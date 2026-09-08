@@ -15,11 +15,12 @@ jobs:
     env:
       CARGO_BUILD_JOBS: "2"
       CARGO_INCREMENTAL: "0"
-      CARGO_TARGET_DIR: ${{ runner.temp }}/eip0045-target
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+      - name: Set temporary build output
+        run: printf 'CARGO_TARGET_DIR=%s/eip0045-target\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - name: Install pinned host Rust
         run: rustup toolchain install 1.89.0 --profile minimal
       - name: Fetch locked guest metadata dependencies
