@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ergo:eip-0045:b4-campaign-executor-contract-v1",
+  "title": "Eip0045B4CampaignExecutorContractV1",
+  "description": "Closed command and create-only phase-root contract of the measured EIP-0045 B4 campaign executor.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "formatVersion",
+    "commands",
+    "phasePolicy"
+  ],
+  "properties": {
+    "format": {
+      "const": "Eip0045B4CampaignExecutorContractV1"
+    },
+    "formatVersion": {
+      "const": 1
+    },
+    "commands": {
+      "type": "array",
+      "minItems": 11,
+      "maxItems": 11,
+      "prefixItems": [
+        {
+          "const": "prepare-input-set"
+        },
+        {
+          "const": "prepare-campaign-precommit"
+        },
+        {
+          "const": "generate-case"
+        },
+        {
+          "const": "finalize-generation-set"
+        },
+        {
+          "const": "publish-terminal-evidence"
+        },
+        {
+          "const": "generate-negative-ancestry-witness-catalog"
+        },
+        {
+          "const": "prepare-negative-materialization-set"
+        },
+        {
+          "const": "run-positive-suite"
+        },
+        {
+          "const": "run-negative-suite"
+        },
+        {
+          "const": "finalize-corpus"
+        },
+        {
+          "const": "replay-corpus"
+        }
+      ],
+      "items": false
+    },
+    "phasePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inputRoot",
+        "outputRoot",
+        "publication",
+        "overwrite",
+        "partialRepair"
+      ],
+      "properties": {
+        "inputRoot": {
+          "const": "immutable-prior-phase-root"
+        },
+        "outputRoot": {
+          "const": "distinct-absent-output-root"
+        },
+        "publication": {
+          "const": "create-only"
+        },
+        "overwrite": {
+          "const": "forbidden"
+        },
+        "partialRepair": {
+          "const": "forbidden"
+        }
+      }
+    }
+  }
+}

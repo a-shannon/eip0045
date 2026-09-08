@@ -1,0 +1,331 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ergo:eip-0045:b4-terminal-evidence-campaign-receipt-v1",
+  "title": "Eip0045B4TerminalEvidenceCampaignReceiptV1",
+  "description": "Closed candidate receipt binding one lineaged terminal-evidence publication to its exact campaign inputs, measured executor, invocation, fixed workload, and terminal packet identity.",
+  "x-eip0045-canonicalByteLengthMaximum": 65536,
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "formatVersion",
+    "campaignPrecommit",
+    "positiveInputSet",
+    "positiveGenerationSet",
+    "executor",
+    "invocation",
+    "workload",
+    "terminalPacket"
+  ],
+  "properties": {
+    "format": {
+      "const": "Eip0045B4TerminalEvidenceCampaignReceiptV1"
+    },
+    "formatVersion": {
+      "const": 1
+    },
+    "campaignPrecommit": {
+      "$ref": "#/$defs/CampaignPrecommitIdentity"
+    },
+    "positiveInputSet": {
+      "$ref": "#/$defs/PositiveInputSetIdentity"
+    },
+    "positiveGenerationSet": {
+      "$ref": "#/$defs/PositiveGenerationSetIdentity"
+    },
+    "executor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact",
+        "buildDescriptor",
+        "executorContract"
+      ],
+      "properties": {
+        "artifact": {
+          "$ref": "#/$defs/ExecutorArtifactIdentity"
+        },
+        "buildDescriptor": {
+          "$ref": "#/$defs/ExecutorBuildDescriptorIdentity"
+        },
+        "executorContract": {
+          "$ref": "#/$defs/ExecutorContractIdentity"
+        }
+      }
+    },
+    "invocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "command",
+        "canonicalArgvSha256",
+        "risc0DevMode"
+      ],
+      "properties": {
+        "command": {
+          "const": "publish-terminal-evidence"
+        },
+        "canonicalArgvSha256": {
+          "$ref": "#/$defs/LowerHex32"
+        },
+        "risc0DevMode": {
+          "const": "absent"
+        }
+      }
+    },
+    "workload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fixtureIds",
+        "fixtureCount",
+        "freshlyGeneratedFixtureReceiptCount",
+        "reusedAuthenticatedFixtureReceiptCount",
+        "directPairCount",
+        "topLevelProvingApiInvocationCount"
+      ],
+      "properties": {
+        "fixtureIds": {
+          "type": "array",
+          "minItems": 9,
+          "maxItems": 9,
+          "prefixItems": [
+            {
+              "const": "lift-po2-14"
+            },
+            {
+              "const": "lift-povw-po2-18"
+            },
+            {
+              "const": "join-povw"
+            },
+            {
+              "const": "join-unwrap-povw"
+            },
+            {
+              "const": "resolve-povw"
+            },
+            {
+              "const": "resolve-unwrap-povw"
+            },
+            {
+              "const": "union"
+            },
+            {
+              "const": "unwrap-povw"
+            },
+            {
+              "const": "allowed-terminal-non-ok"
+            }
+          ],
+          "items": false
+        },
+        "fixtureCount": {
+          "const": 9
+        },
+        "freshlyGeneratedFixtureReceiptCount": {
+          "const": 8
+        },
+        "reusedAuthenticatedFixtureReceiptCount": {
+          "const": 1
+        },
+        "directPairCount": {
+          "const": 1
+        },
+        "topLevelProvingApiInvocationCount": {
+          "const": 12
+        }
+      }
+    },
+    "terminalPacket": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifestByteLength",
+        "packetId"
+      ],
+      "properties": {
+        "manifestByteLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65536
+        },
+        "packetId": {
+          "$ref": "#/$defs/NonzeroHex32"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "LowerHex32": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "NonzeroHex32": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/LowerHex32"
+        },
+        {
+          "not": {
+            "const": "0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        }
+      ]
+    },
+    "RelativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "pattern": "^[a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)*$",
+      "allOf": [
+        {
+          "not": {
+            "pattern": "(^|/)\\.{1,2}($|/)"
+          }
+        },
+        {
+          "not": {
+            "pattern": "(^|/)[^/]*\\.($|/)"
+          }
+        },
+        {
+          "not": {
+            "pattern": "(^|/)(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\.[^/]*)?($|/)"
+          }
+        }
+      ]
+    },
+    "IdentityBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "byteLength",
+        "sha256",
+        "encoding"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/RelativePath"
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/NonzeroHex32"
+        },
+        "encoding": {
+          "enum": [
+            "raw-bytes",
+            "rfc8785-jcs",
+            "git-bundle"
+          ]
+        }
+      }
+    },
+    "CampaignPrecommitIdentity": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/IdentityBase"
+        },
+        {
+          "properties": {
+            "byteLength": {
+              "maximum": 1048576
+            },
+            "encoding": {
+              "const": "rfc8785-jcs"
+            }
+          }
+        }
+      ]
+    },
+    "PositiveInputSetIdentity": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/IdentityBase"
+        },
+        {
+          "properties": {
+            "byteLength": {
+              "maximum": 1048576
+            },
+            "encoding": {
+              "const": "rfc8785-jcs"
+            }
+          }
+        }
+      ]
+    },
+    "PositiveGenerationSetIdentity": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/IdentityBase"
+        },
+        {
+          "properties": {
+            "byteLength": {
+              "maximum": 1048576
+            },
+            "encoding": {
+              "const": "rfc8785-jcs"
+            }
+          }
+        }
+      ]
+    },
+    "ExecutorArtifactIdentity": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/IdentityBase"
+        },
+        {
+          "properties": {
+            "byteLength": {
+              "maximum": 1073741824
+            },
+            "encoding": {
+              "const": "raw-bytes"
+            }
+          }
+        }
+      ]
+    },
+    "ExecutorBuildDescriptorIdentity": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/IdentityBase"
+        },
+        {
+          "properties": {
+            "byteLength": {
+              "maximum": 1048576
+            },
+            "encoding": {
+              "const": "rfc8785-jcs"
+            }
+          }
+        }
+      ]
+    },
+    "ExecutorContractIdentity": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/IdentityBase"
+        },
+        {
+          "properties": {
+            "byteLength": {
+              "maximum": 65536
+            },
+            "encoding": {
+              "const": "rfc8785-jcs"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

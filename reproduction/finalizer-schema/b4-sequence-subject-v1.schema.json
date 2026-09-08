@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ergo:eip-0045:b4-sequence-subject-v1",
+  "title": "Eip0045B4SequenceSubjectV1",
+  "description": "Closed-shape schema for one detached B4 sequence subject. Aggregate decoded payload size, element-ID uniqueness, SHA-256 recomputation, and target-specific nested RFC 8785 JCS remain strict parser obligations.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "target",
+    "elements"
+  ],
+  "properties": {
+    "format": {
+      "const": "Eip0045B4SequenceSubjectV1"
+    },
+    "target": {
+      "$ref": "#/$defs/SequenceTarget"
+    },
+    "elements": {
+      "type": "array",
+      "maxItems": 4096,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/Element"
+      }
+    }
+  },
+  "$defs": {
+    "LowerKebab128": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z](?:[a-z0-9]|-[a-z0-9])*$"
+    },
+    "Hex32": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "EvenLowerHex1MiB": {
+      "type": "string",
+      "maxLength": 2097152,
+      "pattern": "^(?:[0-9a-f]{2})*$"
+    },
+    "SequenceTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targetKind"
+      ],
+      "properties": {
+        "targetKind": {
+          "enum": [
+            "abstract-tree-probe",
+            "registry-positive-cases",
+            "registry-negative-cases",
+            "registry-negative-classes",
+            "registry-negative-bindings",
+            "profile-package-files",
+            "proof-chunks"
+          ]
+        }
+      }
+    },
+    "Element": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "elementId",
+        "bytesHex",
+        "sha256"
+      ],
+      "properties": {
+        "elementId": {
+          "$ref": "#/$defs/LowerKebab128"
+        },
+        "bytesHex": {
+          "$ref": "#/$defs/EvenLowerHex1MiB"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hex32"
+        }
+      }
+    }
+  }
+}

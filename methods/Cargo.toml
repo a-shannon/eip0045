@@ -1,0 +1,38 @@
+[package]
+name = "eip-0045-methods"
+description = "RISC Zero guest method and input ABI for EIP-0045 reproduction"
+version = "0.1.0"
+edition = "2021"
+# This crate is compiled twice: its build script runs on host Rust 1.89.0,
+# while the shared ABI library is also compiled into the guest by RISC Zero's
+# pinned Rust 1.88.0 toolchain.
+rust-version = "1.88.0"
+license = "Apache-2.0"
+authors = ["A. Shannon"]
+publish = false
+
+[workspace]
+resolver = "2"
+
+[features]
+default = []
+embed-methods = ["dep:risc0-build", "dep:sha2"]
+
+[build-dependencies]
+risc0-build = { git = "https://github.com/a-shannon/risc0", rev = "227229dc793c215c533cbc0e07911601974a4629", default-features = false, optional = true }
+sha2 = { version = "=0.10.9", default-features = false, optional = true }
+
+[package.metadata.risc0]
+methods = ["guest"]
+
+[[test]]
+name = "build-contract"
+path = "build_contract.rs"
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"

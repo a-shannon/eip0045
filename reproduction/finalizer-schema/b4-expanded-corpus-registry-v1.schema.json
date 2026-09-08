@@ -1,0 +1,1157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ergo:eip-0045:b4-expanded-corpus-registry-v1",
+  "title": "Eip0045B4CorpusV1Candidate (expanded)",
+  "description": "Closed-shape schema for the expanded B4 candidate registry. Exact positive ordering and family matrix, negative-plan row order/bijection, mutation compatibility and no-op rules, artifact role ordering, path-to-case relations, digest recomputation, and physical/cross-document bindings remain parser, replay, and finalizer-gate obligations.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "bindings",
+    "format",
+    "formatVersion",
+    "negativeCases",
+    "negativeClasses",
+    "positiveCases",
+    "profile",
+    "stage"
+  ],
+  "properties": {
+    "bindings": {
+      "$ref": "#/$defs/IdentityBindings"
+    },
+    "format": {
+      "const": "Eip0045B4CorpusV1Candidate"
+    },
+    "formatVersion": {
+      "const": 1
+    },
+    "negativeCases": {
+      "type": "array",
+      "minItems": 254,
+      "maxItems": 254,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/NegativeCase"
+      }
+    },
+    "negativeClasses": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "uniqueItems": true,
+      "prefixItems": [
+        {
+          "const": "statement-binding"
+        },
+        {
+          "const": "proof-transport"
+        },
+        {
+          "const": "canonical-outer-words"
+        },
+        {
+          "const": "parser-phases"
+        },
+        {
+          "const": "terminal-policy"
+        },
+        {
+          "const": "claim-semantics"
+        },
+        {
+          "const": "resolve-semantics"
+        },
+        {
+          "const": "cryptographic-rejection-depth"
+        },
+        {
+          "const": "profile-package-and-registry"
+        }
+      ],
+      "items": false
+    },
+    "positiveCases": {
+      "type": "array",
+      "minItems": 11,
+      "maxItems": 11,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/PositiveCase"
+      }
+    },
+    "profile": {
+      "$ref": "#/$defs/ProfileBinding"
+    },
+    "stage": {
+      "const": "expanded"
+    }
+  },
+  "$defs": {
+    "Hex32": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "LowerKebab128": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z](?:[a-z0-9]|-[a-z0-9])*$"
+    },
+    "ExecutionId": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 258,
+      "pattern": "^(?=.{1,128}--.{1,128}$)[a-z](?:[a-z0-9]|-[a-z0-9])*--[a-z](?:[a-z0-9]|-[a-z0-9])*$"
+    },
+    "U64": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "RepositoryPath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "pattern": "^[a-z0-9](?:[a-z0-9._-]*[a-z0-9_-])?(?:/[a-z0-9](?:[a-z0-9._-]*[a-z0-9_-])?)*$",
+      "not": {
+        "pattern": "(?:^|/)(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\.[^/]*)?(?:/|$)"
+      }
+    },
+    "CandidatePath": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/RepositoryPath"
+        },
+        {
+          "pattern": "^reproduction/schema/b4-corpus-v1\\.candidate/.+"
+        },
+        {
+          "not": {
+            "pattern": "(?:^|/)lock\\.json"
+          }
+        }
+      ]
+    },
+    "ArtifactEncoding": {
+      "enum": [
+        "raw-bytes",
+        "rfc8785-jcs"
+      ]
+    },
+    "RawBoundCandidateArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "byteLength",
+        "encoding",
+        "path",
+        "sha256",
+        "state"
+      ],
+      "properties": {
+        "byteLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 536870912
+        },
+        "encoding": {
+          "const": "raw-bytes"
+        },
+        "path": {
+          "$ref": "#/$defs/CandidatePath"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "state": {
+          "const": "bound"
+        }
+      }
+    },
+    "JcsBoundCandidateArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "byteLength",
+        "encoding",
+        "path",
+        "sha256",
+        "state"
+      ],
+      "properties": {
+        "byteLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 536870912
+        },
+        "encoding": {
+          "const": "rfc8785-jcs"
+        },
+        "path": {
+          "$ref": "#/$defs/CandidatePath"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "state": {
+          "const": "bound"
+        }
+      }
+    },
+    "ProfileManifestArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "byteLength",
+        "encoding",
+        "path",
+        "sha256",
+        "state"
+      ],
+      "properties": {
+        "byteLength": {
+          "const": 458
+        },
+        "encoding": {
+          "const": "raw-bytes"
+        },
+        "path": {
+          "const": "profiles/risc0-v3-succinct/manifest.bin"
+        },
+        "sha256": {
+          "const": "deffb2cb231f98a348cbd166d5f1c43315661ccd8bd212099f16f238d0fe8946"
+        },
+        "state": {
+          "const": "bound"
+        }
+      }
+    },
+    "ProfileBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifest",
+        "profileId"
+      ],
+      "properties": {
+        "manifest": {
+          "$ref": "#/$defs/ProfileManifestArtifact"
+        },
+        "profileId": {
+          "const": "23c4a123ffb33a1c8db89436fe0e7972bd8e4e289459ee5fd71be5440607d383"
+        }
+      }
+    },
+    "StatementBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractId",
+        "manifest",
+        "statementSha256",
+        "state"
+      ],
+      "properties": {
+        "contractId": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "manifest": {
+          "$ref": "#/$defs/JcsBoundCandidateArtifact"
+        },
+        "statementSha256": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "state": {
+          "const": "bound"
+        }
+      }
+    },
+    "GuestBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "elf",
+        "imageId",
+        "state"
+      ],
+      "properties": {
+        "elf": {
+          "$ref": "#/$defs/RawBoundCandidateArtifact"
+        },
+        "imageId": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "state": {
+          "const": "bound"
+        }
+      }
+    },
+    "IdentityBindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generator",
+        "guest",
+        "jvmVerifier",
+        "negativePlan",
+        "referenceStatementBundle",
+        "rustVerifier",
+        "sourceLock",
+        "subjectCatalog",
+        "terminalFixtureCatalog"
+      ],
+      "properties": {
+        "generator": {
+          "$ref": "#/$defs/RawBoundCandidateArtifact"
+        },
+        "guest": {
+          "$ref": "#/$defs/GuestBinding"
+        },
+        "jvmVerifier": {
+          "$ref": "#/$defs/RawBoundCandidateArtifact"
+        },
+        "negativePlan": {
+          "$ref": "#/$defs/JcsBoundCandidateArtifact"
+        },
+        "referenceStatementBundle": {
+          "$ref": "#/$defs/StatementBinding"
+        },
+        "rustVerifier": {
+          "$ref": "#/$defs/RawBoundCandidateArtifact"
+        },
+        "sourceLock": {
+          "$ref": "#/$defs/JcsBoundCandidateArtifact"
+        },
+        "subjectCatalog": {
+          "$ref": "#/$defs/JcsBoundCandidateArtifact"
+        },
+        "terminalFixtureCatalog": {
+          "$ref": "#/$defs/JcsBoundCandidateArtifact"
+        }
+      }
+    },
+    "ExpectedResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "finalAssumptionCount",
+        "finalStatus",
+        "independentJvm",
+        "upstreamRust"
+      ],
+      "properties": {
+        "finalAssumptionCount": {
+          "const": 0
+        },
+        "finalStatus": {
+          "const": "ok"
+        },
+        "independentJvm": {
+          "const": "accept"
+        },
+        "upstreamRust": {
+          "const": "accept"
+        }
+      }
+    },
+    "Terminal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "parameter"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "lift",
+            "join",
+            "resolve"
+          ]
+        },
+        "parameter": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 22
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "lift"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "parameter": {
+                "type": "integer",
+                "minimum": 15,
+                "maximum": 22
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "parameter": {
+                "const": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "PositiveArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "byteLength",
+        "encoding",
+        "path",
+        "role",
+        "sha256"
+      ],
+      "properties": {
+        "byteLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 536870912
+        },
+        "encoding": {
+          "$ref": "#/$defs/ArtifactEncoding"
+        },
+        "path": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/CandidatePath"
+            },
+            {
+              "pattern": "^reproduction/schema/b4-corpus-v1\\.candidate/positive/.+"
+            }
+          ]
+        },
+        "role": {
+          "enum": [
+            "ancestry",
+            "calibration",
+            "claim-digest",
+            "control-id",
+            "image-id",
+            "journal",
+            "metadata",
+            "raw-seal",
+            "receipt-oracle"
+          ]
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hex32"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "enum": [
+                  "ancestry",
+                  "calibration",
+                  "metadata"
+                ]
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "properties": {
+              "encoding": {
+                "const": "rfc8785-jcs"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "encoding": {
+                "const": "raw-bytes"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "PositiveCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifacts",
+        "caseId",
+        "expectedResult",
+        "family",
+        "guestMode",
+        "index",
+        "rootBranch",
+        "sourceSegments",
+        "terminal"
+      ],
+      "properties": {
+        "artifacts": {
+          "type": "array",
+          "minItems": 7,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/PositiveArtifact"
+          }
+        },
+        "caseId": {
+          "enum": [
+            "lift-po2-15",
+            "lift-po2-16",
+            "lift-po2-17",
+            "lift-po2-18",
+            "lift-po2-19",
+            "lift-po2-20",
+            "lift-po2-21",
+            "lift-po2-22",
+            "terminal-join",
+            "terminal-resolve-explicit-root",
+            "resolve-zero-root-then-join"
+          ]
+        },
+        "expectedResult": {
+          "$ref": "#/$defs/ExpectedResult"
+        },
+        "family": {
+          "enum": [
+            "lift",
+            "terminal-join",
+            "terminal-resolve",
+            "resolve-then-join"
+          ]
+        },
+        "guestMode": {
+          "enum": [
+            "plain",
+            "verify-assumption-zero-root",
+            "verify-assumption-explicit-root"
+          ]
+        },
+        "index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "rootBranch": {
+          "enum": [
+            "none",
+            "explicit",
+            "zero"
+          ]
+        },
+        "sourceSegments": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2
+        },
+        "terminal": {
+          "$ref": "#/$defs/Terminal"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "family": {
+                "const": "lift"
+              }
+            },
+            "required": [
+              "family"
+            ]
+          },
+          "then": {
+            "properties": {
+              "artifacts": {
+                "minItems": 7,
+                "maxItems": 7
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "artifacts": {
+                "minItems": 8,
+                "maxItems": 8
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SequenceElement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "elementId",
+        "bytesHex",
+        "sha256"
+      ],
+      "properties": {
+        "elementId": {
+          "$ref": "#/$defs/LowerKebab128"
+        },
+        "bytesHex": {
+          "type": "string",
+          "maxLength": 2097152,
+          "pattern": "^(?:[0-9a-f]{2})*$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hex32"
+        }
+      }
+    },
+    "ProfileArtifact": {
+      "enum": [
+        "algorithm",
+        "algorithm-artifact-preimage",
+        "constants",
+        "binary-data-artifact-preimage",
+        "profile-id",
+        "profile-id-preimage"
+      ]
+    },
+    "ByteTargetUnit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targetKind"
+      ],
+      "properties": {
+        "targetKind": {
+          "enum": [
+            "application-payload",
+            "ancestry",
+            "candidate-registry-source",
+            "positive-calibration",
+            "positive-metadata",
+            "profile-manifest",
+            "profile-id",
+            "program-id",
+            "receipt-oracle",
+            "raw-seal",
+            "statement",
+            "subject-catalog-entry",
+            "terminal-fixture-catalog-entry",
+            "terminal-metadata-record",
+            "terminal-policy-probe"
+          ]
+        }
+      }
+    },
+    "ProfileArtifactTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targetKind",
+        "artifact"
+      ],
+      "properties": {
+        "targetKind": {
+          "const": "profile-artifact"
+        },
+        "artifact": {
+          "$ref": "#/$defs/ProfileArtifact"
+        }
+      }
+    },
+    "ByteTarget": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ByteTargetUnit"
+        },
+        {
+          "$ref": "#/$defs/ProfileArtifactTarget"
+        }
+      ]
+    },
+    "SequenceTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targetKind"
+      ],
+      "properties": {
+        "targetKind": {
+          "enum": [
+            "abstract-tree-probe",
+            "registry-positive-cases",
+            "registry-negative-cases",
+            "registry-negative-classes",
+            "registry-negative-bindings",
+            "profile-package-files",
+            "proof-chunks"
+          ]
+        }
+      }
+    },
+    "AncestryInventoryTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targetKind"
+      ],
+      "properties": {
+        "targetKind": {
+          "const": "assumption-source-inventory-head"
+        }
+      }
+    },
+    "AncestryInventoryOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "beforeClaimDigest",
+        "beforeControlRoot",
+        "exactDigest"
+      ],
+      "properties": {
+        "operation": {
+          "const": "prune-revealed-head"
+        },
+        "beforeClaimDigest": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "beforeControlRoot": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "exactDigest": {
+          "$ref": "#/$defs/Hex32"
+        }
+      }
+    },
+    "ByteOperation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "operation",
+            "beforeHex",
+            "offset"
+          ],
+          "properties": {
+            "operation": {
+              "const": "delete"
+            },
+            "beforeHex": {
+              "$ref": "#/$defs/NonemptyEvenLowerHex128Bytes"
+            },
+            "offset": {
+              "$ref": "#/$defs/U64"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "operation",
+            "insertedHex",
+            "offset"
+          ],
+          "properties": {
+            "operation": {
+              "const": "insert"
+            },
+            "insertedHex": {
+              "$ref": "#/$defs/NonemptyEvenLowerHex128Bytes"
+            },
+            "offset": {
+              "$ref": "#/$defs/U64"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "operation",
+            "beforeHex",
+            "replacementHex",
+            "offset"
+          ],
+          "properties": {
+            "operation": {
+              "const": "replace"
+            },
+            "beforeHex": {
+              "$ref": "#/$defs/NonemptyEvenLowerHex128Bytes"
+            },
+            "replacementHex": {
+              "$ref": "#/$defs/NonemptyEvenLowerHex128Bytes"
+            },
+            "offset": {
+              "$ref": "#/$defs/U64"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "operation",
+            "beforeHex",
+            "newLength",
+            "originalLength"
+          ],
+          "properties": {
+            "operation": {
+              "const": "truncate"
+            },
+            "beforeHex": {
+              "$ref": "#/$defs/NonemptyEvenLowerHex128Bytes"
+            },
+            "newLength": {
+              "$ref": "#/$defs/U64"
+            },
+            "originalLength": {
+              "$ref": "#/$defs/U64"
+            }
+          }
+        }
+      ]
+    },
+    "NonemptyEvenLowerHex128Bytes": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 256,
+      "pattern": "^(?:[0-9a-f]{2})+$"
+    },
+    "SequenceOperation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "operation"
+          ],
+          "properties": {
+            "operation": {
+              "const": "empty"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "operation",
+            "insertedElement",
+            "index"
+          ],
+          "properties": {
+            "operation": {
+              "const": "insert"
+            },
+            "insertedElement": {
+              "$ref": "#/$defs/SequenceElement"
+            },
+            "index": {
+              "$ref": "#/$defs/U64"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "operation",
+            "beforeElementId",
+            "beforeElementSha256",
+            "fromIndex",
+            "toIndex"
+          ],
+          "properties": {
+            "operation": {
+              "const": "move"
+            },
+            "beforeElementId": {
+              "$ref": "#/$defs/LowerKebab128"
+            },
+            "beforeElementSha256": {
+              "$ref": "#/$defs/Hex32"
+            },
+            "fromIndex": {
+              "$ref": "#/$defs/U64"
+            },
+            "toIndex": {
+              "$ref": "#/$defs/U64"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "operation",
+            "beforeElementId",
+            "beforeElementSha256",
+            "index"
+          ],
+          "properties": {
+            "operation": {
+              "const": "omit"
+            },
+            "beforeElementId": {
+              "$ref": "#/$defs/LowerKebab128"
+            },
+            "beforeElementSha256": {
+              "$ref": "#/$defs/Hex32"
+            },
+            "index": {
+              "$ref": "#/$defs/U64"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "operation",
+            "beforeElementId",
+            "beforeElementSha256",
+            "index",
+            "replacementElement"
+          ],
+          "properties": {
+            "operation": {
+              "const": "replace"
+            },
+            "beforeElementId": {
+              "$ref": "#/$defs/LowerKebab128"
+            },
+            "beforeElementSha256": {
+              "$ref": "#/$defs/Hex32"
+            },
+            "index": {
+              "$ref": "#/$defs/U64"
+            },
+            "replacementElement": {
+              "$ref": "#/$defs/SequenceElement"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "operation",
+            "byteCount",
+            "direction",
+            "leftChunkIndex"
+          ],
+          "properties": {
+            "operation": {
+              "const": "shift-boundary"
+            },
+            "byteCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "direction": {
+              "enum": [
+                "left-to-right",
+                "right-to-left"
+              ]
+            },
+            "leftChunkIndex": {
+              "$ref": "#/$defs/U64"
+            }
+          }
+        }
+      ]
+    },
+    "AncestryWitnessRecipe": {
+      "enum": [
+        "reuse-case9-assumption-at-terminal-join-step0",
+        "reuse-case9-assumption-at-terminal-resolve-step0",
+        "reuse-case9-final-resolve-at-resolve-then-join-step2",
+        "alternate-statement-assumption-lift-for-terminal-resolve",
+        "alternate-guest-lift-for-terminal-resolve",
+        "alternate-statement-final-resolve-for-terminal-resolve",
+        "alternate-statement-assumption-lift-for-resolve-then-join",
+        "alternate-guest-lift-for-resolve-then-join",
+        "alternate-statement-final-join-for-resolve-then-join",
+        "reuse-case9-assumption-with-empty-inventory",
+        "duplicate-assumption-lift-with-duplicated-inventory"
+      ]
+    },
+    "Mutation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "family",
+            "edit",
+            "target"
+          ],
+          "properties": {
+            "family": {
+              "const": "byte-edit"
+            },
+            "edit": {
+              "$ref": "#/$defs/ByteOperation"
+            },
+            "target": {
+              "$ref": "#/$defs/ByteTarget"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "family",
+            "edit",
+            "target"
+          ],
+          "properties": {
+            "family": {
+              "const": "sequence-edit"
+            },
+            "edit": {
+              "$ref": "#/$defs/SequenceOperation"
+            },
+            "target": {
+              "$ref": "#/$defs/SequenceTarget"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "family",
+            "edit",
+            "target"
+          ],
+          "properties": {
+            "family": {
+              "const": "ancestry-inventory-edit"
+            },
+            "edit": {
+              "$ref": "#/$defs/AncestryInventoryOperation"
+            },
+            "target": {
+              "$ref": "#/$defs/AncestryInventoryTarget"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "family",
+            "recipe"
+          ],
+          "properties": {
+            "family": {
+              "const": "ancestry-witness-substitution"
+            },
+            "recipe": {
+              "$ref": "#/$defs/AncestryWitnessRecipe"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "family"
+          ],
+          "properties": {
+            "family": {
+              "const": "alternate-root-assumption-substitution"
+            }
+          }
+        }
+      ]
+    },
+    "Materialization": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "materializationKind",
+            "mutation"
+          ],
+          "properties": {
+            "materializationKind": {
+              "const": "mutation"
+            },
+            "mutation": {
+              "$ref": "#/$defs/Mutation"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "materializationKind",
+            "fixtureId"
+          ],
+          "properties": {
+            "materializationKind": {
+              "const": "fixture-selection"
+            },
+            "fixtureId": {
+              "$ref": "#/$defs/LowerKebab128"
+            }
+          }
+        }
+      ]
+    },
+    "MaterializationDomain": {
+      "enum": [
+        "verifier-input",
+        "artifact-validator",
+        "tree-validator"
+      ]
+    },
+    "NegativeCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "executionId",
+        "baseSelectorId",
+        "materializationDomain",
+        "materialization"
+      ],
+      "properties": {
+        "executionId": {
+          "$ref": "#/$defs/ExecutionId"
+        },
+        "baseSelectorId": {
+          "$ref": "#/$defs/LowerKebab128"
+        },
+        "materializationDomain": {
+          "$ref": "#/$defs/MaterializationDomain"
+        },
+        "materialization": {
+          "$ref": "#/$defs/Materialization"
+        }
+      }
+    }
+  }
+}

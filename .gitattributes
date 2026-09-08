@@ -1,0 +1,12 @@
+* text=auto eol=lf
+
+*.bin binary
+*.bincode binary
+*.borsh binary
+*.elf binary
+*.receipt binary
+*.seal binary
+*.sig binary
+
+# Preserve whitespace in byte-bound upstream patch artifacts.
+reproduction/instrumentation/risc0-zkp-8eb06ab/*.patch whitespace=-blank-at-eol

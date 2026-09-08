@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ergo:eip-0045:b4-abstract-tree-v1",
+  "title": "Eip0045B4AbstractTreeV1",
+  "description": "Closed-shape role-only tree used by the 20 omission probes and one extra-role probe. Canonical semantic role ordering and the accepted-versus-rejected tree policy remain parser/policy-gate obligations.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "formatVersion",
+    "roles"
+  ],
+  "properties": {
+    "format": {
+      "const": "Eip0045B4AbstractTreeV1"
+    },
+    "formatVersion": {
+      "const": 1
+    },
+    "roles": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 21,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "profile-manifest",
+          "statement-bundle-manifest",
+          "guest-elf",
+          "source-lock",
+          "proof-generator",
+          "rust-verifier",
+          "jvm-verifier",
+          "positive-raw-seal",
+          "recursive-ancestry",
+          "negative-plan",
+          "subject-catalog",
+          "terminal-fixture-catalog",
+          "positive-registry",
+          "expanded-negative-registry",
+          "mutation-identities",
+          "rust-negative-results",
+          "jvm-negative-results",
+          "semantic-report",
+          "tree-manifest",
+          "lock",
+          "unregistered-extra"
+        ]
+      }
+    }
+  }
+}

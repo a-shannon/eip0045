@@ -1,0 +1,530 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ergo:eip-0045:b4-positive-oci-runner-profile-v2",
+  "title": "Eip0045B4PositiveOciRunnerProfileV2",
+  "description": "Finalizer-owned closed OCI runner profile for one B4 validator build or verification role under the non-authorizing H0 tmpfs-provider V2 route.",
+  "$comment": "The serialized V2 identity is frozen by docs/plans/2026-08-11-eip0045-h0-tmpfs-provider-v2-runner-identity-contract.md. This schema does not mint provider, session, boot, publication, H0, or B4 authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "formatVersion", "runnerProfileIndex", "purpose", "retainedHostRootfsMetadataProvider", "platform", "image", "runtime", "seccomp", "environment", "policy", "limits"],
+  "properties": {
+    "format": {"const": "Eip0045B4PositiveOciRunnerProfileV2"},
+    "formatVersion": {"const": 2},
+    "runnerProfileIndex": {"type": "integer", "minimum": 0, "maximum": 3},
+    "purpose": {"enum": ["rust-validator-build", "jvm-validator-build", "rust-validator", "jvm-validator"]},
+    "retainedHostRootfsMetadataProvider": {"$ref": "#/$defs/RetainedHostRootfsMetadataProvider"},
+    "platform": {"$ref": "#/$defs/Platform"},
+    "image": {"$ref": "#/$defs/OciImageIdentity"},
+    "runtime": {"$ref": "#/$defs/OciRuntimeIdentity"},
+    "seccomp": {"$ref": "#/$defs/SeccompIdentity"},
+    "environment": {"$ref": "#/$defs/ExecutionEnvironment"},
+    "buildJdk": {"$ref": "#/$defs/BuildJdk"},
+    "javaRuntime": {"$ref": "#/$defs/JavaRuntime"},
+    "policy": {
+      "oneOf": [
+        {"$ref": "#/$defs/RustBuildPolicy"},
+        {"$ref": "#/$defs/JvmBuildPolicy"},
+        {"$ref": "#/$defs/RustVerificationPolicy"},
+        {"$ref": "#/$defs/JvmVerificationPolicy"}
+      ]
+    },
+    "limits": {
+      "oneOf": [
+        {"$ref": "#/$defs/BuildLimits"},
+        {"$ref": "#/$defs/VerificationLimits"}
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "oneOf": [
+        {"not": {"anyOf": [{"required": ["buildJdk"]}, {"required": ["javaRuntime"]}]}, "properties": {"runnerProfileIndex": {"const": 0}, "purpose": {"const": "rust-validator-build"}, "retainedHostRootfsMetadataProvider": {"properties": {"canonicalRole": {"const": "RustValidatorBuild"}}}, "policy": {"$ref": "#/$defs/RustBuildPolicy"}, "limits": {"$ref": "#/$defs/BuildLimits"}}},
+        {"required": ["buildJdk"], "not": {"required": ["javaRuntime"]}, "properties": {"runnerProfileIndex": {"const": 1}, "purpose": {"const": "jvm-validator-build"}, "retainedHostRootfsMetadataProvider": {"properties": {"canonicalRole": {"const": "JvmValidatorBuild"}}}, "buildJdk": {"$ref": "#/$defs/BuildJdk"}, "policy": {"$ref": "#/$defs/JvmBuildPolicy"}, "limits": {"$ref": "#/$defs/BuildLimits"}}},
+        {"not": {"anyOf": [{"required": ["buildJdk"]}, {"required": ["javaRuntime"]}]}, "properties": {"runnerProfileIndex": {"const": 2}, "purpose": {"const": "rust-validator"}, "retainedHostRootfsMetadataProvider": {"properties": {"canonicalRole": {"const": "RustVerifier"}}}, "policy": {"$ref": "#/$defs/RustVerificationPolicy"}, "limits": {"$ref": "#/$defs/VerificationLimits"}}},
+        {"required": ["javaRuntime"], "not": {"required": ["buildJdk"]}, "properties": {"runnerProfileIndex": {"const": 3}, "purpose": {"const": "jvm-validator"}, "retainedHostRootfsMetadataProvider": {"properties": {"canonicalRole": {"const": "JvmVerifier"}}}, "javaRuntime": {"$ref": "#/$defs/JavaRuntime"}, "policy": {"$ref": "#/$defs/JvmVerificationPolicy"}, "limits": {"$ref": "#/$defs/VerificationLimits"}}}
+      ]
+    }
+  ],
+  "$defs": {
+    "Hex32": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "RetainedHostRootfsMetadataProvider": {
+      "type": "object", "additionalProperties": false,
+      "required": ["metadataPolicy", "providerProfile", "sessionProtocol", "applianceProfile", "expectedModeTableSha256", "canonicalRole"],
+      "properties": {
+        "metadataPolicy": {"const": "eip0045-b4-retained-host-rootfs-metadata-obligations-v2"},
+        "providerProfile": {"const": "eip0045-b4-tmpfs-metadata-provider-v1"},
+        "sessionProtocol": {"const": "eip0045-b4-supervised-filesystem-session-v1"},
+        "applianceProfile": {"const": "eip0045-b4-buildroot-appliance-v1"},
+        "expectedModeTableSha256": {"$ref": "#/$defs/Hex32"},
+        "canonicalRole": {"enum": ["RustValidatorBuild", "JvmValidatorBuild", "RustVerifier", "JvmVerifier"]}
+      }
+    },
+    "Sha256Digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "RelativePath": {
+      "type": "string", "minLength": 1, "maxLength": 240,
+      "pattern": "^[a-z0-9][a-z0-9._/-]{0,239}$",
+      "allOf": [
+        {"not": {"pattern": "/$"}},
+        {"not": {"pattern": "(^|/)\\.{1,2}($|/)"}},
+        {"not": {"pattern": "//"}},
+        {"not": {"pattern": "(^|/)[^/]*\\.($|/)"}},
+        {"not": {"pattern": "(^|/)(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\.[^/]*)?($|/)"}}
+      ]
+    },
+    "Platform": {
+      "type": "object", "additionalProperties": false, "required": ["os", "architecture"],
+      "properties": {"os": {"const": "linux"}, "architecture": {"const": "amd64"}}
+    },
+    "StaticElfInspection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["policy", "elfType", "osAbi", "programHeaderCount", "sectionHeaderCount", "loadSegmentCount", "executableLoadSegmentCount", "entryPointInExecutableLoad", "interpreterSegmentCount", "dynamicSegmentCount", "gnuStackSegmentCount", "writableExecutableLoadSegmentCount", "executableStackSegmentCount", "overlappingLoadFileRangeCount", "extendedNumberingCount", "structuralParseFailureCount"],
+      "properties": {
+        "policy": {"const": "eip0045-b4-elf64-amd64-structural-v1"},
+        "elfType": {"enum": ["et-exec", "et-dyn"]},
+        "osAbi": {"enum": ["sysv", "linux"]},
+        "programHeaderCount": {"type": "integer", "minimum": 1, "maximum": 65534},
+        "sectionHeaderCount": {"type": "integer", "minimum": 0, "maximum": 65279},
+        "loadSegmentCount": {"type": "integer", "minimum": 1, "maximum": 65534},
+        "executableLoadSegmentCount": {"type": "integer", "minimum": 1, "maximum": 65534},
+        "entryPointInExecutableLoad": {"const": true},
+        "interpreterSegmentCount": {"const": 0},
+        "dynamicSegmentCount": {"const": 0},
+        "gnuStackSegmentCount": {"const": 1},
+        "writableExecutableLoadSegmentCount": {"const": 0},
+        "executableStackSegmentCount": {"const": 0},
+        "overlappingLoadFileRangeCount": {"const": 0},
+        "extendedNumberingCount": {"const": 0},
+        "structuralParseFailureCount": {"const": 0}
+      }
+    },
+    "RuntimeElfInspection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["policy", "elfType", "osAbi", "programHeaderCount", "sectionHeaderCount", "loadSegmentCount", "executableLoadSegmentCount", "entryPointInExecutableLoad", "interpreterSegmentCount", "interpreterPath", "dynamicSegmentCount", "dynamicEntryCount", "neededLibraryCount", "gnuStackSegmentCount", "writableExecutableLoadSegmentCount", "executableStackSegmentCount", "overlappingLoadFileRangeCount", "extendedNumberingCount", "structuralParseFailureCount"],
+      "properties": {
+        "policy": {"const": "eip0045-b4-elf64-amd64-structural-v1"},
+        "elfType": {"enum": ["et-exec", "et-dyn"]},
+        "osAbi": {"enum": ["sysv", "linux"]},
+        "programHeaderCount": {"type": "integer", "minimum": 1, "maximum": 65534},
+        "sectionHeaderCount": {"type": "integer", "minimum": 0, "maximum": 65279},
+        "loadSegmentCount": {"type": "integer", "minimum": 1, "maximum": 65534},
+        "executableLoadSegmentCount": {"type": "integer", "minimum": 1, "maximum": 65534},
+        "entryPointInExecutableLoad": {"const": true},
+        "interpreterSegmentCount": {"const": 1},
+        "interpreterPath": {
+          "type": "string", "minLength": 2, "maxLength": 240,
+          "pattern": "^/(?:[\\x20-\\x2e\\x30-\\x7e]+/)*[\\x20-\\x2e\\x30-\\x7e]+$",
+          "allOf": [
+            {"not": {"pattern": "//"}},
+            {"not": {"pattern": "(^|/)\\.{1,2}($|/)"}}
+          ]
+        },
+        "dynamicSegmentCount": {"const": 1},
+        "dynamicEntryCount": {"type": "integer", "minimum": 1, "maximum": 65534},
+        "neededLibraryCount": {"type": "integer", "minimum": 0, "maximum": 4096},
+        "gnuStackSegmentCount": {"const": 1},
+        "writableExecutableLoadSegmentCount": {"const": 0},
+        "executableStackSegmentCount": {"const": 0},
+        "overlappingLoadFileRangeCount": {"const": 0},
+        "extendedNumberingCount": {"const": 0},
+        "structuralParseFailureCount": {"const": 0}
+      }
+    },
+    "BinaryIdentity": {
+      "type": "object", "additionalProperties": false, "required": ["path", "byteLength", "sha256", "encoding", "fileFormat", "architecture", "linkage", "inspectionPolicy", "elf"],
+      "properties": {
+        "path": {"$ref": "#/$defs/RelativePath"},
+        "byteLength": {"type": "integer", "minimum": 64, "maximum": 1073741824},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "raw-bytes"},
+        "fileFormat": {"const": "elf64"},
+        "architecture": {"const": "amd64"},
+        "linkage": {"const": "static-no-interpreter"},
+        "inspectionPolicy": {"const": "eip0045-b4-elf64-amd64-static-v1"},
+        "elf": {"$ref": "#/$defs/StaticElfInspection"}
+      }
+    },
+    "SeccompDocumentIdentity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["format", "path", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "format": {"const": "Eip0045B4PositiveSeccompV1"},
+        "path": {"$ref": "#/$defs/RelativePath"},
+        "byteLength": {"type": "integer", "minimum": 2, "maximum": 1048576},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "rfc8785-jcs"}
+      }
+    },
+    "OciImageArchiveIdentity": {
+      "type": "object", "additionalProperties": false, "required": ["path", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "path": {"$ref": "#/$defs/RelativePath"},
+        "byteLength": {"type": "integer", "minimum": 6144, "maximum": 17179869184, "multipleOf": 512},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "eip0045-b4-oci-image-layout-ustar-v1"}
+      }
+    },
+    "OciImageSpecPin": {
+      "type": "object", "additionalProperties": false, "required": ["version", "commit"],
+      "properties": {
+        "version": {"const": "1.1.1"},
+        "commit": {"const": "147f9c13cedb47a0c4d9a11a222961073d585877"}
+      }
+    },
+    "OciRuntimeSpecPin": {
+      "type": "object", "additionalProperties": false, "required": ["version", "commit"],
+      "properties": {
+        "version": {"const": "1.3.0"},
+        "commit": {"const": "92249139eea7161e13745abd4cb6d0ea02a3227a"}
+      }
+    },
+    "ManifestDescriptor": {
+      "type": "object", "additionalProperties": false, "required": ["mediaType", "digest", "size"],
+      "properties": {
+        "mediaType": {"const": "application/vnd.oci.image.manifest.v1+json"},
+        "digest": {"$ref": "#/$defs/Sha256Digest"},
+        "size": {"type": "integer", "minimum": 2, "maximum": 1048576}
+      }
+    },
+    "ConfigDescriptor": {
+      "type": "object", "additionalProperties": false, "required": ["mediaType", "digest", "size"],
+      "properties": {
+        "mediaType": {"const": "application/vnd.oci.image.config.v1+json"},
+        "digest": {"$ref": "#/$defs/Sha256Digest"},
+        "size": {"type": "integer", "minimum": 2, "maximum": 1048576}
+      }
+    },
+    "LayerIdentity": {
+      "type": "object", "additionalProperties": false, "required": ["mediaType", "digest", "size", "uncompressedBytes", "diffId"],
+      "properties": {
+        "mediaType": {"const": "application/vnd.oci.image.layer.v1.tar+gzip"},
+        "digest": {"$ref": "#/$defs/Sha256Digest"},
+        "size": {"type": "integer", "minimum": 20, "maximum": 8589934591},
+        "uncompressedBytes": {"type": "integer", "minimum": 1024, "maximum": 34359738368, "multipleOf": 512},
+        "diffId": {"$ref": "#/$defs/Sha256Digest"}
+      }
+    },
+    "PostChangesetRootfs": {
+      "type": "object", "additionalProperties": false,
+      "required": ["entryCount", "regularFileCount", "directoryCount", "symbolicLinkCount", "regularFileBytes"],
+      "properties": {
+        "entryCount": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "regularFileCount": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "directoryCount": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "symbolicLinkCount": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "regularFileBytes": {"type": "integer", "minimum": 0, "maximum": 34359738368}
+      }
+    },
+    "OciImageIdentity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["policy", "retainedHostRootfsMetadataPolicy", "imageSpec", "layoutVersion", "archive", "manifest", "config", "platform", "layers", "postChangesetRootfs"],
+      "properties": {
+        "policy": {"const": "eip0045-b4-oci-image-v1"},
+        "retainedHostRootfsMetadataPolicy": {"const": "eip0045-b4-retained-host-rootfs-metadata-obligations-v2"},
+        "imageSpec": {"$ref": "#/$defs/OciImageSpecPin"},
+        "layoutVersion": {"const": "1.0.0"},
+        "archive": {"$ref": "#/$defs/OciImageArchiveIdentity"},
+        "manifest": {"$ref": "#/$defs/ManifestDescriptor"},
+        "config": {"$ref": "#/$defs/ConfigDescriptor"},
+        "platform": {"$ref": "#/$defs/Platform"},
+        "layers": {
+          "type": "array", "minItems": 1, "maxItems": 128, "uniqueItems": true,
+          "items": {"$ref": "#/$defs/LayerIdentity"}
+        },
+        "postChangesetRootfs": {"$ref": "#/$defs/PostChangesetRootfs"}
+      }
+    },
+    "OciRuntimeIdentity": {
+      "type": "object", "additionalProperties": false, "required": ["name", "version", "runtimeSpec", "configurationPolicy", "observationSelectors", "binary"],
+      "properties": {
+        "name": {"const": "runc"},
+        "version": {"const": "1.3.0"},
+        "runtimeSpec": {"$ref": "#/$defs/OciRuntimeSpecPin"},
+        "configurationPolicy": {"const": "eip0045-b4-oci-runtime-config-projection-v1"},
+        "observationSelectors": {"$ref": "#/$defs/RuntimeObservationSelectorSet"},
+        "binary": {"$ref": "#/$defs/BinaryIdentity"}
+      }
+    },
+    "RuntimeObservationSelectorSet": {
+      "type": "object", "additionalProperties": false,
+      "required": ["state", "processIdentity", "namespaces", "idMappings", "mountinfo", "securityStatus", "cgroupV2", "rootIdentity", "auxv", "processMappings", "smokeIdentity"],
+      "properties": {
+        "state": {"const": "eip0045-b4-runtime-observation-runc-state-json-v1"},
+        "processIdentity": {"const": "eip0045-b4-runtime-observation-linux-boot-id-pid-starttime-jcs-v1"},
+        "namespaces": {"const": "eip0045-b4-runtime-observation-namespaces-reserved-v1"},
+        "idMappings": {"const": "eip0045-b4-runtime-observation-id-mappings-reserved-v1"},
+        "mountinfo": {"const": "eip0045-b4-runtime-observation-mountinfo-reserved-v1"},
+        "securityStatus": {"const": "eip0045-b4-runtime-observation-security-status-reserved-v1"},
+        "cgroupV2": {"const": "eip0045-b4-runtime-observation-cgroup-v2-reserved-v1"},
+        "rootIdentity": {"const": "eip0045-b4-runtime-observation-root-identity-reserved-v1"},
+        "auxv": {"const": "eip0045-b4-runtime-observation-auxv-reserved-v1"},
+        "processMappings": {"const": "eip0045-b4-runtime-observation-process-mappings-reserved-v1"},
+        "smokeIdentity": {"const": "eip0045-b4-runtime-observation-smoke-identity-reserved-v1"}
+      }
+    },
+    "SeccompIdentity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["policy", "format", "profile", "allowedSyscalls"],
+      "properties": {
+        "policy": {"const": "eip0045-b4-positive-seccomp-v1"},
+        "format": {"const": "Eip0045B4PositiveSeccompV1"},
+        "profile": {"$ref": "#/$defs/SeccompDocumentIdentity"},
+        "allowedSyscalls": {
+          "type": "array", "minItems": 1, "maxItems": 256, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-z0-9_]+$"}
+        }
+      }
+    },
+    "ExecutionEnvironment": {
+      "type": "object", "additionalProperties": false, "required": ["inheritance", "variables"],
+      "properties": {
+        "inheritance": {"const": "none"},
+        "variables": {
+          "type": "object", "additionalProperties": false, "required": ["LANG", "LC_ALL", "TZ"],
+          "properties": {"LANG": {"const": "C.UTF-8"}, "LC_ALL": {"const": "C.UTF-8"}, "TZ": {"const": "UTC"}}
+        }
+      }
+    },
+    "ImageJavaBinaryIdentity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["imagePath", "byteLength", "sha256", "encoding", "fileFormat", "architecture", "inspectionPolicy", "elf"],
+      "properties": {
+        "imagePath": {"const": "/runtime/bin/java"},
+        "byteLength": {"type": "integer", "minimum": 64, "maximum": 1073741824},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "raw-bytes"},
+        "fileFormat": {"const": "elf64"},
+        "architecture": {"const": "amd64"},
+        "inspectionPolicy": {"const": "eip0045-b4-elf64-amd64-runtime-v1"},
+        "elf": {"$ref": "#/$defs/RuntimeElfInspection"}
+      }
+    },
+    "ImageJavacBinaryIdentity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["imagePath", "byteLength", "sha256", "encoding", "fileFormat", "architecture", "inspectionPolicy", "elf"],
+      "properties": {
+        "imagePath": {"const": "/runtime/bin/javac"},
+        "byteLength": {"type": "integer", "minimum": 64, "maximum": 1073741824},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "raw-bytes"},
+        "fileFormat": {"const": "elf64"},
+        "architecture": {"const": "amd64"},
+        "inspectionPolicy": {"const": "eip0045-b4-elf64-amd64-runtime-v1"},
+        "elf": {"$ref": "#/$defs/RuntimeElfInspection"}
+      }
+    },
+    "JavaReleaseIdentity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["imagePath", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "imagePath": {"const": "/runtime/release"},
+        "byteLength": {"type": "integer", "minimum": 1, "maximum": 65536},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "openjdk-release-file-utf8-v1"}
+      }
+    },
+    "JavaRuntime": {
+      "type": "object", "additionalProperties": false,
+      "required": ["startupDependencyPolicy", "binary", "release", "featureVersion", "vendor", "version", "options"],
+      "properties": {
+        "startupDependencyPolicy": {"const": "eip0045-b4-elf64-amd64-startup-dependency-closure-v1"},
+        "binary": {"$ref": "#/$defs/ImageJavaBinaryIdentity"},
+        "release": {"$ref": "#/$defs/JavaReleaseIdentity"},
+        "featureVersion": {"const": 21},
+        "vendor": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[ -~]+$"},
+        "version": {"$ref": "#/$defs/JavaRuntimeVersion"},
+        "options": {
+          "type": "array", "minItems": 9, "maxItems": 9,
+          "prefixItems": [
+            {"const": "-Xms64m"},
+            {"const": "-Xmx3072m"},
+            {"const": "-XX:+UseSerialGC"},
+            {"const": "-XX:+DisableAttachMechanism"},
+            {"const": "-Djava.io.tmpdir=/tmp"},
+            {"const": "-Dfile.encoding=UTF-8"},
+            {"const": "-Duser.language=en"},
+            {"const": "-Duser.country=US"},
+            {"const": "-Duser.timezone=UTC"}
+          ],
+          "items": false
+        }
+      }
+    },
+    "BuildJdk": {
+      "type": "object", "additionalProperties": false,
+      "required": ["startupDependencyPolicy", "launcher", "compiler", "release", "featureVersion", "vendor", "version"],
+      "properties": {
+        "startupDependencyPolicy": {"const": "eip0045-b4-elf64-amd64-startup-dependency-closure-v1"},
+        "launcher": {"$ref": "#/$defs/ImageJavaBinaryIdentity"},
+        "compiler": {"$ref": "#/$defs/ImageJavacBinaryIdentity"},
+        "release": {"$ref": "#/$defs/JavaReleaseIdentity"},
+        "featureVersion": {"const": 21},
+        "vendor": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[ -~]+$"},
+        "version": {"$ref": "#/$defs/JavaRuntimeVersion"}
+      }
+    },
+    "JavaRuntimeVersion": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 128,
+      "pattern": "^21(?:\\.(?:0|[1-9][0-9]*)){0,3}(?:-[A-Za-z0-9]+)?(?:\\+(?:0|[1-9][0-9]*)(?:-[A-Za-z0-9][A-Za-z0-9.-]*)?)?$"
+    },
+    "NonRootUser": {
+      "type": "object", "additionalProperties": false, "required": ["uid", "gid", "additionalGids"],
+      "properties": {"uid": {"const": 65532}, "gid": {"const": 65532}, "additionalGids": {"type": "array", "maxItems": 0}}
+    },
+    "PrivateNamespaces": {
+      "type": "object", "additionalProperties": false, "required": ["mount", "pid", "ipc", "uts", "user", "cgroup", "userMapping", "network"],
+      "properties": {"mount": {"const": "private"}, "pid": {"const": "private"}, "ipc": {"const": "private"}, "uts": {"const": "private"}, "user": {"const": "private"}, "cgroup": {"const": "private"}, "userMapping": {"const": "container-65532-to-finalizer-euid-egid-single-id"}, "network": {"const": "private-empty-loopback-down-no-address-no-route"}}
+    },
+    "NoCapabilities": {
+      "type": "object", "additionalProperties": false, "required": ["bounding", "effective", "inheritable", "permitted", "ambient"],
+      "properties": {"bounding": {"type": "array", "maxItems": 0}, "effective": {"type": "array", "maxItems": 0}, "inheritable": {"type": "array", "maxItems": 0}, "permitted": {"type": "array", "maxItems": 0}, "ambient": {"type": "array", "maxItems": 0}}
+    },
+    "FileDescriptorPolicy": {
+      "type": "object", "additionalProperties": false, "required": ["stdin", "stdout", "stderr", "additionalInherited"],
+      "properties": {"stdin": {"const": "closed"}, "stdout": {"const": "bounded-capture"}, "stderr": {"const": "bounded-capture"}, "additionalInherited": {"const": 0}}
+    },
+    "HostIsolation": {
+      "type": "object", "additionalProperties": false, "required": ["devices", "sockets", "home", "cache", "provenance", "sysfs", "proc"],
+      "properties": {"devices": {"const": "fixed-host-pseudodevices-null-zero-full-random-urandom-only"}, "sockets": {"const": "none"}, "home": {"const": "none"}, "cache": {"const": "none"}, "provenance": {"enum": ["none", "exact-source-dependency-output-mounts-only"]}, "sysfs": {"const": "none"}, "proc": {"const": "private-pid-namespace-only"}}
+    },
+    "InputMount": {
+      "type": "object", "additionalProperties": false, "required": ["sourceRole", "type", "target", "readOnly", "nodev", "nosuid", "noexec", "propagation"],
+      "properties": {"sourceRole": {"const": "verifier-input-root"}, "type": {"const": "bind-directory"}, "target": {"const": "/input"}, "readOnly": {"const": true}, "nodev": {"const": true}, "nosuid": {"const": true}, "noexec": {"const": true}, "propagation": {"const": "private"}}
+    },
+    "NativeValidatorMount": {
+      "type": "object", "additionalProperties": false, "required": ["sourceRole", "type", "target", "readOnly", "nodev", "nosuid", "noexec", "propagation"],
+      "properties": {"sourceRole": {"const": "validator-artifact"}, "type": {"const": "bind-file"}, "target": {"const": "/validator/validator"}, "readOnly": {"const": true}, "nodev": {"const": true}, "nosuid": {"const": true}, "noexec": {"const": false}, "propagation": {"const": "private"}}
+    },
+    "JvmValidatorMount": {
+      "type": "object", "additionalProperties": false, "required": ["sourceRole", "type", "target", "readOnly", "nodev", "nosuid", "noexec", "propagation"],
+      "properties": {"sourceRole": {"const": "validator-artifact"}, "type": {"const": "bind-file"}, "target": {"const": "/validator/validator.jar"}, "readOnly": {"const": true}, "nodev": {"const": true}, "nosuid": {"const": true}, "noexec": {"const": true}, "propagation": {"const": "private"}}
+    },
+    "BuildSourceMount": {"type": "object", "additionalProperties": false, "required": ["sourceRole", "type", "target", "readOnly", "nodev", "nosuid", "noexec", "propagation"], "properties": {"sourceRole": {"const": "verified-source-tree"}, "type": {"const": "bind-directory"}, "target": {"const": "/src"}, "readOnly": {"const": true}, "nodev": {"const": true}, "nosuid": {"const": true}, "noexec": {"const": true}, "propagation": {"const": "private"}}},
+    "BuildDependencyMount": {"type": "object", "additionalProperties": false, "required": ["sourceRole", "type", "target", "readOnly", "nodev", "nosuid", "noexec", "propagation"], "properties": {"sourceRole": {"const": "dependency-closure"}, "type": {"const": "bind-directory"}, "target": {"const": "/deps"}, "readOnly": {"const": true}, "nodev": {"const": true}, "nosuid": {"const": true}, "noexec": {"const": true}, "propagation": {"const": "private"}}},
+    "BuildOutputMount": {"type": "object", "additionalProperties": false, "required": ["sourceRole", "type", "target", "readOnly", "freshEmpty", "nodev", "nosuid", "noexec", "propagation"], "properties": {"sourceRole": {"const": "fresh-output-root"}, "type": {"const": "bind-directory"}, "target": {"const": "/out"}, "readOnly": {"const": false}, "freshEmpty": {"const": true}, "nodev": {"const": true}, "nosuid": {"const": true}, "noexec": {"const": false}, "propagation": {"const": "private"}}},
+    "JvmPackagingPhaseInputMount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceRole", "type", "target", "readOnly", "freshMaterialization", "destroyAfterRun", "contentsPolicy", "nodev", "nosuid", "noexec", "propagation"],
+      "properties": {
+        "sourceRole": {"const": "jvm-copy-only-phase-input"},
+        "type": {"const": "bind-directory"},
+        "target": {"const": "/phase-input"},
+        "readOnly": {"const": true},
+        "freshMaterialization": {"const": true},
+        "destroyAfterRun": {"const": true},
+        "contentsPolicy": {"const": "eip0045-b4-jvm-copy-only-phase-input-v1"},
+        "nodev": {"const": true},
+        "nosuid": {"const": true},
+        "noexec": {"const": true},
+        "propagation": {"const": "private"}
+      }
+    },
+    "JvmPackagingPhasePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["phase", "hostAccessProvenance", "mounts", "workingDirectory"],
+      "properties": {
+        "phase": {"const": "copy-only-packaging"},
+        "hostAccessProvenance": {"const": "exact-phase-input-output-mounts-only"},
+        "mounts": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [
+            {"$ref": "#/$defs/JvmPackagingPhaseInputMount"},
+            {"$ref": "#/$defs/BuildOutputMount"}
+          ],
+          "items": false
+        },
+        "workingDirectory": {"const": "/phase-input"}
+      }
+    },
+    "ExecutionTmpfs": {
+      "type": "object", "additionalProperties": false, "required": ["target", "sizeBytes", "fresh", "destroyAfterRun", "nodev", "nosuid", "noexec"],
+      "properties": {"target": {"const": "/tmp"}, "sizeBytes": {"const": 67108864}, "fresh": {"const": true}, "destroyAfterRun": {"const": true}, "nodev": {"const": true}, "nosuid": {"const": true}, "noexec": {"const": true}}
+    },
+    "BuildTmpfs": {
+      "type": "object", "additionalProperties": false, "required": ["target", "sizeBytes", "fresh", "destroyAfterRun", "nodev", "nosuid", "noexec"],
+      "properties": {"target": {"const": "/tmp"}, "sizeBytes": {"const": 268435456}, "fresh": {"const": true}, "destroyAfterRun": {"const": true}, "nodev": {"const": true}, "nosuid": {"const": true}, "noexec": {"const": true}}
+    },
+    "InspectionPolicy": {
+      "type": "object", "additionalProperties": false, "required": ["beforeLaunch", "afterExit", "afterDestroy"],
+      "properties": {"beforeLaunch": {"const": "semantic-projection-and-created-state-required"}, "afterExit": {"const": "semantic-projection-and-stopped-state-required"}, "afterDestroy": {"const": "runtime-state-and-owned-path-absence-required"}}
+    },
+    "CommonPolicy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["lifecycle", "reuse", "pullPolicy", "network", "rootFilesystem", "user", "namespaces", "capabilities", "noNewPrivileges", "fileDescriptors", "hostAccess", "mounts", "tmpfs", "workingDirectory", "imageEntrypoint", "imageCmd", "imageEnvironment", "caseMetadata", "crossRunMutableState", "clockPolicy", "inspection"],
+      "properties": {
+        "lifecycle": {"const": "derive-create-inspect-start-wait-inspect-delete-confirm-absence"}, "reuse": {"const": false}, "pullPolicy": {"const": "never"}, "network": {"const": "private-empty-loopback-down-no-address-no-route"}, "rootFilesystem": {"const": "read-only"}, "user": {"$ref": "#/$defs/NonRootUser"}, "namespaces": {"$ref": "#/$defs/PrivateNamespaces"}, "capabilities": {"$ref": "#/$defs/NoCapabilities"}, "noNewPrivileges": {"const": true}, "fileDescriptors": {"$ref": "#/$defs/FileDescriptorPolicy"}, "hostAccess": {"$ref": "#/$defs/HostIsolation"}, "mounts": {"type": "array", "minItems": 2, "maxItems": 3}, "tmpfs": {"type": "array", "minItems": 1, "maxItems": 1}, "workingDirectory": {"enum": ["/src", "/input"]}, "packagingPhase": {"$ref": "#/$defs/JvmPackagingPhasePolicy"}, "imageEntrypoint": {"const": "ignored-by-finalizer"}, "imageCmd": {"const": "ignored-by-finalizer"}, "imageEnvironment": {"const": "ignored-by-finalizer"}, "caseMetadata": {"const": "none"}, "crossRunMutableState": {"const": "none"}, "clockPolicy": {"const": "host-clocks-visible-not-authoritative"}, "inspection": {"$ref": "#/$defs/InspectionPolicy"}
+      }
+    },
+    "BuildPolicy": {
+      "allOf": [
+        {"$ref": "#/$defs/CommonPolicy"},
+        {"properties": {"lifecycle": {"const": "derive-create-inspect-start-wait-inspect-delete-confirm-absence"}, "hostAccess": {"properties": {"provenance": {"const": "exact-source-dependency-output-mounts-only"}}}, "mounts": {"type": "array", "minItems": 3, "maxItems": 3, "prefixItems": [{"$ref": "#/$defs/BuildSourceMount"}, {"$ref": "#/$defs/BuildDependencyMount"}, {"$ref": "#/$defs/BuildOutputMount"}], "items": false}, "tmpfs": {"prefixItems": [{"$ref": "#/$defs/BuildTmpfs"}], "items": false}, "workingDirectory": {"const": "/src"}}}
+      ]
+    },
+    "RustBuildPolicy": {
+      "allOf": [
+        {"$ref": "#/$defs/BuildPolicy"},
+        {"not": {"required": ["packagingPhase"]}}
+      ]
+    },
+    "JvmBuildPolicy": {
+      "allOf": [
+        {"$ref": "#/$defs/BuildPolicy"},
+        {"required": ["packagingPhase"], "properties": {"packagingPhase": {"$ref": "#/$defs/JvmPackagingPhasePolicy"}}}
+      ]
+    },
+    "RustVerificationPolicy": {
+      "allOf": [
+        {"$ref": "#/$defs/CommonPolicy"},
+        {"properties": {"lifecycle": {"const": "derive-create-inspect-start-wait-inspect-delete-confirm-absence"}, "hostAccess": {"properties": {"provenance": {"const": "none"}}}, "mounts": {"type": "array", "minItems": 2, "maxItems": 2, "prefixItems": [{"$ref": "#/$defs/InputMount"}, {"$ref": "#/$defs/NativeValidatorMount"}], "items": false}, "tmpfs": {"prefixItems": [{"$ref": "#/$defs/ExecutionTmpfs"}], "items": false}, "workingDirectory": {"const": "/input"}}},
+        {"not": {"required": ["packagingPhase"]}}
+      ]
+    },
+    "JvmVerificationPolicy": {
+      "allOf": [
+        {"$ref": "#/$defs/CommonPolicy"},
+        {"properties": {"lifecycle": {"const": "derive-create-inspect-start-wait-inspect-delete-confirm-absence"}, "hostAccess": {"properties": {"provenance": {"const": "none"}}}, "mounts": {"type": "array", "minItems": 2, "maxItems": 2, "prefixItems": [{"$ref": "#/$defs/InputMount"}, {"$ref": "#/$defs/JvmValidatorMount"}], "items": false}, "tmpfs": {"prefixItems": [{"$ref": "#/$defs/ExecutionTmpfs"}], "items": false}, "workingDirectory": {"const": "/input"}}},
+        {"not": {"required": ["packagingPhase"]}}
+      ]
+    },
+    "BuildLimits": {
+      "type": "object", "additionalProperties": false,
+      "required": ["wallTimeoutMilliseconds", "cgroup", "maximumOpenFileDescriptors", "coreDumps", "stdoutBytes", "stderrBytes", "outputBytes", "outputEntries"],
+      "properties": {
+        "wallTimeoutMilliseconds": {"const": 3600000},
+        "cgroup": {"$ref": "#/$defs/BuildCgroupLimits"},
+        "maximumOpenFileDescriptors": {"const": 1024},
+        "coreDumps": {"const": "disabled"},
+        "stdoutBytes": {"const": 1048576},
+        "stderrBytes": {"const": 1048576},
+        "outputBytes": {"const": 34359738368},
+        "outputEntries": {"const": 1000000}
+      }
+    },
+    "VerificationLimits": {
+      "type": "object", "additionalProperties": false,
+      "required": ["wallTimeoutMilliseconds", "cgroup", "maximumOpenFileDescriptors", "coreDumps", "stdoutBytes", "stderrBytes"],
+      "properties": {
+        "wallTimeoutMilliseconds": {"const": 300000},
+        "cgroup": {"$ref": "#/$defs/VerificationCgroupLimits"},
+        "maximumOpenFileDescriptors": {"const": 256},
+        "coreDumps": {"const": "disabled"},
+        "stdoutBytes": {"const": 65536},
+        "stderrBytes": {"const": 65536}
+      }
+    },
+    "BuildCgroupLimits": {
+      "type": "object", "additionalProperties": false, "required": ["memoryBytes", "memorySwapBytes", "cpuPeriodMicroseconds", "cpuQuotaMicroseconds", "pids"],
+      "properties": {"memoryBytes": {"const": 12884901888}, "memorySwapBytes": {"const": 0}, "cpuPeriodMicroseconds": {"const": 100000}, "cpuQuotaMicroseconds": {"const": 800000}, "pids": {"const": 512}}
+    },
+    "VerificationCgroupLimits": {
+      "type": "object", "additionalProperties": false, "required": ["memoryBytes", "memorySwapBytes", "cpuPeriodMicroseconds", "cpuQuotaMicroseconds", "pids"],
+      "properties": {"memoryBytes": {"const": 4294967296}, "memorySwapBytes": {"const": 0}, "cpuPeriodMicroseconds": {"const": 100000}, "cpuQuotaMicroseconds": {"const": 400000}, "pids": {"const": 256}}
+    }
+  }
+}

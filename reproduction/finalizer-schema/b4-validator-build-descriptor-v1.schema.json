@@ -1,0 +1,683 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ergo:eip-0045:b4-validator-build-descriptor-v1",
+  "title": "Eip0045B4ValidatorBuildDescriptorV1",
+  "$comment": "This positive-finalizer schema is outside the legacy candidate-schema quarantine. The normative JVM inspection semantics are in docs/specs/b4-jvm-artifact-policy-v1.md.",
+  "description": "Closed identities for the source, build, artifact, entrypoint, and finalizer runner profile of one hermetic B4 positive validator. Cross-descriptor validation establishes non-aliasing lineage metadata, not independent source review; review remains external evidence. The JVM branch binds an executable JAR inspected under the exact eip0045-b4-jvm-artifact-v1 policy; it does not claim that a JAR contains its Java runtime or that static scanning proves absence of reflective or generated behavior.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "formatVersion", "implementation", "implementationLanguage", "implementationLineage", "reviewedSource", "dependencyClosure", "toolchainClosure", "deterministicBuild", "artifactKind", "artifact", "entrypoint", "executionEnvironment"],
+  "properties": {
+    "format": {"const": "Eip0045B4ValidatorBuildDescriptorV1"},
+    "formatVersion": {"const": 1},
+    "implementation": {"description": "Stable wire identifier. The independent-jvm spelling names the intended lineage and is not itself an independence or review attestation.", "enum": ["rust-reference", "independent-jvm"]},
+    "implementationLanguage": {"enum": ["rust", "scala"]},
+    "implementationLineage": {"$ref": "#/$defs/ImplementationLineage"},
+    "reviewedSource": {"$ref": "#/$defs/ReviewedSource"},
+    "dependencyClosure": {"$ref": "#/$defs/DependencyClosure"},
+    "toolchainClosure": {"$ref": "#/$defs/ToolchainClosure"},
+    "deterministicBuild": {
+      "oneOf": [
+        {"$ref": "#/$defs/RustClosedDeterministicBuild"},
+        {"$ref": "#/$defs/JvmClosedDeterministicBuild"}
+      ]
+    },
+    "artifactKind": {"enum": ["native-executable", "executable-jar"]},
+    "artifact": {"oneOf": [{"$ref": "#/$defs/NativeArtifactIdentity"}, {"$ref": "#/$defs/JvmArtifactIdentity"}]},
+    "entrypoint": {"oneOf": [{"$ref": "#/$defs/NativeEntrypoint"}, {"$ref": "#/$defs/JvmEntrypoint"}]},
+    "executionEnvironment": {"oneOf": [{"$ref": "#/$defs/NativeOciExecutionEnvironment"}, {"$ref": "#/$defs/JvmOciExecutionEnvironment"}]}
+  },
+  "allOf": [
+    {
+      "oneOf": [
+        {
+          "properties": {
+            "implementation": {"const": "rust-reference"},
+            "implementationLanguage": {"const": "rust"},
+            "deterministicBuild": {"$ref": "#/$defs/RustClosedDeterministicBuild"},
+            "artifactKind": {"const": "native-executable"},
+            "artifact": {"$ref": "#/$defs/NativeArtifactIdentity"},
+            "entrypoint": {"$ref": "#/$defs/NativeEntrypoint"},
+            "executionEnvironment": {"$ref": "#/$defs/NativeOciExecutionEnvironment"}
+          }
+        },
+        {
+          "properties": {
+            "implementation": {"const": "independent-jvm"},
+            "implementationLanguage": {"const": "scala"},
+            "deterministicBuild": {"$ref": "#/$defs/JvmClosedDeterministicBuild"},
+            "artifactKind": {"const": "executable-jar"},
+            "artifact": {"$ref": "#/$defs/JvmArtifactIdentity"},
+            "entrypoint": {"$ref": "#/$defs/JvmEntrypoint"},
+            "executionEnvironment": {"$ref": "#/$defs/JvmOciExecutionEnvironment"}
+          }
+        }
+      ]
+    }
+  ],
+  "$defs": {
+    "Hex32": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "GitObjectId": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "RelativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "pattern": "^[a-z0-9][a-z0-9._/-]{0,239}$",
+      "allOf": [
+        {"not": {"pattern": "/$"}},
+        {"not": {"pattern": "(^|/)\\.{1,2}($|/)"}},
+        {"not": {"pattern": "//"}},
+        {"not": {"pattern": "(^|/)[^/]*\\.($|/)"}},
+        {"not": {"pattern": "(^|/)(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\.[^/]*)?($|/)"}}
+      ]
+    },
+    "GitTreePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "pattern": "^[A-Za-z0-9.-][A-Za-z0-9._/-]{0,239}$",
+      "allOf": [
+        {"not": {"pattern": "/$"}},
+        {"not": {"pattern": "(^|/)\\.{1,2}($|/)"}},
+        {"not": {"pattern": "//"}},
+        {"not": {"pattern": "(^|/)[^/]*\\.($|/)"}}
+      ]
+    },
+    "ContainerPath": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 240,
+      "pattern": "^/[a-z0-9][a-z0-9._/-]{0,238}[a-z0-9]$",
+      "allOf": [
+        {"not": {"pattern": "//"}},
+        {"not": {"pattern": "(^|/)\\.{1,2}($|/)"}},
+        {"not": {"pattern": "(^|/)[^/]*\\.($|/)"}}
+      ]
+    },
+    "ReviewedSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit", "tree", "archive"],
+      "properties": {
+        "repository": {"type": "string", "minLength": 20, "maxLength": 200, "pattern": "^https://github\\.com/[a-z0-9][a-z0-9.-]*/[a-z0-9][a-z0-9._-]*\\.git$"},
+        "commit": {"$ref": "#/$defs/GitObjectId"},
+        "tree": {"$ref": "#/$defs/GitObjectId"},
+        "archive": {"$ref": "#/$defs/GitBundleIdentity"}
+      }
+    },
+    "GitBundleIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "path": {"$ref": "#/$defs/RelativePath"},
+        "byteLength": {"type": "integer", "minimum": 64, "maximum": 1073741824},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "git-bundle"}
+      }
+    },
+    "SourceFileIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "role", "byteLength", "sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/GitTreePath"},
+        "role": {"enum": ["implementation-source", "generated-verifier-data", "implementation-resource"]},
+        "byteLength": {"type": "integer", "minimum": 0, "maximum": 16777216},
+        "sha256": {"$ref": "#/$defs/Hex32"}
+      }
+    },
+    "ImplementationLineage": {
+      "description": "Hash-bound source inventory used for non-aliasing checks. Independent authorship and source review are established outside this document.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "sharedVerifierImplementation", "sourceFiles", "lineageSha256"],
+      "properties": {
+        "method": {"const": "canonical-source-inventory-v1"},
+        "sharedVerifierImplementation": {"const": "none"},
+        "sourceFiles": {"type": "array", "minItems": 1, "maxItems": 2048, "uniqueItems": true, "items": {"$ref": "#/$defs/SourceFileIdentity"}},
+        "lineageSha256": {"$ref": "#/$defs/Hex32"}
+      }
+    },
+    "ClosureArtifactIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "path": {"$ref": "#/$defs/RelativePath"},
+        "byteLength": {"type": "integer", "minimum": 1, "maximum": 268435456},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "raw-bytes"}
+      }
+    },
+    "DependencyEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ecosystem", "name", "version", "origin", "artifact"],
+      "properties": {
+        "ecosystem": {"enum": ["cargo", "maven", "local"]},
+        "name": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[A-Za-z0-9._:/+-]+$"},
+        "version": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[ -~]+$"},
+        "origin": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^[ -~]+$"},
+        "artifact": {"$ref": "#/$defs/ClosureArtifactIdentity"}
+      }
+    },
+    "DependencyClosure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "lockfile", "entries", "closureSha256"],
+      "properties": {
+        "method": {"const": "content-addressed-offline-v1"},
+        "lockfile": {"$ref": "#/$defs/ClosureArtifactIdentity"},
+        "entries": {"type": "array", "minItems": 0, "maxItems": 512, "uniqueItems": true, "items": {"$ref": "#/$defs/DependencyEntry"}},
+        "closureSha256": {"$ref": "#/$defs/Hex32"}
+      }
+    },
+    "ToolchainEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "name", "version", "imagePath", "byteLength", "sha256"],
+      "properties": {
+        "role": {"enum": ["build-driver", "compiler", "linker", "packager", "runtime", "auxiliary"]},
+        "name": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-z0-9][a-z0-9._+-]*$"},
+        "version": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[ -~]+$"},
+        "imagePath": {"$ref": "#/$defs/ContainerPath"},
+        "byteLength": {"type": "integer", "minimum": 1, "maximum": 1073741824},
+        "sha256": {"$ref": "#/$defs/Hex32"}
+      }
+    },
+    "ToolchainClosure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "entries", "closureSha256"],
+      "properties": {
+        "method": {"const": "container-toolchain-inventory-v1"},
+        "entries": {"type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true, "items": {"$ref": "#/$defs/ToolchainEntry"}},
+        "closureSha256": {"$ref": "#/$defs/Hex32"}
+      }
+    },
+    "RunnerProfileCommitment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "path", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "format": {"const": "Eip0045B4PositiveOciRunnerProfileV1"},
+        "path": {"$ref": "#/$defs/RelativePath"},
+        "byteLength": {"type": "integer", "minimum": 1, "maximum": 1048576},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "rfc8785-jcs"}
+      }
+    },
+    "RustBuildRunnerProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runnerProfileIndex", "purpose", "commitment"],
+      "properties": {
+        "runnerProfileIndex": {"const": 0},
+        "purpose": {"const": "rust-validator-build"},
+        "commitment": {"$ref": "#/$defs/RunnerProfileCommitment"}
+      }
+    },
+    "JvmBuildRunnerProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runnerProfileIndex", "purpose", "commitment"],
+      "properties": {
+        "runnerProfileIndex": {"const": 1},
+        "purpose": {"const": "jvm-validator-build"},
+        "commitment": {"$ref": "#/$defs/RunnerProfileCommitment"}
+      }
+    },
+    "RustExecutionRunnerProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runnerProfileIndex", "purpose", "commitment"],
+      "properties": {
+        "runnerProfileIndex": {"const": 2},
+        "purpose": {"const": "rust-validator"},
+        "commitment": {"$ref": "#/$defs/RunnerProfileCommitment"}
+      }
+    },
+    "JvmExecutionRunnerProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runnerProfileIndex", "purpose", "commitment"],
+      "properties": {
+        "runnerProfileIndex": {"const": 3},
+        "purpose": {"const": "jvm-validator"},
+        "commitment": {"$ref": "#/$defs/RunnerProfileCommitment"}
+      }
+    },
+    "BuildEnvironment": {
+      "description": "No descriptor-selected variables are permitted. The separately committed runner profile supplies the complete fixed process environment.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inheritance", "variables"],
+      "properties": {
+        "inheritance": {"const": "none"},
+        "variables": {"type": "array", "maxItems": 0}
+      }
+    },
+    "BuildStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["executable", "arguments", "workingDirectory", "shell"],
+      "properties": {
+        "executable": {"$ref": "#/$defs/ContainerPath"},
+        "arguments": {"type": "array", "minItems": 0, "maxItems": 64, "items": {"type": "string", "maxLength": 512, "pattern": "^[ -~]*$"}},
+        "workingDirectory": {"const": "/src"},
+        "shell": {"const": "none"}
+      }
+    },
+    "ClosedDeterministicBuild": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runnerProfile", "environment", "steps", "outputPath", "repetitions", "comparison", "networkAccess", "cachePolicy"],
+      "properties": {
+        "runnerProfile": {"oneOf": [{"$ref": "#/$defs/RustBuildRunnerProfile"}, {"$ref": "#/$defs/JvmBuildRunnerProfile"}]},
+        "environment": {"$ref": "#/$defs/BuildEnvironment"},
+        "steps": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"$ref": "#/$defs/BuildStep"}},
+        "outputPath": {"$ref": "#/$defs/RelativePath"},
+        "repetitions": {"const": 2},
+        "comparison": {"const": "byte-for-byte"},
+        "networkAccess": {"const": "disabled"},
+        "cachePolicy": {"const": "none"}
+      }
+    },
+    "RustClosedDeterministicBuild": {
+      "allOf": [
+        {"$ref": "#/$defs/ClosedDeterministicBuild"},
+        {"properties": {"runnerProfile": {"$ref": "#/$defs/RustBuildRunnerProfile"}}}
+      ]
+    },
+    "JvmApplicationBuildOutput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "containerPath"],
+      "properties": {
+        "role": {"const": "application-intermediate"},
+        "containerPath": {"const": "/out/application.jar"}
+      }
+    },
+    "JvmValidatorBuildOutput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "containerPath"],
+      "properties": {
+        "role": {"const": "validator-artifact"},
+        "containerPath": {"const": "/out/validator.jar"}
+      }
+    },
+    "JvmCopyOnlyPhaseInputLayout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy", "manifestPath", "archiveRoot"],
+      "properties": {
+        "policy": {"const": "eip0045-b4-jvm-copy-only-phase-input-v1"},
+        "manifestPath": {"const": "/phase-input/inclusion-manifest.json"},
+        "archiveRoot": {"const": "/phase-input/archives"}
+      }
+    },
+    "JvmApplicationBuildPhase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["phase", "step", "output"],
+      "properties": {
+        "phase": {"const": "application-intermediate"},
+        "step": {"$ref": "#/$defs/BuildStep"},
+        "output": {"$ref": "#/$defs/JvmApplicationBuildOutput"}
+      }
+    },
+    "JvmCopyOnlyPackagingStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["executable", "arguments", "workingDirectory", "shell"],
+      "properties": {
+        "executable": {"$ref": "#/$defs/ContainerPath"},
+        "arguments": {
+          "type": "array",
+          "minItems": 7,
+          "maxItems": 7,
+          "prefixItems": [
+            {"const": "replay-copy-only-v1"},
+            {"const": "--manifest"},
+            {"const": "/phase-input/inclusion-manifest.json"},
+            {"const": "--archive-root"},
+            {"const": "/phase-input/archives"},
+            {"const": "--output"},
+            {"const": "/out/validator.jar"}
+          ],
+          "items": false
+        },
+        "workingDirectory": {"const": "/phase-input"},
+        "shell": {"const": "none"}
+      }
+    },
+    "JvmCopyOnlyPackagingPhase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["phase", "inputLayout", "step", "output"],
+      "properties": {
+        "phase": {"const": "copy-only-packaging"},
+        "inputLayout": {"$ref": "#/$defs/JvmCopyOnlyPhaseInputLayout"},
+        "step": {"$ref": "#/$defs/JvmCopyOnlyPackagingStep"},
+        "output": {"$ref": "#/$defs/JvmValidatorBuildOutput"}
+      }
+    },
+    "JvmClosedDeterministicBuild": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runnerProfile", "environment", "phases", "executionOrder", "repetitionsPerPhase", "instancePolicy", "comparison", "networkAccess", "cachePolicy"],
+      "properties": {
+        "runnerProfile": {"$ref": "#/$defs/JvmBuildRunnerProfile"},
+        "environment": {"$ref": "#/$defs/BuildEnvironment"},
+        "phases": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [
+            {"$ref": "#/$defs/JvmApplicationBuildPhase"},
+            {"$ref": "#/$defs/JvmCopyOnlyPackagingPhase"}
+          ],
+          "items": false
+        },
+        "executionOrder": {"const": "complete-and-compare-each-phase-before-next"},
+        "repetitionsPerPhase": {"const": 2},
+        "instancePolicy": {"const": "fresh-oci-instance-and-output-root-per-phase-repetition"},
+        "comparison": {"const": "byte-for-byte-and-bound-identity-per-phase"},
+        "networkAccess": {"const": "disabled"},
+        "cachePolicy": {"const": "none"}
+      }
+    },
+    "StaticElfInspection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["policy", "elfType", "osAbi", "programHeaderCount", "sectionHeaderCount", "loadSegmentCount", "executableLoadSegmentCount", "entryPointInExecutableLoad", "interpreterSegmentCount", "dynamicSegmentCount", "gnuStackSegmentCount", "writableExecutableLoadSegmentCount", "executableStackSegmentCount", "overlappingLoadFileRangeCount", "extendedNumberingCount", "structuralParseFailureCount"],
+      "properties": {
+        "policy": {"const": "eip0045-b4-elf64-amd64-structural-v1"},
+        "elfType": {"enum": ["et-exec", "et-dyn"]},
+        "osAbi": {"enum": ["sysv", "linux"]},
+        "programHeaderCount": {"type": "integer", "minimum": 1, "maximum": 65534},
+        "sectionHeaderCount": {"type": "integer", "minimum": 0, "maximum": 65279},
+        "loadSegmentCount": {"type": "integer", "minimum": 1, "maximum": 65534},
+        "executableLoadSegmentCount": {"type": "integer", "minimum": 1, "maximum": 65534},
+        "entryPointInExecutableLoad": {"const": true},
+        "interpreterSegmentCount": {"const": 0},
+        "dynamicSegmentCount": {"const": 0},
+        "gnuStackSegmentCount": {"const": 1},
+        "writableExecutableLoadSegmentCount": {"const": 0},
+        "executableStackSegmentCount": {"const": 0},
+        "overlappingLoadFileRangeCount": {"const": 0},
+        "extendedNumberingCount": {"const": 0},
+        "structuralParseFailureCount": {"const": 0}
+      }
+    },
+    "NativeArtifactIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byteLength", "sha256", "encoding", "fileFormat", "architecture", "linkage", "inspectionPolicy", "elf"],
+      "properties": {
+        "path": {"$ref": "#/$defs/RelativePath"},
+        "byteLength": {"type": "integer", "minimum": 64, "maximum": 1073741824},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "raw-bytes"},
+        "fileFormat": {"const": "elf64"},
+        "architecture": {"const": "amd64"},
+        "linkage": {"const": "static-no-interpreter"},
+        "inspectionPolicy": {"const": "eip0045-b4-elf64-amd64-static-v1"},
+        "elf": {"$ref": "#/$defs/StaticElfInspection"}
+      }
+    },
+    "JvmArtifactIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byteLength", "sha256", "encoding", "fileFormat", "inspectionPolicy", "packaging", "archive", "manifest", "classFiles", "nonClassFiles", "analysisBoundary"],
+      "properties": {
+        "path": {"$ref": "#/$defs/RelativePath"},
+        "byteLength": {"type": "integer", "minimum": 22, "maximum": 1073741824},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "raw-bytes"},
+        "fileFormat": {"const": "zip-jar"},
+        "inspectionPolicy": {"const": "eip0045-b4-jvm-artifact-v1"},
+        "packaging": {"$ref": "#/$defs/JvmCopyOnlyPackaging"},
+        "archive": {"$ref": "#/$defs/JvmJarArchiveInspection"},
+        "manifest": {"$ref": "#/$defs/JvmJarManifestInspection"},
+        "classFiles": {"$ref": "#/$defs/JvmClassFileInspection"},
+        "nonClassFiles": {"$ref": "#/$defs/JvmNonClassFileInspection"},
+        "analysisBoundary": {"$ref": "#/$defs/JvmArtifactAnalysisBoundary"}
+      }
+    },
+    "JvmPackagerReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "name", "version", "imagePath", "byteLength", "sha256"],
+      "properties": {
+        "role": {"const": "packager"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-z0-9][a-z0-9._+-]*$"},
+        "version": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[ -~]+$"},
+        "imagePath": {"$ref": "#/$defs/ContainerPath"},
+        "byteLength": {"type": "integer", "minimum": 1, "maximum": 1073741824},
+        "sha256": {"$ref": "#/$defs/Hex32"}
+      }
+    },
+    "JvmPackagingSourceReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "role", "byteLength", "sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/GitTreePath"},
+        "role": {"enum": ["implementation-source", "implementation-resource"]},
+        "byteLength": {"type": "integer", "minimum": 1, "maximum": 16777216},
+        "sha256": {"$ref": "#/$defs/Hex32"}
+      }
+    },
+    "JvmPackagingArchiveIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byteLength", "sha256", "encoding", "fileFormat", "regularEntryCount"],
+      "properties": {
+        "path": {"$ref": "#/$defs/RelativePath"},
+        "byteLength": {"type": "integer", "minimum": 22, "maximum": 1073741824},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "raw-bytes"},
+        "fileFormat": {"const": "zip-jar"},
+        "regularEntryCount": {"type": "integer", "minimum": 1, "maximum": 65534}
+      }
+    },
+    "JvmCopyOnlyInclusionManifestIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "path", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "format": {"const": "Eip0045B4JvmCopyOnlyInclusionManifestV1"},
+        "path": {"$ref": "#/$defs/RelativePath"},
+        "byteLength": {"type": "integer", "minimum": 2, "maximum": 1048576},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "rfc8785-jcs"}
+      }
+    },
+    "JvmCopyOnlyPackaging": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy", "mode", "applicationSelection", "dependencySelection", "replayPolicy", "dependencyArtifactCount", "packer", "configuration", "applicationInput", "inclusionManifest"],
+      "properties": {
+        "policy": {"const": "eip0045-b4-jvm-copy-only-packaging-v1"},
+        "mode": {"const": "copy-only-inclusion-manifest"},
+        "applicationSelection": {"const": "all-regular-entries"},
+        "dependencySelection": {"const": "reviewed-exact-copy-list"},
+        "replayPolicy": {"const": "exact-input-output-entry-replay-required"},
+        "dependencyArtifactCount": {"type": "integer", "minimum": 0, "maximum": 512},
+        "packer": {"$ref": "#/$defs/JvmPackagerReference"},
+        "configuration": {"$ref": "#/$defs/JvmPackagingSourceReference"},
+        "applicationInput": {"$ref": "#/$defs/JvmPackagingArchiveIdentity"},
+        "inclusionManifest": {"$ref": "#/$defs/JvmCopyOnlyInclusionManifestIdentity"}
+      }
+    },
+    "JvmJarArchiveInspection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy", "entryCount", "localFileRecordCount", "regularFileEntryCount", "directoryEntryCount", "uncompressedByteLength", "largestEntryUncompressedByteLength", "allowedCompressionMethods", "dataDescriptorPolicy", "dataDescriptorCount", "unsignedDataDescriptorCount", "zip64DataDescriptorCount", "zip64RecordCount", "encryptedEntryCount", "multiDiskFieldCount", "unsupportedFlagEntryCount", "unsupportedExtraFieldEntryCount", "archiveCommentByteLength", "entryCommentCount", "prefixByteLength", "suffixByteLength", "unreferencedByteLength", "overlappingEntryCount", "centralDirectoryOrderMismatchCount", "versionFieldMismatchCount", "nonCanonicalTimestampCount", "utf8FlagMissingCount", "nonZeroAttributeCount", "manifestFirstEntryCount", "canonicalEntryOrderMismatchCount", "duplicateEntryNameCount", "asciiCaseFoldCollisionCount", "nonCanonicalEntryNameCount", "linkOrSpecialEntryCount", "localCentralHeaderMismatchCount", "crcMismatchCount", "sizeMismatchCount", "decompressionFailureCount"],
+      "properties": {
+        "policy": {"const": "eip0045-b4-canonical-jar-zip-v1"},
+        "entryCount": {"type": "integer", "minimum": 1, "maximum": 65534},
+        "localFileRecordCount": {"type": "integer", "minimum": 1, "maximum": 65534},
+        "regularFileEntryCount": {"type": "integer", "minimum": 1, "maximum": 65534},
+        "directoryEntryCount": {"type": "integer", "minimum": 0, "maximum": 65534},
+        "uncompressedByteLength": {"type": "integer", "minimum": 1, "maximum": 1073741824},
+        "largestEntryUncompressedByteLength": {"type": "integer", "minimum": 1, "maximum": 1073741824},
+        "allowedCompressionMethods": {"type": "array", "minItems": 2, "maxItems": 2, "prefixItems": [{"const": "stored"}, {"const": "deflate"}], "items": false},
+        "dataDescriptorPolicy": {"const": "signed-immediate-classic-match-central-directory"},
+        "dataDescriptorCount": {"type": "integer", "minimum": 0, "maximum": 65534},
+        "unsignedDataDescriptorCount": {"const": 0},
+        "zip64DataDescriptorCount": {"const": 0},
+        "zip64RecordCount": {"const": 0},
+        "encryptedEntryCount": {"const": 0},
+        "multiDiskFieldCount": {"const": 0},
+        "unsupportedFlagEntryCount": {"const": 0},
+        "unsupportedExtraFieldEntryCount": {"const": 0},
+        "archiveCommentByteLength": {"const": 0},
+        "entryCommentCount": {"const": 0},
+        "prefixByteLength": {"const": 0},
+        "suffixByteLength": {"const": 0},
+        "unreferencedByteLength": {"const": 0},
+        "overlappingEntryCount": {"const": 0},
+        "centralDirectoryOrderMismatchCount": {"const": 0},
+        "versionFieldMismatchCount": {"const": 0},
+        "nonCanonicalTimestampCount": {"const": 0},
+        "utf8FlagMissingCount": {"const": 0},
+        "nonZeroAttributeCount": {"const": 0},
+        "manifestFirstEntryCount": {"const": 1},
+        "canonicalEntryOrderMismatchCount": {"const": 0},
+        "duplicateEntryNameCount": {"const": 0},
+        "asciiCaseFoldCollisionCount": {"const": 0},
+        "nonCanonicalEntryNameCount": {"const": 0},
+        "linkOrSpecialEntryCount": {"const": 0},
+        "localCentralHeaderMismatchCount": {"const": 0},
+        "crcMismatchCount": {"const": 0},
+        "sizeMismatchCount": {"const": 0},
+        "decompressionFailureCount": {"const": 0}
+      }
+    },
+    "JvmJarManifestInspection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy", "manifestEntryCount", "manifestByteLength", "mainAttributeCount", "createdByAttributeCount", "individualSectionCount", "unsupportedMainAttributeCount", "manifestVersionAttributeCount", "manifestVersion", "mainClassAttributeCount", "mainClass", "mainClassEntry", "mainClassEntryCount", "classPathAttributeCount", "multiReleaseAttributeCount", "launcherAgentClassAttributeCount", "addExportsAttributeCount", "addOpensAttributeCount", "javaFxApplicationClassAttributeCount", "signatureVersionAttributeCount", "signatureRelatedEntryCount", "versionedEntryCount", "classpathMode", "launchMode"],
+      "properties": {
+        "policy": {"const": "java-se-21-jar-manifest-executable-v1"},
+        "manifestEntryCount": {"const": 1},
+        "manifestByteLength": {"type": "integer", "minimum": 1, "maximum": 65536},
+        "mainAttributeCount": {"type": "integer", "minimum": 2, "maximum": 3},
+        "createdByAttributeCount": {"type": "integer", "minimum": 0, "maximum": 1},
+        "individualSectionCount": {"const": 0},
+        "unsupportedMainAttributeCount": {"const": 0},
+        "manifestVersionAttributeCount": {"const": 1},
+        "manifestVersion": {"const": "1.0"},
+        "mainClassAttributeCount": {"const": 1},
+        "mainClass": {"type": "string", "minLength": 1, "maxLength": 234, "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*(?:\\.[A-Za-z_$][A-Za-z0-9_$]*)*$"},
+        "mainClassEntry": {"type": "string", "minLength": 7, "maxLength": 240, "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*(?:/[A-Za-z_$][A-Za-z0-9_$]*)*\\.class$"},
+        "mainClassEntryCount": {"const": 1},
+        "classPathAttributeCount": {"const": 0},
+        "multiReleaseAttributeCount": {"const": 0},
+        "launcherAgentClassAttributeCount": {"const": 0},
+        "addExportsAttributeCount": {"const": 0},
+        "addOpensAttributeCount": {"const": 0},
+        "javaFxApplicationClassAttributeCount": {"const": 0},
+        "signatureVersionAttributeCount": {"const": 0},
+        "signatureRelatedEntryCount": {"const": 0},
+        "versionedEntryCount": {"const": 0},
+        "classpathMode": {"const": "jar-only"},
+        "launchMode": {"const": "java-jar"}
+      }
+    },
+    "JvmClassFileInspection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy", "runtimeFeatureVersion", "maximumSupportedMajorVersion", "classEntryCount", "minimumObservedMajorVersion", "maximumObservedMajorVersion", "nonZeroMinorVersionCount", "structuralParseFailureCount", "trailingByteCount", "accNativeMethodCount", "nativeLoadMethodReferenceCount", "foreignApiTypeReferenceCount", "jnaTypeReferenceCount", "jnrTypeReferenceCount", "processLaunchMethodReferenceCount", "forbiddenMethodHandleTargetCount"],
+      "properties": {
+        "policy": {"const": "jvms-se21-complete-class-file-v1"},
+        "runtimeFeatureVersion": {"const": 21},
+        "maximumSupportedMajorVersion": {"const": 65},
+        "classEntryCount": {"type": "integer", "minimum": 1, "maximum": 65534},
+        "minimumObservedMajorVersion": {"type": "integer", "minimum": 45, "maximum": 65},
+        "maximumObservedMajorVersion": {"type": "integer", "minimum": 45, "maximum": 65},
+        "nonZeroMinorVersionCount": {"const": 0},
+        "structuralParseFailureCount": {"const": 0},
+        "trailingByteCount": {"const": 0},
+        "accNativeMethodCount": {"const": 0},
+        "nativeLoadMethodReferenceCount": {"const": 0},
+        "foreignApiTypeReferenceCount": {"const": 0},
+        "jnaTypeReferenceCount": {"const": 0},
+        "jnrTypeReferenceCount": {"const": 0},
+        "processLaunchMethodReferenceCount": {"const": 0},
+        "forbiddenMethodHandleTargetCount": {"const": 0}
+      }
+    },
+    "JvmNonClassFileInspection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy", "regularEntryCount", "scannedEntryCount", "forbiddenNameMatchCount", "nativeExecutableMagicMatchCount", "nestedArchiveMagicMatchCount", "scriptMagicMatchCount", "misnamedClassMagicMatchCount"],
+      "properties": {
+        "policy": {"const": "eip0045-b4-jvm-nonclass-scan-v1"},
+        "regularEntryCount": {"type": "integer", "minimum": 1, "maximum": 65534},
+        "scannedEntryCount": {"type": "integer", "minimum": 1, "maximum": 65534},
+        "forbiddenNameMatchCount": {"const": 0},
+        "nativeExecutableMagicMatchCount": {"const": 0},
+        "nestedArchiveMagicMatchCount": {"const": 0},
+        "scriptMagicMatchCount": {"const": 0},
+        "misnamedClassMagicMatchCount": {"const": 0}
+      }
+    },
+    "JvmArtifactAnalysisBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["staticResultScope", "reflection", "generatedBytecode", "encodedOrAssembledSymbols", "resourceDrivenDelegation", "runtimeNativeCode"],
+      "properties": {
+        "staticResultScope": {"const": "complete-archive-structure-direct-symbolic-reference-and-byte-signature-scan"},
+        "reflection": {"const": "not-established-source-review-required"},
+        "generatedBytecode": {"const": "not-established-source-review-required"},
+        "encodedOrAssembledSymbols": {"const": "not-established-source-review-required"},
+        "resourceDrivenDelegation": {"const": "not-established-source-review-required"},
+        "runtimeNativeCode": {"const": "outside-jar-scan-bound-by-runner-profile"}
+      }
+    },
+    "NativeEntrypoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "interface", "subcommand", "wrapper"],
+      "properties": {
+        "kind": {"const": "direct-native"},
+        "interface": {"const": "eip0045-b4-verifier-cli-v2"},
+        "subcommand": {"const": "verify-positive"},
+        "wrapper": {"const": "none"}
+      }
+    },
+    "JvmEntrypoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "interface", "subcommand", "wrapper"],
+      "properties": {
+        "kind": {"const": "direct-java-jar"},
+        "interface": {"const": "eip0045-b4-verifier-cli-v2"},
+        "subcommand": {"const": "verify-positive"},
+        "wrapper": {"const": "none"}
+      }
+    },
+    "NativeOciExecutionEnvironment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "runnerProfile"],
+      "properties": {
+        "kind": {"const": "isolated-oci-native"},
+        "runnerProfile": {"$ref": "#/$defs/RustExecutionRunnerProfile"}
+      }
+    },
+    "JvmOciExecutionEnvironment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "runnerProfile"],
+      "properties": {
+        "kind": {"const": "isolated-oci-jvm"},
+        "runnerProfile": {"$ref": "#/$defs/JvmExecutionRunnerProfile"}
+      }
+    }
+  }
+}

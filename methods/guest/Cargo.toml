@@ -1,0 +1,38 @@
+[package]
+name = "eip-0045-guest"
+description = "Deterministic RISC Zero guest for EIP-0045 statement receipts"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88.0"
+license = "Apache-2.0"
+authors = ["A. Shannon"]
+publish = false
+autobins = false
+
+[workspace]
+resolver = "2"
+
+[[bin]]
+name = "eip-0045-guest"
+path = "src/main.rs"
+
+[[bin]]
+name = "eip-0045-alternate-program-guest"
+path = "src/bin/eip-0045-alternate-program-guest.rs"
+
+[dependencies]
+eip-0045-methods = { path = "..", default-features = false }
+risc0-circuit-recursion = { git = "https://github.com/a-shannon/risc0", rev = "227229dc793c215c533cbc0e07911601974a4629", default-features = false }
+risc0-zkvm = { git = "https://github.com/a-shannon/risc0", rev = "227229dc793c215c533cbc0e07911601974a4629", default-features = false }
+
+[profile.release]
+lto = true
+opt-level = 3
+codegen-units = 1
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"

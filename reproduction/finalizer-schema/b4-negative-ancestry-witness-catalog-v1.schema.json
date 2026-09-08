@@ -1,0 +1,1382 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ergo:eip-0045:b4-negative-ancestry-witness-catalog-v1",
+  "title": "Eip0045B4NegativeAncestryWitnessCatalogV1",
+  "description": "Strict post-generation candidate catalogue for seven distinct recursive-ancestry receipt witnesses materialized into eleven ordered negative row bindings.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "formatVersion",
+    "stage",
+    "receiptOracleCodec",
+    "negativePlan",
+    "profileManifest",
+    "alternateGuestElf",
+    "consumerProgramId",
+    "alternateProgramId",
+    "innerControlRoot",
+    "entries"
+  ],
+  "properties": {
+    "format": {
+      "const": "Eip0045B4NegativeAncestryWitnessCatalogV1"
+    },
+    "formatVersion": {
+      "const": 1
+    },
+    "stage": {
+      "const": "post-generation-derived"
+    },
+    "receiptOracleCodec": {
+      "const": "bincode-1.3.3-fixint-little-endian-reject-trailing-limit-1048576"
+    },
+    "negativePlan": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/ArtifactIdentity"
+        },
+        {
+          "properties": {
+            "path": {
+              "const": "reproduction/negative-plan.json"
+            },
+            "byteLength": {
+              "maximum": 131072
+            },
+            "encoding": {
+              "const": "rfc8785-jcs"
+            }
+          }
+        }
+      ]
+    },
+    "profileManifest": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/ArtifactIdentity"
+        },
+        {
+          "properties": {
+            "path": {
+              "const": "profiles/risc0-v3-succinct/manifest.bin"
+            },
+            "byteLength": {
+              "const": 458
+            },
+            "encoding": {
+              "const": "raw-bytes"
+            }
+          }
+        }
+      ]
+    },
+    "alternateGuestElf": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/ArtifactIdentity"
+        },
+        {
+          "properties": {
+            "path": {
+              "const": "reproduction/negative-ancestry-witnesses/alternate-program-guest.elf"
+            },
+            "byteLength": {
+              "maximum": 4194304
+            },
+            "encoding": {
+              "const": "raw-bytes"
+            }
+          }
+        }
+      ]
+    },
+    "consumerProgramId": {
+      "$ref": "#/$defs/Hex32"
+    },
+    "alternateProgramId": {
+      "$ref": "#/$defs/Hex32"
+    },
+    "innerControlRoot": {
+      "const": "a54dc85ac99f851c92d7c96d7318af41dbe7c0194edfcc37eb4d422a998c1f56"
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 11,
+      "maxItems": 11,
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/Row141"
+        },
+        {
+          "$ref": "#/$defs/Row142"
+        },
+        {
+          "$ref": "#/$defs/Row143"
+        },
+        {
+          "$ref": "#/$defs/Row145"
+        },
+        {
+          "$ref": "#/$defs/Row147"
+        },
+        {
+          "$ref": "#/$defs/Row148"
+        },
+        {
+          "$ref": "#/$defs/Row150"
+        },
+        {
+          "$ref": "#/$defs/Row151"
+        },
+        {
+          "$ref": "#/$defs/Row152"
+        },
+        {
+          "$ref": "#/$defs/Row153"
+        },
+        {
+          "$ref": "#/$defs/Row154"
+        }
+      ],
+      "items": false
+    }
+  },
+  "$defs": {
+    "Hex32": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "ArtifactHex32": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Hex32"
+        },
+        {
+          "not": {
+            "const": "0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        }
+      ]
+    },
+    "RelativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "pattern": "^[a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)*$",
+      "allOf": [
+        {
+          "not": {
+            "pattern": "(^|/)\\.{1,2}($|/)"
+          }
+        },
+        {
+          "not": {
+            "pattern": "(^|/)[^/]*\\.($|/)"
+          }
+        },
+        {
+          "not": {
+            "pattern": "(^|/)(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\.[^/]*)?($|/)"
+          }
+        }
+      ]
+    },
+    "ArtifactIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "byteLength",
+        "sha256",
+        "encoding"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/RelativePath"
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1073741824
+        },
+        "sha256": {
+          "$ref": "#/$defs/ArtifactHex32"
+        },
+        "encoding": {
+          "enum": [
+            "raw-bytes",
+            "rfc8785-jcs"
+          ]
+        }
+      }
+    },
+    "RawSealIdentity": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/ArtifactIdentity"
+        },
+        {
+          "properties": {
+            "byteLength": {
+              "const": 222668
+            },
+            "encoding": {
+              "const": "raw-bytes"
+            }
+          }
+        }
+      ]
+    },
+    "ReceiptOracleIdentity": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/ArtifactIdentity"
+        },
+        {
+          "properties": {
+            "byteLength": {
+              "maximum": 1048576
+            },
+            "encoding": {
+              "const": "raw-bytes"
+            }
+          }
+        }
+      ]
+    },
+    "Claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inputDigest",
+        "preStateDigest",
+        "postStateDigest",
+        "systemExit",
+        "userExit",
+        "outputDigest"
+      ],
+      "properties": {
+        "inputDigest": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "preStateDigest": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "postStateDigest": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "systemExit": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "userExit": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "outputDigest": {
+          "$ref": "#/$defs/Hex32"
+        }
+      }
+    },
+    "FirstPublicRejection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "class",
+        "stage"
+      ],
+      "properties": {
+        "class": {
+          "const": "ancestry-replay-mismatch"
+        },
+        "stage": {
+          "enum": [
+            "claim-edge",
+            "resolve-explicit-semantics",
+            "resolve-zero-root-semantics",
+            "resolve-assumption-inventory"
+          ]
+        }
+      }
+    },
+    "Lift15Terminal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "segmentPo2",
+        "controlId"
+      ],
+      "properties": {
+        "kind": {
+          "const": "lift"
+        },
+        "segmentPo2": {
+          "const": 15
+        },
+        "controlId": {
+          "const": "1ca3ca03030719064ba61b3125bdd326fc57f74e799ef860bdea6f3227381e16"
+        }
+      }
+    },
+    "Lift16Terminal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "segmentPo2",
+        "controlId"
+      ],
+      "properties": {
+        "kind": {
+          "const": "lift"
+        },
+        "segmentPo2": {
+          "const": 16
+        },
+        "controlId": {
+          "const": "c32b3627d2b3d60c64adf523a98bd16c0ff607471f3d6630d1f26d5e9406d841"
+        }
+      }
+    },
+    "JoinTerminal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "controlId"
+      ],
+      "properties": {
+        "kind": {
+          "const": "join"
+        },
+        "controlId": {
+          "const": "7a8f24092c34ed3eb81b3d0a0b796c588c615d3488ef9e61c21dbd1e4b83ea6e"
+        }
+      }
+    },
+    "ResolveTerminal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "controlId"
+      ],
+      "properties": {
+        "kind": {
+          "const": "resolve"
+        },
+        "controlId": {
+          "const": "53a7b23d07f99e5d5685e85874f5181e8486aa267a0ae607ffe9ba47c8bdda4a"
+        }
+      }
+    },
+    "Terminal": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Lift15Terminal"
+        },
+        {
+          "$ref": "#/$defs/Lift16Terminal"
+        },
+        {
+          "$ref": "#/$defs/JoinTerminal"
+        },
+        {
+          "$ref": "#/$defs/ResolveTerminal"
+        }
+      ]
+    },
+    "Entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expandedRow",
+        "executionId",
+        "baseFamily",
+        "witnessId",
+        "producerRole",
+        "logicalPlacement",
+        "recipe",
+        "logicalConsumerPath",
+        "firstPublicRejection",
+        "claim",
+        "claimDigest",
+        "producerProgramId",
+        "terminal",
+        "controlRoot",
+        "rawSeal",
+        "receiptOracle"
+      ],
+      "properties": {
+        "expandedRow": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "executionId": {
+          "type": "string"
+        },
+        "baseFamily": {
+          "enum": [
+            "terminal-join",
+            "terminal-resolve",
+            "resolve-then-join"
+          ]
+        },
+        "witnessId": {
+          "enum": [
+            "case9-assumption-lift",
+            "case9-final-resolve",
+            "alternate-statement-assumption-lift",
+            "alternate-program-lift",
+            "alternate-statement-final-resolve",
+            "alternate-statement-final-join",
+            "duplicate-assumption-lift"
+          ]
+        },
+        "producerRole": {
+          "enum": [
+            "lift",
+            "assumption-lift",
+            "join",
+            "resolve"
+          ]
+        },
+        "logicalPlacement": {
+          "enum": [
+            "assumption-receipt",
+            "step0",
+            "step2",
+            "final-receipt"
+          ]
+        },
+        "recipe": {
+          "enum": [
+            "reuse-case9-assumption-at-terminal-join-step0",
+            "reuse-case9-assumption-at-terminal-resolve-step0",
+            "reuse-case9-final-resolve-at-resolve-then-join-step2",
+            "alternate-statement-assumption-lift-for-terminal-resolve",
+            "alternate-guest-lift-for-terminal-resolve",
+            "alternate-statement-final-resolve-for-terminal-resolve",
+            "alternate-statement-assumption-lift-for-resolve-then-join",
+            "alternate-guest-lift-for-resolve-then-join",
+            "alternate-statement-final-join-for-resolve-then-join",
+            "reuse-case9-assumption-with-empty-inventory",
+            "duplicate-assumption-lift-with-duplicated-inventory"
+          ]
+        },
+        "logicalConsumerPath": {
+          "$ref": "#/$defs/RelativePath"
+        },
+        "firstPublicRejection": {
+          "$ref": "#/$defs/FirstPublicRejection"
+        },
+        "claim": {
+          "$ref": "#/$defs/Claim"
+        },
+        "claimDigest": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "producerProgramId": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "terminal": {
+          "$ref": "#/$defs/Terminal"
+        },
+        "controlRoot": {
+          "const": "a54dc85ac99f851c92d7c96d7318af41dbe7c0194edfcc37eb4d422a998c1f56"
+        },
+        "rawSeal": {
+          "$ref": "#/$defs/RawSealIdentity"
+        },
+        "receiptOracle": {
+          "$ref": "#/$defs/ReceiptOracleIdentity"
+        }
+      }
+    },
+    "Row141": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Entry"
+        },
+        {
+          "properties": {
+            "expandedRow": {
+              "const": 141
+            },
+            "executionId": {
+              "const": "claim-edge-family-sweep--terminal-join"
+            },
+            "baseFamily": {
+              "const": "terminal-join"
+            },
+            "witnessId": {
+              "const": "case9-assumption-lift"
+            },
+            "producerRole": {
+              "const": "lift"
+            },
+            "logicalPlacement": {
+              "const": "step0"
+            },
+            "recipe": {
+              "const": "reuse-case9-assumption-at-terminal-join-step0"
+            },
+            "logicalConsumerPath": {
+              "const": "reproduction/schema/b4-corpus-v1.candidate/positive/terminal-join/candidate-ancestry-step-00-raw-seal.bin"
+            },
+            "firstPublicRejection": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/FirstPublicRejection"
+                },
+                {
+                  "properties": {
+                    "stage": {
+                      "const": "claim-edge"
+                    }
+                  }
+                }
+              ]
+            },
+            "terminal": {
+              "$ref": "#/$defs/Lift15Terminal"
+            },
+            "rawSeal": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/RawSealIdentity"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": "reproduction/negative-ancestry-witnesses/141.raw-seal.bin"
+                    }
+                  }
+                }
+              ]
+            },
+            "receiptOracle": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/ReceiptOracleIdentity"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": "reproduction/negative-ancestry-witnesses/141.receipt-oracle.bincode"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "Row142": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Entry"
+        },
+        {
+          "properties": {
+            "expandedRow": {
+              "const": 142
+            },
+            "executionId": {
+              "const": "claim-edge-family-sweep--terminal-resolve-explicit-root"
+            },
+            "baseFamily": {
+              "const": "terminal-resolve"
+            },
+            "witnessId": {
+              "const": "case9-assumption-lift"
+            },
+            "producerRole": {
+              "const": "lift"
+            },
+            "logicalPlacement": {
+              "const": "step0"
+            },
+            "recipe": {
+              "const": "reuse-case9-assumption-at-terminal-resolve-step0"
+            },
+            "logicalConsumerPath": {
+              "const": "reproduction/schema/b4-corpus-v1.candidate/positive/terminal-resolve-explicit-root/candidate-ancestry-step-00-raw-seal.bin"
+            },
+            "firstPublicRejection": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/FirstPublicRejection"
+                },
+                {
+                  "properties": {
+                    "stage": {
+                      "const": "claim-edge"
+                    }
+                  }
+                }
+              ]
+            },
+            "terminal": {
+              "$ref": "#/$defs/Lift15Terminal"
+            },
+            "rawSeal": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/RawSealIdentity"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": "reproduction/negative-ancestry-witnesses/142.raw-seal.bin"
+                    }
+                  }
+                }
+              ]
+            },
+            "receiptOracle": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/ReceiptOracleIdentity"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": "reproduction/negative-ancestry-witnesses/142.receipt-oracle.bincode"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "Row143": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Entry"
+        },
+        {
+          "properties": {
+            "expandedRow": {
+              "const": 143
+            },
+            "executionId": {
+              "const": "claim-edge-family-sweep--resolve-zero-root-then-join"
+            },
+            "baseFamily": {
+              "const": "resolve-then-join"
+            },
+            "witnessId": {
+              "const": "case9-final-resolve"
+            },
+            "producerRole": {
+              "const": "resolve"
+            },
+            "logicalPlacement": {
+              "const": "step2"
+            },
+            "recipe": {
+              "const": "reuse-case9-final-resolve-at-resolve-then-join-step2"
+            },
+            "logicalConsumerPath": {
+              "const": "reproduction/schema/b4-corpus-v1.candidate/positive/resolve-zero-root-then-join/candidate-ancestry-step-02-raw-seal.bin"
+            },
+            "firstPublicRejection": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/FirstPublicRejection"
+                },
+                {
+                  "properties": {
+                    "stage": {
+                      "const": "claim-edge"
+                    }
+                  }
+                }
+              ]
+            },
+            "terminal": {
+              "$ref": "#/$defs/ResolveTerminal"
+            },
+            "rawSeal": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/RawSealIdentity"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": "reproduction/negative-ancestry-witnesses/143.raw-seal.bin"
+                    }
+                  }
+                }
+              ]
+            },
+            "receiptOracle": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/ReceiptOracleIdentity"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": "reproduction/negative-ancestry-witnesses/143.receipt-oracle.bincode"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "Row145": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Entry"
+        },
+        {
+          "properties": {
+            "expandedRow": {
+              "const": 145
+            },
+            "executionId": {
+              "const": "resolve-explicit-field-sweep--assumption-claim"
+            },
+            "baseFamily": {
+              "const": "terminal-resolve"
+            },
+            "witnessId": {
+              "const": "alternate-statement-assumption-lift"
+            },
+            "producerRole": {
+              "const": "assumption-lift"
+            },
+            "logicalPlacement": {
+              "const": "assumption-receipt"
+            },
+            "recipe": {
+              "const": "alternate-statement-assumption-lift-for-terminal-resolve"
+            },
+            "logicalConsumerPath": {
+              "const": "reproduction/schema/b4-corpus-v1.candidate/positive/terminal-resolve-explicit-root/candidate-ancestry-assumption-raw-seal.bin"
+            },
+            "firstPublicRejection": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/FirstPublicRejection"
+                },
+                {
+                  "properties": {
+                    "stage": {
+                      "const": "resolve-explicit-semantics"
+                    }
+                  }
+                }
+              ]
+            },
+            "terminal": {
+              "$ref": "#/$defs/Lift15Terminal"
+            },
+            "rawSeal": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/RawSealIdentity"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": "reproduction/negative-ancestry-witnesses/145.raw-seal.bin"
+                    }
+                  }
+                }
+              ]
+            },
+            "receiptOracle": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/ReceiptOracleIdentity"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": "reproduction/negative-ancestry-witnesses/145.receipt-oracle.bincode"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "Row147": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Entry"
+        },
+        {
+          "properties": {
+            "expandedRow": {
+              "const": 147
+            },
+            "executionId": {
+              "const": "resolve-explicit-field-sweep--program-id"
+            },
+            "baseFamily": {
+              "const": "terminal-resolve"
+            },
+            "witnessId": {
+              "const": "alternate-program-lift"
+            },
+            "producerRole": {
+              "const": "lift"
+            },
+            "logicalPlacement": {
+              "const": "step0"
+            },
+            "recipe": {
+              "const": "alternate-guest-lift-for-terminal-resolve"
+            },
+            "logicalConsumerPath": {
+              "const": "reproduction/schema/b4-corpus-v1.candidate/positive/terminal-resolve-explicit-root/candidate-ancestry-step-00-raw-seal.bin"
+            },
+            "firstPublicRejection": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/FirstPublicRejection"
+                },
+                {
+                  "properties": {
+                    "stage": {
+                      "const": "resolve-explicit-semantics"
+                    }
+                  }
+                }
+              ]
+            },
+            "terminal": {
+              "$ref": "#/$defs/Lift15Terminal"
+            },
+            "rawSeal": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/RawSealIdentity"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": "reproduction/negative-ancestry-witnesses/147.raw-seal.bin"
+                    }
+                  }
+                }
+              ]
+            },
+            "receiptOracle": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/ReceiptOracleIdentity"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": "reproduction/negative-ancestry-witnesses/147.receipt-oracle.bincode"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "Row148": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Entry"
+        },
+        {
+          "properties": {
+            "expandedRow": {
+              "const": 148
+            },
+            "executionId": {
+              "const": "resolve-explicit-field-sweep--final-claim"
+            },
+            "baseFamily": {
+              "const": "terminal-resolve"
+            },
+            "witnessId": {
+              "const": "alternate-statement-final-resolve"
+            },
+            "producerRole": {
+              "const": "resolve"
+            },
+            "logicalPlacement": {
+              "const": "final-receipt"
+            },
+            "recipe": {
+              "const": "alternate-statement-final-resolve-for-terminal-resolve"
+            },
+            "logicalConsumerPath": {
+              "const": "reproduction/schema/b4-corpus-v1.candidate/positive/terminal-resolve-explicit-root/candidate-raw-seal.bin"
+            },
+            "firstPublicRejection": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/FirstPublicRejection"
+                },
+                {
+                  "properties": {
+                    "stage": {
+                      "const": "resolve-explicit-semantics"
+                    }
+                  }
+                }
+              ]
+            },
+            "terminal": {
+              "$ref": "#/$defs/ResolveTerminal"
+            },
+            "rawSeal": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/RawSealIdentity"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": "reproduction/negative-ancestry-witnesses/148.raw-seal.bin"
+                    }
+                  }
+                }
+              ]
+            },
+            "receiptOracle": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/ReceiptOracleIdentity"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": "reproduction/negative-ancestry-witnesses/148.receipt-oracle.bincode"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "Row150": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Entry"
+        },
+        {
+          "properties": {
+            "expandedRow": {
+              "const": 150
+            },
+            "executionId": {
+              "const": "resolve-zero-root-field-sweep--assumption-claim"
+            },
+            "baseFamily": {
+              "const": "resolve-then-join"
+            },
+            "witnessId": {
+              "const": "alternate-statement-assumption-lift"
+            },
+            "producerRole": {
+              "const": "assumption-lift"
+            },
+            "logicalPlacement": {
+              "const": "assumption-receipt"
+            },
+            "recipe": {
+              "const": "alternate-statement-assumption-lift-for-resolve-then-join"
+            },
+            "logicalConsumerPath": {
+              "const": "reproduction/schema/b4-corpus-v1.candidate/positive/resolve-zero-root-then-join/candidate-ancestry-assumption-raw-seal.bin"
+            },
+            "firstPublicRejection": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/FirstPublicRejection"
+                },
+                {
+                  "properties": {
+                    "stage": {
+                      "const": "resolve-zero-root-semantics"
+                    }
+                  }
+                }
+              ]
+            },
+            "terminal": {
+              "$ref": "#/$defs/Lift15Terminal"
+            },
+            "rawSeal": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/RawSealIdentity"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": "reproduction/negative-ancestry-witnesses/150.raw-seal.bin"
+                    }
+                  }
+                }
+              ]
+            },
+            "receiptOracle": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/ReceiptOracleIdentity"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": "reproduction/negative-ancestry-witnesses/150.receipt-oracle.bincode"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "Row151": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Entry"
+        },
+        {
+          "properties": {
+            "expandedRow": {
+              "const": 151
+            },
+            "executionId": {
+              "const": "resolve-zero-root-field-sweep--program-id"
+            },
+            "baseFamily": {
+              "const": "resolve-then-join"
+            },
+            "witnessId": {
+              "const": "alternate-program-lift"
+            },
+            "producerRole": {
+              "const": "lift"
+            },
+            "logicalPlacement": {
+              "const": "step0"
+            },
+            "recipe": {
+              "const": "alternate-guest-lift-for-resolve-then-join"
+            },
+            "logicalConsumerPath": {
+              "const": "reproduction/schema/b4-corpus-v1.candidate/positive/resolve-zero-root-then-join/candidate-ancestry-step-00-raw-seal.bin"
+            },
+            "firstPublicRejection": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/FirstPublicRejection"
+                },
+                {
+                  "properties": {
+                    "stage": {
+                      "const": "resolve-zero-root-semantics"
+                    }
+                  }
+                }
+              ]
+            },
+            "terminal": {
+              "$ref": "#/$defs/Lift15Terminal"
+            },
+            "rawSeal": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/RawSealIdentity"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": "reproduction/negative-ancestry-witnesses/151.raw-seal.bin"
+                    }
+                  }
+                }
+              ]
+            },
+            "receiptOracle": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/ReceiptOracleIdentity"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": "reproduction/negative-ancestry-witnesses/151.receipt-oracle.bincode"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "Row152": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Entry"
+        },
+        {
+          "properties": {
+            "expandedRow": {
+              "const": 152
+            },
+            "executionId": {
+              "const": "resolve-zero-root-field-sweep--final-claim"
+            },
+            "baseFamily": {
+              "const": "resolve-then-join"
+            },
+            "witnessId": {
+              "const": "alternate-statement-final-join"
+            },
+            "producerRole": {
+              "const": "join"
+            },
+            "logicalPlacement": {
+              "const": "final-receipt"
+            },
+            "recipe": {
+              "const": "alternate-statement-final-join-for-resolve-then-join"
+            },
+            "logicalConsumerPath": {
+              "const": "reproduction/schema/b4-corpus-v1.candidate/positive/resolve-zero-root-then-join/candidate-raw-seal.bin"
+            },
+            "firstPublicRejection": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/FirstPublicRejection"
+                },
+                {
+                  "properties": {
+                    "stage": {
+                      "const": "resolve-zero-root-semantics"
+                    }
+                  }
+                }
+              ]
+            },
+            "terminal": {
+              "$ref": "#/$defs/JoinTerminal"
+            },
+            "rawSeal": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/RawSealIdentity"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": "reproduction/negative-ancestry-witnesses/152.raw-seal.bin"
+                    }
+                  }
+                }
+              ]
+            },
+            "receiptOracle": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/ReceiptOracleIdentity"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": "reproduction/negative-ancestry-witnesses/152.receipt-oracle.bincode"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "Row153": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Entry"
+        },
+        {
+          "properties": {
+            "expandedRow": {
+              "const": 153
+            },
+            "executionId": {
+              "const": "resolve-assumption-inventory-sweep--missing-assumption"
+            },
+            "baseFamily": {
+              "const": "terminal-resolve"
+            },
+            "witnessId": {
+              "const": "case9-assumption-lift"
+            },
+            "producerRole": {
+              "const": "lift"
+            },
+            "logicalPlacement": {
+              "const": "step0"
+            },
+            "recipe": {
+              "const": "reuse-case9-assumption-with-empty-inventory"
+            },
+            "logicalConsumerPath": {
+              "const": "reproduction/schema/b4-corpus-v1.candidate/positive/terminal-resolve-explicit-root/candidate-ancestry-step-00-raw-seal.bin"
+            },
+            "firstPublicRejection": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/FirstPublicRejection"
+                },
+                {
+                  "properties": {
+                    "stage": {
+                      "const": "resolve-assumption-inventory"
+                    }
+                  }
+                }
+              ]
+            },
+            "terminal": {
+              "$ref": "#/$defs/Lift15Terminal"
+            },
+            "rawSeal": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/RawSealIdentity"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": "reproduction/negative-ancestry-witnesses/153.raw-seal.bin"
+                    }
+                  }
+                }
+              ]
+            },
+            "receiptOracle": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/ReceiptOracleIdentity"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": "reproduction/negative-ancestry-witnesses/153.receipt-oracle.bincode"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "Row154": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Entry"
+        },
+        {
+          "properties": {
+            "expandedRow": {
+              "const": 154
+            },
+            "executionId": {
+              "const": "resolve-assumption-inventory-sweep--extra-assumption"
+            },
+            "baseFamily": {
+              "const": "terminal-resolve"
+            },
+            "witnessId": {
+              "const": "duplicate-assumption-lift"
+            },
+            "producerRole": {
+              "const": "lift"
+            },
+            "logicalPlacement": {
+              "const": "step0"
+            },
+            "recipe": {
+              "const": "duplicate-assumption-lift-with-duplicated-inventory"
+            },
+            "logicalConsumerPath": {
+              "const": "reproduction/schema/b4-corpus-v1.candidate/positive/terminal-resolve-explicit-root/candidate-ancestry-step-00-raw-seal.bin"
+            },
+            "firstPublicRejection": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/FirstPublicRejection"
+                },
+                {
+                  "properties": {
+                    "stage": {
+                      "const": "resolve-assumption-inventory"
+                    }
+                  }
+                }
+              ]
+            },
+            "terminal": {
+              "$ref": "#/$defs/Lift16Terminal"
+            },
+            "rawSeal": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/RawSealIdentity"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": "reproduction/negative-ancestry-witnesses/154.raw-seal.bin"
+                    }
+                  }
+                }
+              ]
+            },
+            "receiptOracle": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/ReceiptOracleIdentity"
+                },
+                {
+                  "properties": {
+                    "path": {
+                      "const": "reproduction/negative-ancestry-witnesses/154.receipt-oracle.bincode"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,110 @@
+diff --git a/risc0/zkp/src/verify/mod.rs b/risc0/zkp/src/verify/mod.rs
+index e7ddb1a2..c60c5cf0 100644
+--- a/risc0/zkp/src/verify/mod.rs
++++ b/risc0/zkp/src/verify/mod.rs
+@@ -139,6 +139,24 @@ impl fmt::Display for VerificationError {
+ #[cfg(feature = "std")]
+ impl std::error::Error for VerificationError {}
+ 
++/// Typed source locations at which the stock verifier returns
++/// [`VerificationError::InvalidProof`].
++///
++/// These checkpoints are observational only. They neither suppress nor
++/// replace the stock error and are emitted immediately before the unchanged
++/// return from the named source location.
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub enum VerificationCheckpoint {
++    /// The DEEP-ALI validity check found `check != result`.
++    ValidityCheck,
++    /// The per-query inner verification returned `InvalidProof`.
++    FriInnerQuery { query: usize },
++    /// One FRI folding round found `data_ext[quot] != goal`.
++    FriRoundGoal { query: usize, round: usize },
++    /// The final FRI polynomial evaluation found `fx != goal`.
++    FriFinalPolynomial { query: usize },
++}
++
+ trait VerifyParams<F: Field> {
+     const CHECK_SIZE: usize = INV_RATE * F::ExtElem::EXT_SIZE;
+ }
+@@ -280,6 +298,14 @@ impl<'a, F: Field> Verifier<'a, F> {
+     pub fn verify_validity(
+         &mut self,
+         validity_fn: impl Fn(&F::ExtElem, &[F::ExtElem]) -> F::ExtElem,
++    ) -> Result<(), VerificationError> {
++        self.verify_validity_with_checkpoints(validity_fn, &mut |_| {})
++    }
++
++    fn verify_validity_with_checkpoints(
++        &mut self,
++        validity_fn: impl Fn(&F::ExtElem, &[F::ExtElem]) -> F::ExtElem,
++        observe: &mut impl FnMut(VerificationCheckpoint),
+     ) -> Result<(), VerificationError> {
+         // Ensure that we were given verifiers for all tap groups
+         for (reg_group_id, verifier) in self.merkle_verifiers.iter().enumerate() {
+@@ -380,6 +406,7 @@ impl<'a, F: Field> Verifier<'a, F> {
+         trace_if_enabled!("Check = {check:?}");
+         if check != result {
+             tracing::debug!("check != result");
++            observe(VerificationCheckpoint::ValidityCheck);
+             return Err(VerificationError::InvalidProof);
+         }
+ 
+@@ -428,7 +455,7 @@ impl<'a, F: Field> Verifier<'a, F> {
+         );
+         let gen = <F::Elem as RootsOfUnity>::ROU_FWD[log2_ceil(domain)];
+         let hashfn = self.suite.hashfn.as_ref();
+-        self.fri_verify(|idx| {
++        self.fri_verify_with_checkpoints(|idx| {
+             let x = gen.pow(idx);
+             let rows= self
+                 .merkle_verifiers
+@@ -442,7 +469,7 @@ impl<'a, F: Field> Verifier<'a, F> {
+             let check_row = check_merkle.verify(self.iop().deref_mut(), hashfn, idx)?;
+             let ret = self.fri_eval_taps(&combo_u, check_row, back_one, x, z, &rows, &tap_mix_pows, &check_mix_pows);
+             Ok(ret)
+-        })?;
++        }, observe)?;
+         Ok(())
+     }
+ 
+@@ -502,6 +529,27 @@ where
+     F: Field,
+     C: CircuitCoreDef<F>,
+     CheckCode: Fn(u32, &Digest) -> Result<(), VerificationError>,
++{
++    verify_with_checkpoints(circuit, suite, seal, check_code, |_| {})
++}
++
++/// Verify a seal while observing typed `InvalidProof` source locations.
++///
++/// This function executes the same computation and returns the same verdict as
++/// [`verify`]. The callback is invoked only immediately before an unchanged
++/// `InvalidProof` return.
++pub fn verify_with_checkpoints<F, C, CheckCode, Observe>(
++    circuit: &C,
++    suite: &HashSuite<F>,
++    seal: &[u32],
++    check_code: CheckCode,
++    mut observe: Observe,
++) -> Result<(), VerificationError>
++where
++    F: Field,
++    C: CircuitCoreDef<F>,
++    CheckCode: Fn(u32, &Digest) -> Result<(), VerificationError>,
++    Observe: FnMut(VerificationCheckpoint),
+ {
+     if seal.is_empty() {
+         return Err(VerificationError::ReceiptFormatError);
+@@ -548,7 +596,10 @@ where
+     // Verify the evaluation of the validity polynomial to make sure
+     // the constraints were not violated.
+     verifier
+-        .verify_validity(|poly_mix, eval_u| circuit.poly_ext(poly_mix, eval_u, &[out, &mix]).tot)?;
++        .verify_validity_with_checkpoints(
++            |poly_mix, eval_u| circuit.poly_ext(poly_mix, eval_u, &[out, &mix]).tot,
++            &mut observe,
++        )?;
+ 
+     // There should be nothing else in the IOP, so verify that's the case.
+     verifier.iop().verify_complete()?;

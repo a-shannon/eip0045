@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ergo:eip-0045:b4-negative-expectation-set-v1",
+  "title": "Eip0045B4NegativeExpectationSetV1",
+  "description": "Canonical pre-proof authority for exactly two implementation-labelled rejection expectations per closed B4 negative-plan execution. Cross-document plan identity, execution ordering, and IDs are independently rebuilt by the finalizer.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "formatVersion",
+    "negativePlan",
+    "executions"
+  ],
+  "properties": {
+    "format": {
+      "const": "Eip0045B4NegativeExpectationSetV1"
+    },
+    "formatVersion": {
+      "const": 1
+    },
+    "negativePlan": {
+      "$ref": "#/$defs/NegativePlanIdentity"
+    },
+    "executions": {
+      "type": "array",
+      "minItems": 254,
+      "maxItems": 254,
+      "items": {
+        "$ref": "#/$defs/Execution"
+      }
+    }
+  },
+  "$defs": {
+    "Hex32": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "RejectionId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 192,
+      "pattern": "^[a-z](?:[a-z0-9]|-[a-z0-9])*$",
+      "not": {
+        "pattern": "(?:^|-)(?:error|failure|fixme|generic|pending|placeholder|reject|tbd|todo|unclassified|unknown|unspecified)(?:-|$)"
+      }
+    },
+    "ExecutionId": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 386,
+      "pattern": "^(?=.{1,192}--.{1,192}$)[a-z](?:[a-z0-9]|-[a-z0-9])*--[a-z](?:[a-z0-9]|-[a-z0-9])*$"
+    },
+    "NegativePlanIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "byteLength",
+        "sha256"
+      ],
+      "properties": {
+        "byteLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 131072
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hex32"
+        }
+      }
+    },
+    "Rejection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "class",
+        "stage"
+      ],
+      "properties": {
+        "class": {
+          "$ref": "#/$defs/RejectionId"
+        },
+        "stage": {
+          "$ref": "#/$defs/RejectionId"
+        }
+      },
+      "oneOf": [
+        {"properties":{"class":{"const":"opcode-input-shape-invalid"},"stage":{"enum":["opcode-profile-id-byte-length","opcode-program-id-byte-length","opcode-application-payload-byte-length","opcode-proof-chunk-count","opcode-proof-chunk-byte-length"]}}},
+        {"properties":{"class":{"const":"receipt-claim-mismatch"},"stage":{"const":"expected-claim-binding"}}},
+        {"properties":{"class":{"const":"raw-seal-shape-invalid"},"stage":{"enum":["babybear-word-reduction","inner-root-padding","claim-halfword-decoding","outer-po2-preflight"]}}},
+        {"properties":{"class":{"const":"inner-control-root-mismatch"},"stage":{"const":"inner-control-root-binding"}}},
+        {"properties":{"class":{"const":"risc0-parser-invalid"},"stage":{"enum":["risc0-read-iop-output-before-read","risc0-read-iop-output-at-last-required-word","risc0-read-iop-outer-po2-before-read","risc0-read-iop-code-top-before-read","risc0-read-iop-code-top-at-last-required-word","risc0-read-iop-data-top-before-read","risc0-read-iop-data-top-at-last-required-word","risc0-read-iop-accum-top-before-read","risc0-read-iop-accum-top-at-last-required-word","risc0-read-iop-check-top-before-read","risc0-read-iop-check-top-at-last-required-word","risc0-read-iop-coeff-u-before-read","risc0-read-iop-coeff-u-at-last-required-word","risc0-read-iop-fri-round-one-top-before-read","risc0-read-iop-fri-round-one-top-at-last-required-word","risc0-read-iop-fri-round-two-top-before-read","risc0-read-iop-fri-round-two-top-at-last-required-word","risc0-read-iop-fri-round-three-top-before-read","risc0-read-iop-fri-round-three-top-at-last-required-word","risc0-read-iop-final-coefficients-before-read","risc0-read-iop-final-coefficients-at-last-required-word","risc0-read-iop-queries-before-read","risc0-read-iop-queries-at-last-required-word","risc0-read-iop-query-zero-accum-opening-at-last-required-word","risc0-read-iop-query-zero-code-opening-before-read","risc0-read-iop-query-zero-code-opening-at-last-required-word","risc0-read-iop-query-zero-data-opening-before-read","risc0-read-iop-query-zero-data-opening-at-last-required-word","risc0-read-iop-query-zero-check-opening-before-read","risc0-read-iop-query-zero-check-opening-at-last-required-word","risc0-read-iop-query-zero-fri-round-one-opening-before-read","risc0-read-iop-query-zero-fri-round-one-opening-at-last-required-word","risc0-read-iop-query-zero-fri-round-two-opening-before-read","risc0-read-iop-query-zero-fri-round-two-opening-at-last-required-word","risc0-read-iop-query-zero-fri-round-three-opening-before-read","risc0-read-iop-query-zero-fri-round-three-opening-at-last-required-word"]}}},
+        {"properties":{"class":{"const":"risc0-proof-invalid"},"stage":{"enum":["risc0-validity-check","risc0-fri-round-two-query-zero","risc0-fri-final-polynomial-query-zero","risc0-fri-inner-query-forty-nine"]}}},
+        {"properties":{"class":{"const":"terminal-policy-mismatch"},"stage":{"const":"terminal-control-id"}}},
+        {"properties":{"class":{"const":"ancestry-replay-mismatch"},"stage":{"enum":["claim-edge","resolve-explicit-semantics","resolve-zero-root-semantics","resolve-assumption-inventory"]}}},
+        {"properties":{"class":{"const":"profile-manifest-invalid"},"stage":{"enum":["profile-manifest-byte-length","profile-manifest-format-version","profile-manifest-terminal-kind","profile-manifest-terminal-parameter","profile-manifest-terminal-order","profile-manifest-terminal-control-id-uniqueness","profile-manifest-artifact-kind"]}}},
+        {"properties":{"class":{"const":"initial-profile-target-mismatch"},"stage":{"enum":["exact-proof-bytes","maximum-application-payload-bytes","outer-po2","inner-control-root","terminal-control-id"]}}},
+        {"properties":{"class":{"const":"profile-artifact-package-mismatch"},"stage":{"enum":["profile-artifact-byte-length","profile-artifact-digest"]}}},
+        {"properties":{"class":{"const":"activated-profile-package-mismatch"},"stage":{"const":"activated-profile-id"}}},
+        {"properties":{"class":{"const":"terminal-fixture-catalog-mismatch"},"stage":{"const":"terminal-fixture-catalog-binding"}}},
+        {"properties":{"class":{"const":"sequence-subject-catalog-invalid"},"stage":{"const":"sequence-subject-catalog-validation"}}},
+        {"properties":{"class":{"const":"terminal-metadata-mismatch"},"stage":{"const":"terminal-metadata-binding"}}},
+        {"properties":{"class":{"const":"profile-id-preimage-mismatch"},"stage":{"const":"profile-id-preimage-binding"}}},
+        {"properties":{"class":{"const":"candidate-registry-invalid"},"stage":{"const":"candidate-registry-validation"}}},
+        {"properties":{"class":{"const":"negative-binding-index-invalid"},"stage":{"enum":["negative-binding-index-codec","negative-binding-index-plan-binding"]}}},
+        {"properties":{"class":{"const":"corpus-closure-mismatch"},"stage":{"enum":["corpus-required-role","corpus-unexpected-role"]}}}
+      ]
+    },
+    "RustSlot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "implementation",
+        "rejection"
+      ],
+      "properties": {
+        "implementation": {
+          "const": "rust-reference"
+        },
+        "rejection": {
+          "$ref": "#/$defs/Rejection"
+        }
+      }
+    },
+    "JvmSlot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "implementation",
+        "rejection"
+      ],
+      "properties": {
+        "implementation": {
+          "const": "independent-jvm"
+        },
+        "rejection": {
+          "$ref": "#/$defs/Rejection"
+        }
+      }
+    },
+    "Execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "executionIndex",
+        "executionId",
+        "slots"
+      ],
+      "properties": {
+        "executionIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 253
+        },
+        "executionId": {
+          "$ref": "#/$defs/ExecutionId"
+        },
+        "slots": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/RustSlot"
+            },
+            {
+              "$ref": "#/$defs/JvmSlot"
+            }
+          ],
+          "items": false
+        }
+      }
+    }
+  }
+}

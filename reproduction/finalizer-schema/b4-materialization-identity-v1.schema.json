@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ergo:eip-0045:b4-materialization-identity-v1",
+  "title": "Eip0045B4MaterializationIdentityV1",
+  "description": "Digest-only identity for one B4 materialization. Plan-row identity, registry-recipe identity, base selection, output reconstruction, and every digest/length equality remain replay-gate obligations.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "formatVersion",
+    "baseSelectorId",
+    "baseByteLength",
+    "baseSha256",
+    "executionId",
+    "materializationDomain",
+    "materializationRecipeByteLength",
+    "materializationRecipeSha256",
+    "negativePlanByteLength",
+    "negativePlanSha256",
+    "outputByteLength",
+    "outputSha256"
+  ],
+  "properties": {
+    "format": {
+      "const": "Eip0045B4MaterializationIdentityV1"
+    },
+    "formatVersion": {
+      "const": 1
+    },
+    "baseSelectorId": {
+      "$ref": "#/$defs/LowerKebab128"
+    },
+    "baseByteLength": {
+      "$ref": "#/$defs/MaterializationByteLength"
+    },
+    "baseSha256": {
+      "$ref": "#/$defs/Hex32"
+    },
+    "executionId": {
+      "$ref": "#/$defs/ExecutionId"
+    },
+    "materializationDomain": {
+      "$ref": "#/$defs/MaterializationDomain"
+    },
+    "materializationRecipeByteLength": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 8388608
+    },
+    "materializationRecipeSha256": {
+      "$ref": "#/$defs/Hex32"
+    },
+    "negativePlanByteLength": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 131072
+    },
+    "negativePlanSha256": {
+      "$ref": "#/$defs/Hex32"
+    },
+    "outputByteLength": {
+      "$ref": "#/$defs/MaterializationByteLength"
+    },
+    "outputSha256": {
+      "$ref": "#/$defs/Hex32"
+    }
+  },
+  "$defs": {
+    "Hex32": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "LowerKebab128": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z](?:[a-z0-9]|-[a-z0-9])*$"
+    },
+    "ExecutionId": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 258,
+      "pattern": "^(?=.{1,128}--.{1,128}$)[a-z](?:[a-z0-9]|-[a-z0-9])*--[a-z](?:[a-z0-9]|-[a-z0-9])*$"
+    },
+    "MaterializationDomain": {
+      "enum": [
+        "verifier-input",
+        "artifact-validator",
+        "tree-validator"
+      ]
+    },
+    "MaterializationByteLength": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 536870912
+    }
+  }
+}

@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ergo:eip-0045:b4-positive-observation-v1",
+  "title": "Eip0045B4PositiveObservationV1",
+  "$comment": "This positive-finalizer schema is outside the legacy candidate-schema quarantine.",
+  "description": "Authority-minimal cryptographic observation emitted on successful B4 positive verification.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "formatVersion",
+    "verdict",
+    "profileId",
+    "programId",
+    "statementSha256",
+    "claimDigest",
+    "finalStatus",
+    "finalAssumptionCount",
+    "terminal"
+  ],
+  "properties": {
+    "format": {
+      "const": "Eip0045B4PositiveObservationV1"
+    },
+    "formatVersion": {
+      "const": 1
+    },
+    "verdict": {
+      "const": "accept"
+    },
+    "profileId": {
+      "const": "23c4a123ffb33a1c8db89436fe0e7972bd8e4e289459ee5fd71be5440607d383"
+    },
+    "programId": {
+      "$ref": "#/$defs/Hex32"
+    },
+    "statementSha256": {
+      "$ref": "#/$defs/Hex32"
+    },
+    "claimDigest": {
+      "$ref": "#/$defs/Hex32"
+    },
+    "finalStatus": {
+      "const": "ok"
+    },
+    "finalAssumptionCount": {
+      "const": 0
+    },
+    "terminal": {
+      "$ref": "#/$defs/AllowedTerminal"
+    }
+  },
+  "$defs": {
+    "Hex32": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "AllowedTerminal": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Lift15"
+        },
+        {
+          "$ref": "#/$defs/Lift16"
+        },
+        {
+          "$ref": "#/$defs/Lift17"
+        },
+        {
+          "$ref": "#/$defs/Lift18"
+        },
+        {
+          "$ref": "#/$defs/Lift19"
+        },
+        {
+          "$ref": "#/$defs/Lift20"
+        },
+        {
+          "$ref": "#/$defs/Lift21"
+        },
+        {
+          "$ref": "#/$defs/Lift22"
+        },
+        {
+          "$ref": "#/$defs/Join"
+        },
+        {
+          "$ref": "#/$defs/Resolve"
+        }
+      ]
+    },
+    "Lift15": {
+      "$ref": "#/$defs/LiftTerminal15"
+    },
+    "Lift16": {
+      "$ref": "#/$defs/LiftTerminal16"
+    },
+    "Lift17": {
+      "$ref": "#/$defs/LiftTerminal17"
+    },
+    "Lift18": {
+      "$ref": "#/$defs/LiftTerminal18"
+    },
+    "Lift19": {
+      "$ref": "#/$defs/LiftTerminal19"
+    },
+    "Lift20": {
+      "$ref": "#/$defs/LiftTerminal20"
+    },
+    "Lift21": {
+      "$ref": "#/$defs/LiftTerminal21"
+    },
+    "Lift22": {
+      "$ref": "#/$defs/LiftTerminal22"
+    },
+    "Join": {
+      "$ref": "#/$defs/JoinTerminal"
+    },
+    "Resolve": {
+      "$ref": "#/$defs/ResolveTerminal"
+    },
+    "LiftTerminal15": {"type": "object", "additionalProperties": false, "required": ["kind", "parameter", "controlId"], "properties": {"kind": {"const": "lift"}, "parameter": {"const": 15}, "controlId": {"$ref": "#/$defs/Hex32"}}},
+    "LiftTerminal16": {"type": "object", "additionalProperties": false, "required": ["kind", "parameter", "controlId"], "properties": {"kind": {"const": "lift"}, "parameter": {"const": 16}, "controlId": {"$ref": "#/$defs/Hex32"}}},
+    "LiftTerminal17": {"type": "object", "additionalProperties": false, "required": ["kind", "parameter", "controlId"], "properties": {"kind": {"const": "lift"}, "parameter": {"const": 17}, "controlId": {"$ref": "#/$defs/Hex32"}}},
+    "LiftTerminal18": {"type": "object", "additionalProperties": false, "required": ["kind", "parameter", "controlId"], "properties": {"kind": {"const": "lift"}, "parameter": {"const": 18}, "controlId": {"$ref": "#/$defs/Hex32"}}},
+    "LiftTerminal19": {"type": "object", "additionalProperties": false, "required": ["kind", "parameter", "controlId"], "properties": {"kind": {"const": "lift"}, "parameter": {"const": 19}, "controlId": {"$ref": "#/$defs/Hex32"}}},
+    "LiftTerminal20": {"type": "object", "additionalProperties": false, "required": ["kind", "parameter", "controlId"], "properties": {"kind": {"const": "lift"}, "parameter": {"const": 20}, "controlId": {"$ref": "#/$defs/Hex32"}}},
+    "LiftTerminal21": {"type": "object", "additionalProperties": false, "required": ["kind", "parameter", "controlId"], "properties": {"kind": {"const": "lift"}, "parameter": {"const": 21}, "controlId": {"$ref": "#/$defs/Hex32"}}},
+    "LiftTerminal22": {"type": "object", "additionalProperties": false, "required": ["kind", "parameter", "controlId"], "properties": {"kind": {"const": "lift"}, "parameter": {"const": 22}, "controlId": {"$ref": "#/$defs/Hex32"}}},
+    "JoinTerminal": {"type": "object", "additionalProperties": false, "required": ["kind", "parameter", "controlId"], "properties": {"kind": {"const": "join"}, "parameter": {"const": 0}, "controlId": {"$ref": "#/$defs/Hex32"}}},
+    "ResolveTerminal": {"type": "object", "additionalProperties": false, "required": ["kind", "parameter", "controlId"], "properties": {"kind": {"const": "resolve"}, "parameter": {"const": 0}, "controlId": {"$ref": "#/$defs/Hex32"}}}
+  }
+}

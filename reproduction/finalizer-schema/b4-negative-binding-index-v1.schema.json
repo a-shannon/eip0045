@@ -1,0 +1,663 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ergo:eip-0045:b4-negative-binding-index-v1",
+  "title": "Eip0045B4NegativeBindingIndexV1",
+  "description": "Closed-shape synthetic projection of all 254 expanded negative rows. Exact plan order and bijection, plan-derived selector/domain equality, deterministic recipe equality, target/operation compatibility, before-witness checks, no-op exclusion, and reconstruction remain parser/replay-gate obligations.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "formatVersion",
+    "rows"
+  ],
+  "properties": {
+    "format": {
+      "const": "Eip0045B4NegativeBindingIndexV1"
+    },
+    "formatVersion": {
+      "const": 1
+    },
+    "rows": {
+      "type": "array",
+      "minItems": 254,
+      "maxItems": 254,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/Row"
+      }
+    }
+  },
+  "$defs": {
+    "Hex32": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "LowerKebab128": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z](?:[a-z0-9]|-[a-z0-9])*$"
+    },
+    "ExecutionId": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 258,
+      "pattern": "^(?=.{1,128}--.{1,128}$)[a-z](?:[a-z0-9]|-[a-z0-9])*--[a-z](?:[a-z0-9]|-[a-z0-9])*$"
+    },
+    "U64": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "NonemptyEvenLowerHex128Bytes": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 256,
+      "pattern": "^(?:[0-9a-f]{2})+$"
+    },
+    "MaterializationDomain": {
+      "enum": [
+        "verifier-input",
+        "artifact-validator",
+        "tree-validator"
+      ]
+    },
+    "SequenceElement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "elementId",
+        "bytesHex",
+        "sha256"
+      ],
+      "properties": {
+        "elementId": {
+          "$ref": "#/$defs/LowerKebab128"
+        },
+        "bytesHex": {
+          "type": "string",
+          "maxLength": 2097152,
+          "pattern": "^(?:[0-9a-f]{2})*$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hex32"
+        }
+      }
+    },
+    "ProfileArtifact": {
+      "enum": [
+        "algorithm",
+        "algorithm-artifact-preimage",
+        "constants",
+        "binary-data-artifact-preimage",
+        "profile-id",
+        "profile-id-preimage"
+      ]
+    },
+    "ByteTargetUnit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targetKind"
+      ],
+      "properties": {
+        "targetKind": {
+          "enum": [
+            "application-payload",
+            "ancestry",
+            "candidate-registry-source",
+            "positive-calibration",
+            "positive-metadata",
+            "profile-manifest",
+            "profile-id",
+            "program-id",
+            "receipt-oracle",
+            "raw-seal",
+            "statement",
+            "subject-catalog-entry",
+            "terminal-fixture-catalog-entry",
+            "terminal-metadata-record",
+            "terminal-policy-probe"
+          ]
+        }
+      }
+    },
+    "ProfileArtifactTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targetKind",
+        "artifact"
+      ],
+      "properties": {
+        "targetKind": {
+          "const": "profile-artifact"
+        },
+        "artifact": {
+          "$ref": "#/$defs/ProfileArtifact"
+        }
+      }
+    },
+    "ByteTarget": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ByteTargetUnit"
+        },
+        {
+          "$ref": "#/$defs/ProfileArtifactTarget"
+        }
+      ]
+    },
+    "SequenceTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targetKind"
+      ],
+      "properties": {
+        "targetKind": {
+          "enum": [
+            "abstract-tree-probe",
+            "registry-positive-cases",
+            "registry-negative-cases",
+            "registry-negative-classes",
+            "registry-negative-bindings",
+            "profile-package-files",
+            "proof-chunks"
+          ]
+        }
+      }
+    },
+    "AncestryInventoryTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targetKind"
+      ],
+      "properties": {
+        "targetKind": {
+          "const": "assumption-source-inventory-head"
+        }
+      }
+    },
+    "AncestryInventoryOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "beforeClaimDigest",
+        "beforeControlRoot",
+        "exactDigest"
+      ],
+      "properties": {
+        "operation": {
+          "const": "prune-revealed-head"
+        },
+        "beforeClaimDigest": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "beforeControlRoot": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "exactDigest": {
+          "$ref": "#/$defs/Hex32"
+        }
+      }
+    },
+    "ByteDelete": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "beforeHex",
+        "offset"
+      ],
+      "properties": {
+        "operation": {
+          "const": "delete"
+        },
+        "beforeHex": {
+          "$ref": "#/$defs/NonemptyEvenLowerHex128Bytes"
+        },
+        "offset": {
+          "$ref": "#/$defs/U64"
+        }
+      }
+    },
+    "ByteInsert": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "insertedHex",
+        "offset"
+      ],
+      "properties": {
+        "operation": {
+          "const": "insert"
+        },
+        "insertedHex": {
+          "$ref": "#/$defs/NonemptyEvenLowerHex128Bytes"
+        },
+        "offset": {
+          "$ref": "#/$defs/U64"
+        }
+      }
+    },
+    "ByteReplace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "beforeHex",
+        "replacementHex",
+        "offset"
+      ],
+      "properties": {
+        "operation": {
+          "const": "replace"
+        },
+        "beforeHex": {
+          "$ref": "#/$defs/NonemptyEvenLowerHex128Bytes"
+        },
+        "replacementHex": {
+          "$ref": "#/$defs/NonemptyEvenLowerHex128Bytes"
+        },
+        "offset": {
+          "$ref": "#/$defs/U64"
+        }
+      }
+    },
+    "ByteTruncate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "beforeHex",
+        "newLength",
+        "originalLength"
+      ],
+      "properties": {
+        "operation": {
+          "const": "truncate"
+        },
+        "beforeHex": {
+          "$ref": "#/$defs/NonemptyEvenLowerHex128Bytes"
+        },
+        "newLength": {
+          "$ref": "#/$defs/U64"
+        },
+        "originalLength": {
+          "$ref": "#/$defs/U64"
+        }
+      }
+    },
+    "ByteOperation": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ByteDelete"
+        },
+        {
+          "$ref": "#/$defs/ByteInsert"
+        },
+        {
+          "$ref": "#/$defs/ByteReplace"
+        },
+        {
+          "$ref": "#/$defs/ByteTruncate"
+        }
+      ]
+    },
+    "SequenceEmpty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation"
+      ],
+      "properties": {
+        "operation": {
+          "const": "empty"
+        }
+      }
+    },
+    "SequenceInsert": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "insertedElement",
+        "index"
+      ],
+      "properties": {
+        "operation": {
+          "const": "insert"
+        },
+        "insertedElement": {
+          "$ref": "#/$defs/SequenceElement"
+        },
+        "index": {
+          "$ref": "#/$defs/U64"
+        }
+      }
+    },
+    "SequenceMove": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "beforeElementId",
+        "beforeElementSha256",
+        "fromIndex",
+        "toIndex"
+      ],
+      "properties": {
+        "operation": {
+          "const": "move"
+        },
+        "beforeElementId": {
+          "$ref": "#/$defs/LowerKebab128"
+        },
+        "beforeElementSha256": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "fromIndex": {
+          "$ref": "#/$defs/U64"
+        },
+        "toIndex": {
+          "$ref": "#/$defs/U64"
+        }
+      }
+    },
+    "SequenceOmit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "beforeElementId",
+        "beforeElementSha256",
+        "index"
+      ],
+      "properties": {
+        "operation": {
+          "const": "omit"
+        },
+        "beforeElementId": {
+          "$ref": "#/$defs/LowerKebab128"
+        },
+        "beforeElementSha256": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "index": {
+          "$ref": "#/$defs/U64"
+        }
+      }
+    },
+    "SequenceReplace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "beforeElementId",
+        "beforeElementSha256",
+        "index",
+        "replacementElement"
+      ],
+      "properties": {
+        "operation": {
+          "const": "replace"
+        },
+        "beforeElementId": {
+          "$ref": "#/$defs/LowerKebab128"
+        },
+        "beforeElementSha256": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "index": {
+          "$ref": "#/$defs/U64"
+        },
+        "replacementElement": {
+          "$ref": "#/$defs/SequenceElement"
+        }
+      }
+    },
+    "SequenceShiftBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "byteCount",
+        "direction",
+        "leftChunkIndex"
+      ],
+      "properties": {
+        "operation": {
+          "const": "shift-boundary"
+        },
+        "byteCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "direction": {
+          "enum": [
+            "left-to-right",
+            "right-to-left"
+          ]
+        },
+        "leftChunkIndex": {
+          "$ref": "#/$defs/U64"
+        }
+      }
+    },
+    "SequenceOperation": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/SequenceEmpty"
+        },
+        {
+          "$ref": "#/$defs/SequenceInsert"
+        },
+        {
+          "$ref": "#/$defs/SequenceMove"
+        },
+        {
+          "$ref": "#/$defs/SequenceOmit"
+        },
+        {
+          "$ref": "#/$defs/SequenceReplace"
+        },
+        {
+          "$ref": "#/$defs/SequenceShiftBoundary"
+        }
+      ]
+    },
+    "ByteMutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "edit",
+        "target"
+      ],
+      "properties": {
+        "family": {
+          "const": "byte-edit"
+        },
+        "edit": {
+          "$ref": "#/$defs/ByteOperation"
+        },
+        "target": {
+          "$ref": "#/$defs/ByteTarget"
+        }
+      }
+    },
+    "SequenceMutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "edit",
+        "target"
+      ],
+      "properties": {
+        "family": {
+          "const": "sequence-edit"
+        },
+        "edit": {
+          "$ref": "#/$defs/SequenceOperation"
+        },
+        "target": {
+          "$ref": "#/$defs/SequenceTarget"
+        }
+      }
+    },
+    "AncestryInventoryMutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "edit",
+        "target"
+      ],
+      "properties": {
+        "family": {
+          "const": "ancestry-inventory-edit"
+        },
+        "edit": {
+          "$ref": "#/$defs/AncestryInventoryOperation"
+        },
+        "target": {
+          "$ref": "#/$defs/AncestryInventoryTarget"
+        }
+      }
+    },
+    "AncestryWitnessRecipe": {
+      "enum": [
+        "reuse-case9-assumption-at-terminal-join-step0",
+        "reuse-case9-assumption-at-terminal-resolve-step0",
+        "reuse-case9-final-resolve-at-resolve-then-join-step2",
+        "alternate-statement-assumption-lift-for-terminal-resolve",
+        "alternate-guest-lift-for-terminal-resolve",
+        "alternate-statement-final-resolve-for-terminal-resolve",
+        "alternate-statement-assumption-lift-for-resolve-then-join",
+        "alternate-guest-lift-for-resolve-then-join",
+        "alternate-statement-final-join-for-resolve-then-join",
+        "reuse-case9-assumption-with-empty-inventory",
+        "duplicate-assumption-lift-with-duplicated-inventory"
+      ]
+    },
+    "AncestryWitnessMutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "recipe"
+      ],
+      "properties": {
+        "family": {
+          "const": "ancestry-witness-substitution"
+        },
+        "recipe": {
+          "$ref": "#/$defs/AncestryWitnessRecipe"
+        }
+      }
+    },
+    "AlternateRootAssumptionMutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family"
+      ],
+      "properties": {
+        "family": {
+          "const": "alternate-root-assumption-substitution"
+        }
+      }
+    },
+    "Mutation": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ByteMutation"
+        },
+        {
+          "$ref": "#/$defs/SequenceMutation"
+        },
+        {
+          "$ref": "#/$defs/AncestryInventoryMutation"
+        },
+        {
+          "$ref": "#/$defs/AncestryWitnessMutation"
+        },
+        {
+          "$ref": "#/$defs/AlternateRootAssumptionMutation"
+        }
+      ]
+    },
+    "MutationMaterialization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "materializationKind",
+        "mutation"
+      ],
+      "properties": {
+        "materializationKind": {
+          "const": "mutation"
+        },
+        "mutation": {
+          "$ref": "#/$defs/Mutation"
+        }
+      }
+    },
+    "FixtureSelectionMaterialization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "materializationKind",
+        "fixtureId"
+      ],
+      "properties": {
+        "materializationKind": {
+          "const": "fixture-selection"
+        },
+        "fixtureId": {
+          "$ref": "#/$defs/LowerKebab128"
+        }
+      }
+    },
+    "Materialization": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/MutationMaterialization"
+        },
+        {
+          "$ref": "#/$defs/FixtureSelectionMaterialization"
+        }
+      ]
+    },
+    "Row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "executionId",
+        "baseSelectorId",
+        "materializationDomain",
+        "materialization"
+      ],
+      "properties": {
+        "executionId": {
+          "$ref": "#/$defs/ExecutionId"
+        },
+        "baseSelectorId": {
+          "$ref": "#/$defs/LowerKebab128"
+        },
+        "materializationDomain": {
+          "$ref": "#/$defs/MaterializationDomain"
+        },
+        "materialization": {
+          "$ref": "#/$defs/Materialization"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,42 @@
+[workspace]
+members = ["reproduction"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89.0"
+license = "Apache-2.0"
+authors = ["A. Shannon"]
+publish = false
+
+[workspace.dependencies]
+anyhow = "=1.0.99"
+bincode = "=1.3.3"
+blake2 = "=0.10.6"
+clap = { version = "=4.5.46", features = ["derive"] }
+curve25519-dalek = "=5.0.0"
+hex = "=0.4.3"
+jsonschema = { version = "=0.48.5", default-features = false }
+renamore = "=0.3.2"
+winapi-util = "=0.1.11"
+serde = { version = "=1.0.219", features = ["derive"] }
+serde_json = "=1.0.143"
+serde_json_canonicalizer = "=0.3.2"
+risc0-binfmt = { git = "https://github.com/a-shannon/risc0", rev = "227229dc793c215c533cbc0e07911601974a4629", default-features = false, features = ["std"] }
+risc0-circuit-recursion = { git = "https://github.com/a-shannon/risc0", rev = "227229dc793c215c533cbc0e07911601974a4629", default-features = false }
+risc0-zkp = { git = "https://github.com/a-shannon/risc0", rev = "227229dc793c215c533cbc0e07911601974a4629", default-features = false }
+risc0-zkvm = { git = "https://github.com/a-shannon/risc0", rev = "227229dc793c215c533cbc0e07911601974a4629", default-features = false, features = ["disable-dev-mode"] }
+risc0-zkvm-platform = { git = "https://github.com/a-shannon/risc0", rev = "227229dc793c215c533cbc0e07911601974a4629", default-features = false, features = ["export-syscalls"] }
+rustix = { version = "=1.1.4", default-features = false, features = ["std", "fs"] }
+sha1 = "=0.10.6"
+sha2 = "=0.10.9"
+toml = "=0.8.23"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"

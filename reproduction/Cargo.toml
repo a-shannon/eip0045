@@ -1,0 +1,92 @@
+[package]
+name = "eip-0045-reproduction"
+description = "Validation primitives for the EIP-0045 reproduction package"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[features]
+default = ["cli", "evidence", "positive-gate"]
+cli = ["dep:clap", "dep:sha1", "dep:toml", "profile"]
+evidence = ["dep:blake2", "dep:curve25519-dalek"]
+positive-gate = ["profile", "dep:jsonschema"]
+h0-tmpfs-provider-v2 = ["positive-gate"]
+b4-descriptor-build-check = ["profile", "dep:rustix"]
+profile = ["dep:blake2", "dep:risc0-binfmt", "dep:risc0-zkvm-platform"]
+receipt-oracle-codec = ["dep:bincode"]
+receipt-oracle = [
+  "receipt-oracle-codec",
+  "dep:risc0-circuit-recursion",
+  "dep:risc0-zkp",
+  "dep:risc0-zkvm",
+]
+materializer-replay = ["positive-gate", "receipt-oracle", "dep:risc0-zkp"]
+b4-terminal-evidence-packet = ["validator", "dep:rustix", "dep:winapi-util"]
+b4-terminal-evidence-publication = ["b4-terminal-evidence-packet", "dep:renamore"]
+negative-ancestry-publication = [
+  "positive-gate",
+  "receipt-oracle",
+  "recursive-ancestry",
+  "dep:renamore",
+  "dep:rustix",
+  "dep:winapi-util",
+]
+negative-materialization-set = [
+  "negative-ancestry-publication",
+  "b4-terminal-evidence-packet",
+  "materializer-replay",
+]
+recursive-ancestry = ["profile", "dep:risc0-zkvm", "risc0-zkvm/std"]
+validator = [
+  "profile",
+  "receipt-oracle",
+  "recursive-ancestry",
+  "dep:clap",
+  "dep:risc0-zkp",
+  "dep:rustix",
+]
+
+[dependencies]
+anyhow.workspace = true
+bincode = { workspace = true, optional = true }
+blake2 = { workspace = true, optional = true }
+clap = { workspace = true, optional = true }
+curve25519-dalek = { workspace = true, optional = true }
+hex.workspace = true
+jsonschema = { workspace = true, optional = true }
+risc0-binfmt = { workspace = true, optional = true }
+risc0-circuit-recursion = { workspace = true, optional = true }
+risc0-zkp = { workspace = true, optional = true }
+risc0-zkvm = { workspace = true, optional = true }
+risc0-zkvm-platform = { workspace = true, optional = true }
+renamore = { workspace = true, optional = true }
+rustix = { workspace = true, optional = true }
+serde.workspace = true
+serde_json.workspace = true
+serde_json_canonicalizer.workspace = true
+sha1 = { workspace = true, optional = true }
+sha2.workspace = true
+toml = { workspace = true, optional = true }
+
+[target.'cfg(windows)'.dependencies]
+winapi-util = { workspace = true, optional = true }
+
+[dev-dependencies]
+ed25519-dalek = "=3.0.0"
+tempfile = "=3.27.0"
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "eip0045-reproduction"
+path = "src/main.rs"
+required-features = ["cli"]
+
+[[bin]]
+name = "eip0045-b4-validator"
+path = "src/bin/eip0045-b4-validator.rs"
+required-features = ["validator"]

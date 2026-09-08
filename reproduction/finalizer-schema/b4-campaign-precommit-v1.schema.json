@@ -1,0 +1,228 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ergo:eip-0045:b4-campaign-precommit-v1",
+  "title": "Eip0045B4CampaignPrecommitV1",
+  "description": "Closed create-only pre-proof binding of the exact positive input set, cross-bound executor build, independent validator lineages, policies, authorities, and future output roles.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "formatVersion",
+    "inputSet",
+    "campaignExecutor",
+    "executorContract",
+    "verifierContract",
+    "expectationSet",
+    "validators",
+    "runnerProfiles",
+    "seccompDocuments",
+    "jvmCopyOnlyInclusionManifest",
+    "futureOutputRoles"
+  ],
+  "properties": {
+    "format": {"const": "Eip0045B4CampaignPrecommitV1"},
+    "formatVersion": {"const": 1},
+    "inputSet": {"$ref": "#/$defs/InputSetIdentity"},
+    "campaignExecutor": {"$ref": "#/$defs/CampaignExecutorBinding"},
+    "executorContract": {"$ref": "#/$defs/ExecutorContractIdentity"},
+    "verifierContract": {"$ref": "#/$defs/VerifierContractIdentity"},
+    "expectationSet": {"$ref": "#/$defs/ExpectationSetIdentity"},
+    "validators": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {"$ref": "#/$defs/RustValidatorBinding"},
+        {"$ref": "#/$defs/JvmValidatorBinding"}
+      ],
+      "items": false
+    },
+    "runnerProfiles": {"$ref": "#/$defs/OrderedRunnerProfiles"},
+    "seccompDocuments": {"$ref": "#/$defs/OrderedSeccompDocuments"},
+    "jvmCopyOnlyInclusionManifest": {"$ref": "#/$defs/JvmInclusionIdentity"},
+    "futureOutputRoles": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "prefixItems": [
+        {"const": "positive-case"},
+        {"const": "positive-generation-set"},
+        {"const": "terminal-evidence-campaign"},
+        {"const": "negative-ancestry-witness-catalog"},
+        {"const": "negative-materialization-set"},
+        {"const": "positive-suite"},
+        {"const": "negative-suite"},
+        {"const": "final-corpus"},
+        {"const": "corpus-replay"}
+      ],
+      "items": false
+    }
+  },
+  "$defs": {
+    "Hex32": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "not": {"const": "0000000000000000000000000000000000000000000000000000000000000000"}
+    },
+    "GitObjectId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "not": {"const": "0000000000000000000000000000000000000000"}
+    },
+    "RelativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "pattern": "^[a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)*$",
+      "allOf": [
+        {"not": {"pattern": "(^|/)\\.{1,2}($|/)"}},
+        {"not": {"pattern": "(^|/)[^/]*\\.($|/)"}},
+        {"not": {"pattern": "(^|/)(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\.[^/]*)?($|/)"}}
+      ]
+    },
+    "IdentityBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "path": {"$ref": "#/$defs/RelativePath"},
+        "byteLength": {"type": "integer", "minimum": 1},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"enum": ["raw-bytes", "rfc8785-jcs", "git-bundle"]}
+      }
+    },
+    "InputSetIdentity": {
+      "allOf": [{"$ref": "#/$defs/IdentityBase"}, {"properties": {"byteLength": {"maximum": 1048576}, "encoding": {"const": "rfc8785-jcs"}}}]
+    },
+    "ExecutorArtifactIdentity": {
+      "allOf": [{"$ref": "#/$defs/IdentityBase"}, {"properties": {"byteLength": {"maximum": 1073741824}, "encoding": {"const": "raw-bytes"}}}]
+    },
+    "ValidatorArtifactIdentity": {
+      "allOf": [{"$ref": "#/$defs/IdentityBase"}, {"properties": {"byteLength": {"maximum": 1073741824}, "encoding": {"const": "raw-bytes"}}}]
+    },
+    "DescriptorIdentity": {
+      "allOf": [{"$ref": "#/$defs/IdentityBase"}, {"properties": {"byteLength": {"maximum": 1048576}, "encoding": {"const": "rfc8785-jcs"}}}]
+    },
+    "ExecutorContractIdentity": {
+      "allOf": [{"$ref": "#/$defs/IdentityBase"}, {"properties": {"byteLength": {"maximum": 65536}, "encoding": {"const": "rfc8785-jcs"}}}]
+    },
+    "VerifierContractIdentity": {
+      "allOf": [{"$ref": "#/$defs/IdentityBase"}, {"properties": {"byteLength": {"maximum": 1048576}, "encoding": {"const": "rfc8785-jcs"}}}]
+    },
+    "ExpectationSetIdentity": {
+      "allOf": [{"$ref": "#/$defs/IdentityBase"}, {"properties": {"byteLength": {"maximum": 262144}, "encoding": {"const": "rfc8785-jcs"}}}]
+    },
+    "RunnerProfileIdentity": {
+      "allOf": [{"$ref": "#/$defs/IdentityBase"}, {"properties": {"byteLength": {"maximum": 1048576}, "encoding": {"const": "rfc8785-jcs"}}}]
+    },
+    "SeccompIdentity": {
+      "allOf": [{"$ref": "#/$defs/IdentityBase"}, {"properties": {"byteLength": {"maximum": 1048576}, "encoding": {"const": "rfc8785-jcs"}}}]
+    },
+    "JvmInclusionIdentity": {
+      "allOf": [{"$ref": "#/$defs/IdentityBase"}, {"properties": {"byteLength": {"maximum": 1048576}, "encoding": {"const": "rfc8785-jcs"}}}]
+    },
+    "GitBundleIdentity": {
+      "allOf": [{"$ref": "#/$defs/IdentityBase"}, {"properties": {"byteLength": {"maximum": 1073741824}, "encoding": {"const": "git-bundle"}}}]
+    },
+    "ReviewedSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit", "tree", "archive"],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 20,
+          "maxLength": 200,
+          "pattern": "^https://github\\.com/[a-z0-9][a-z0-9.-]*/[a-z0-9][a-z0-9._-]*\\.git$"
+        },
+        "commit": {"$ref": "#/$defs/GitObjectId"},
+        "tree": {"$ref": "#/$defs/GitObjectId"},
+        "archive": {"$ref": "#/$defs/GitBundleIdentity"}
+      }
+    },
+    "CampaignExecutorBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact", "reviewedSource", "buildDescriptor"],
+      "properties": {
+        "artifact": {"$ref": "#/$defs/ExecutorArtifactIdentity"},
+        "reviewedSource": {"$ref": "#/$defs/ReviewedSource"},
+        "buildDescriptor": {"$ref": "#/$defs/DescriptorIdentity"}
+      }
+    },
+    "ValidatorBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "implementation",
+        "buildDescriptor",
+        "artifact",
+        "reviewedSource",
+        "lineageSha256"
+      ],
+      "properties": {
+        "implementation": {"enum": ["rust-reference", "independent-jvm"]},
+        "buildDescriptor": {"$ref": "#/$defs/DescriptorIdentity"},
+        "artifact": {"$ref": "#/$defs/ValidatorArtifactIdentity"},
+        "reviewedSource": {"$ref": "#/$defs/ReviewedSource"},
+        "lineageSha256": {"$ref": "#/$defs/Hex32"}
+      }
+    },
+    "RustValidatorBinding": {
+      "allOf": [{"$ref": "#/$defs/ValidatorBinding"}, {"properties": {"implementation": {"const": "rust-reference"}}}]
+    },
+    "JvmValidatorBinding": {
+      "allOf": [{"$ref": "#/$defs/ValidatorBinding"}, {"properties": {"implementation": {"const": "independent-jvm"}}}]
+    },
+    "NamedRunnerProfileIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "artifact"],
+      "properties": {
+        "role": {"enum": ["rust-validator-build", "jvm-validator-build", "rust-validator", "jvm-validator"]},
+        "artifact": {"$ref": "#/$defs/RunnerProfileIdentity"}
+      }
+    },
+    "NamedSeccompIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "artifact"],
+      "properties": {
+        "role": {"enum": ["rust-validator-build", "jvm-validator-build", "rust-validator", "jvm-validator"]},
+        "artifact": {"$ref": "#/$defs/SeccompIdentity"}
+      }
+    },
+    "RustBuildRunner": {"allOf": [{"$ref": "#/$defs/NamedRunnerProfileIdentity"}, {"properties": {"role": {"const": "rust-validator-build"}}}]},
+    "JvmBuildRunner": {"allOf": [{"$ref": "#/$defs/NamedRunnerProfileIdentity"}, {"properties": {"role": {"const": "jvm-validator-build"}}}]},
+    "RustValidatorRunner": {"allOf": [{"$ref": "#/$defs/NamedRunnerProfileIdentity"}, {"properties": {"role": {"const": "rust-validator"}}}]},
+    "JvmValidatorRunner": {"allOf": [{"$ref": "#/$defs/NamedRunnerProfileIdentity"}, {"properties": {"role": {"const": "jvm-validator"}}}]},
+    "RustBuildSeccomp": {"allOf": [{"$ref": "#/$defs/NamedSeccompIdentity"}, {"properties": {"role": {"const": "rust-validator-build"}}}]},
+    "JvmBuildSeccomp": {"allOf": [{"$ref": "#/$defs/NamedSeccompIdentity"}, {"properties": {"role": {"const": "jvm-validator-build"}}}]},
+    "RustValidatorSeccomp": {"allOf": [{"$ref": "#/$defs/NamedSeccompIdentity"}, {"properties": {"role": {"const": "rust-validator"}}}]},
+    "JvmValidatorSeccomp": {"allOf": [{"$ref": "#/$defs/NamedSeccompIdentity"}, {"properties": {"role": {"const": "jvm-validator"}}}]},
+    "OrderedRunnerProfiles": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "prefixItems": [
+        {"$ref": "#/$defs/RustBuildRunner"},
+        {"$ref": "#/$defs/JvmBuildRunner"},
+        {"$ref": "#/$defs/RustValidatorRunner"},
+        {"$ref": "#/$defs/JvmValidatorRunner"}
+      ],
+      "items": false
+    },
+    "OrderedSeccompDocuments": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "prefixItems": [
+        {"$ref": "#/$defs/RustBuildSeccomp"},
+        {"$ref": "#/$defs/JvmBuildSeccomp"},
+        {"$ref": "#/$defs/RustValidatorSeccomp"},
+        {"$ref": "#/$defs/JvmValidatorSeccomp"}
+      ],
+      "items": false
+    }
+  }
+}

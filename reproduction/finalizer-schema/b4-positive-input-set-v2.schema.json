@@ -1,0 +1,890 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ergo:eip-0045:b4-positive-input-set-v2",
+  "title": "Eip0045B4PositiveInputSetV2",
+  "$comment": "This positive-finalizer schema is outside the legacy candidate-schema quarantine.",
+  "description": "Closed pre-proof identity set for the eleven EIP-0045 B4 positive cases. It binds the proof generator to an authoritatively checked dual-build projection and a fixed isolated execution policy, and contains no proof or result identity.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "formatVersion",
+    "profile",
+    "guest",
+    "referenceStatement",
+    "sourceLock",
+    "proofGenerator",
+    "verifierCliContract",
+    "validators",
+    "runnerProfiles",
+    "recursiveCalibrations",
+    "positiveCases"
+  ],
+  "properties": {
+    "format": {
+      "const": "Eip0045B4PositiveInputSetV2"
+    },
+    "formatVersion": {
+      "const": 2
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profileId", "algorithm", "constants", "manifest"],
+      "properties": {
+        "profileId": {
+          "const": "23c4a123ffb33a1c8db89436fe0e7972bd8e4e289459ee5fd71be5440607d383"
+        },
+        "algorithm": {
+          "$ref": "#/$defs/ProfileAlgorithmIdentity"
+        },
+        "constants": {
+          "$ref": "#/$defs/ProfileConstantsIdentity"
+        },
+        "manifest": {
+          "$ref": "#/$defs/ProfileManifestIdentity"
+        }
+      }
+    },
+    "guest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["elf", "imageId"],
+      "properties": {
+        "elf": {
+          "$ref": "#/$defs/GuestElfIdentity"
+        },
+        "imageId": {
+          "$ref": "#/$defs/Hex32"
+        }
+      }
+    },
+    "referenceStatement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bundleManifest", "contractId", "statementByteLength", "statementSha256", "chainDomainId", "applicationPayloadByteLength", "applicationPayloadSha256"],
+      "properties": {
+        "bundleManifest": {
+          "$ref": "#/$defs/JcsArtifactIdentity"
+        },
+        "contractId": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "statementByteLength": {
+          "type": "integer",
+          "minimum": 159,
+          "maximum": 16543
+        },
+        "statementSha256": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "chainDomainId": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "applicationPayloadByteLength": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16384
+        },
+        "applicationPayloadSha256": {
+          "$ref": "#/$defs/Hex32"
+        }
+      }
+    },
+    "sourceLock": {
+      "$ref": "#/$defs/JcsArtifactIdentity"
+    },
+    "proofGenerator": {
+      "$ref": "#/$defs/ToolIdentityBinding"
+    },
+    "verifierCliContract": {
+      "$ref": "#/$defs/VerifierContractIdentity"
+    },
+    "validators": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/RustImplementationBinding"
+        },
+        {
+          "$ref": "#/$defs/JvmImplementationBinding"
+        }
+      ],
+      "items": false
+    },
+    "runnerProfiles": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "prefixItems": [
+        {"$ref": "#/$defs/RustValidatorBuildRunnerProfile"},
+        {"$ref": "#/$defs/JvmValidatorBuildRunnerProfile"},
+        {"$ref": "#/$defs/RustPositiveVerifierRunnerProfile"},
+        {"$ref": "#/$defs/JvmPositiveVerifierRunnerProfile"}
+      ],
+      "items": false
+    },
+    "recursiveCalibrations": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/JoinCalibration"
+        },
+        {
+          "$ref": "#/$defs/ResolveCalibration"
+        },
+        {
+          "$ref": "#/$defs/ResolveThenJoinCalibration"
+        }
+      ],
+      "items": false
+    },
+    "positiveCases": {
+      "type": "array",
+      "minItems": 11,
+      "maxItems": 11,
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/Lift15"
+        },
+        {
+          "$ref": "#/$defs/Lift16"
+        },
+        {
+          "$ref": "#/$defs/Lift17"
+        },
+        {
+          "$ref": "#/$defs/Lift18"
+        },
+        {
+          "$ref": "#/$defs/Lift19"
+        },
+        {
+          "$ref": "#/$defs/Lift20"
+        },
+        {
+          "$ref": "#/$defs/Lift21"
+        },
+        {
+          "$ref": "#/$defs/Lift22"
+        },
+        {
+          "$ref": "#/$defs/TerminalJoin"
+        },
+        {
+          "$ref": "#/$defs/TerminalResolve"
+        },
+        {
+          "$ref": "#/$defs/ResolveThenJoin"
+        }
+      ],
+      "items": false
+    }
+  },
+  "$defs": {
+    "Hex32": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "Hex20": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "RelativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "pattern": "^[a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)*$",
+      "allOf": [
+        {
+          "not": {
+            "pattern": "/$"
+          }
+        },
+        {
+          "not": {
+            "pattern": "(^|/)\\.{1,2}($|/)"
+          }
+        },
+        {
+          "not": {
+            "pattern": "//"
+          }
+        },
+        {
+          "not": {
+            "pattern": "(^|/)[^/]*\\.($|/)"
+          }
+        },
+        {
+          "not": {
+            "pattern": "(^|/)(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\.[^/]*)?($|/)"
+          }
+        }
+      ]
+    },
+    "VerifierContractIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "path", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "format": {
+          "const": "Eip0045B4VerifierContractV1"
+        },
+        "path": {
+          "$ref": "#/$defs/RelativePath"
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1048576
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "encoding": {
+          "const": "rfc8785-jcs"
+        }
+      }
+    },
+    "BinaryArtifactIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/RelativePath"
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1073741824
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "encoding": {
+          "const": "raw-bytes"
+        }
+      }
+    },
+    "JcsArtifactIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/RelativePath"
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1048576
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "encoding": {
+          "const": "rfc8785-jcs"
+        }
+      }
+    },
+    "ProfileManifestIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "path": {
+          "const": "profiles/risc0-v3-succinct/manifest.bin"
+        },
+        "byteLength": {
+          "const": 458
+        },
+        "sha256": {
+          "const": "deffb2cb231f98a348cbd166d5f1c43315661ccd8bd212099f16f238d0fe8946"
+        },
+        "encoding": {
+          "const": "raw-bytes"
+        }
+      }
+    },
+    "ProfileAlgorithmIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "path": {
+          "const": "profiles/risc0-v3-succinct/algorithm.txt"
+        },
+        "byteLength": {
+          "const": 29773
+        },
+        "sha256": {
+          "const": "90a884da420a09f2c1108d7388c2ac74db8dbdb195de704206e2bf8ec1ad0bee"
+        },
+        "encoding": {
+          "const": "raw-bytes"
+        }
+      }
+    },
+    "ProfileConstantsIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "path": {
+          "const": "profiles/risc0-v3-succinct/constants.bin"
+        },
+        "byteLength": {
+          "const": 65119
+        },
+        "sha256": {
+          "const": "8c4a92b7d354890481eefdef233d4ca43f6bcd9f7cb00e4dd9e709da47789ef3"
+        },
+        "encoding": {
+          "const": "raw-bytes"
+        }
+      }
+    },
+    "GuestElfIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/RelativePath"
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4194304
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "encoding": {
+          "const": "raw-bytes"
+        }
+      }
+    },
+    "ToolIdentityBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact", "qualifyingBuild", "executionPolicy"],
+      "properties": {
+        "artifact": {
+          "$ref": "#/$defs/BinaryArtifactIdentity"
+        },
+        "qualifyingBuild": {
+          "$ref": "#/$defs/QualifyingBuildBinding"
+        },
+        "executionPolicy": {
+          "$ref": "#/$defs/ProofGeneratorExecutionPolicy"
+        }
+      }
+    },
+    "BinaryCommitment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["byteLength", "sha256", "encoding"],
+      "properties": {
+        "byteLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1073741824
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "encoding": {
+          "const": "raw-bytes"
+        }
+      }
+    },
+    "QualifyingBuildBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy",
+        "validationMode",
+        "filesystemBinding",
+        "evidenceRootSha256",
+        "sourceCommit",
+        "sourceTree",
+        "sourceLockSha256",
+        "generatorCargoClosureSha256",
+        "proofGenerationTestsSha256",
+        "generatorArtifact"
+      ],
+      "properties": {
+        "policy": {
+          "const": "eip0045-b4-qualifying-build-binding-v1"
+        },
+        "validationMode": {
+          "const": "authoritative-external-anchors"
+        },
+        "filesystemBinding": {
+          "const": "unix-file-identity-bound"
+        },
+        "evidenceRootSha256": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "sourceCommit": {
+          "$ref": "#/$defs/Hex20"
+        },
+        "sourceTree": {
+          "$ref": "#/$defs/Hex20"
+        },
+        "sourceLockSha256": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "generatorCargoClosureSha256": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "proofGenerationTestsSha256": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "generatorArtifact": {
+          "$ref": "#/$defs/BinaryCommitment"
+        }
+      }
+    },
+    "ProofGeneratorExecutionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy",
+        "caseOrder",
+        "generatorProcessReuse",
+        "replayProcessReuse",
+        "network",
+        "environmentInheritance",
+        "inputSetMount",
+        "caseOutput",
+        "replayExportMount",
+        "failurePublication"
+      ],
+      "properties": {
+        "policy": {
+          "const": "eip0045-b4-proof-generation-executor-v1"
+        },
+        "caseOrder": {
+          "const": "input-set-order"
+        },
+        "generatorProcessReuse": {
+          "const": false
+        },
+        "replayProcessReuse": {
+          "const": false
+        },
+        "network": {
+          "const": "disabled"
+        },
+        "environmentInheritance": {
+          "const": "none"
+        },
+        "inputSetMount": {
+          "const": "read-only-preexisting"
+        },
+        "caseOutput": {
+          "const": "fresh-empty-create-only"
+        },
+        "replayExportMount": {
+          "const": "read-only-physical-export"
+        },
+        "failurePublication": {
+          "const": "none"
+        }
+      }
+    },
+    "ValidatorBuildDescriptorIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "path", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "format": {
+          "const": "Eip0045B4ValidatorBuildDescriptorV2"
+        },
+        "path": {
+          "$ref": "#/$defs/RelativePath"
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1048576
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "encoding": {
+          "const": "rfc8785-jcs"
+        }
+      }
+    },
+    "RustImplementationBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["implementationIndex", "implementation", "language", "buildDescriptor"],
+      "properties": {
+        "implementationIndex": {
+          "const": 0
+        },
+        "implementation": {
+          "const": "rust-reference"
+        },
+        "language": {
+          "const": "rust"
+        },
+        "buildDescriptor": {
+          "$ref": "#/$defs/ValidatorBuildDescriptorIdentity"
+        }
+      }
+    },
+    "JvmImplementationBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["implementationIndex", "implementation", "language", "buildDescriptor"],
+      "properties": {
+        "implementationIndex": {
+          "const": 1
+        },
+        "implementation": {
+          "const": "independent-jvm"
+        },
+        "language": {
+          "const": "scala"
+        },
+        "buildDescriptor": {
+          "$ref": "#/$defs/ValidatorBuildDescriptorIdentity"
+        }
+      }
+    },
+    "OciRunnerProfileArtifactIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "path", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "format": {"const": "Eip0045B4PositiveOciRunnerProfileV2"},
+        "path": {"$ref": "#/$defs/RelativePath"},
+        "byteLength": {"type": "integer", "minimum": 1, "maximum": 1048576},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "rfc8785-jcs"}
+      }
+    },
+    "RustValidatorBuildRunnerProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runnerProfileIndex", "purpose", "artifact"],
+      "properties": {
+        "runnerProfileIndex": {"const": 0},
+        "purpose": {"const": "rust-validator-build"},
+        "artifact": {"$ref": "#/$defs/OciRunnerProfileArtifactIdentity"}
+      }
+    },
+    "JvmValidatorBuildRunnerProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runnerProfileIndex", "purpose", "artifact"],
+      "properties": {
+        "runnerProfileIndex": {"const": 1},
+        "purpose": {"const": "jvm-validator-build"},
+        "artifact": {"$ref": "#/$defs/OciRunnerProfileArtifactIdentity"}
+      }
+    },
+    "RustPositiveVerifierRunnerProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runnerProfileIndex", "purpose", "artifact"],
+      "properties": {
+        "runnerProfileIndex": {"const": 2},
+        "purpose": {"const": "rust-validator"},
+        "artifact": {"$ref": "#/$defs/OciRunnerProfileArtifactIdentity"}
+      }
+    },
+    "JvmPositiveVerifierRunnerProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runnerProfileIndex", "purpose", "artifact"],
+      "properties": {
+        "runnerProfileIndex": {"const": 3},
+        "purpose": {"const": "jvm-validator"},
+        "artifact": {"$ref": "#/$defs/OciRunnerProfileArtifactIdentity"}
+      }
+    },
+    "JoinCalibration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["caseId", "artifact"],
+      "properties": {
+        "caseId": {
+          "const": "terminal-join"
+        },
+        "artifact": {
+          "$ref": "#/$defs/JcsArtifactIdentity"
+        }
+      }
+    },
+    "ResolveCalibration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["caseId", "artifact"],
+      "properties": {
+        "caseId": {
+          "const": "terminal-resolve-explicit-root"
+        },
+        "artifact": {
+          "$ref": "#/$defs/JcsArtifactIdentity"
+        }
+      }
+    },
+    "ResolveThenJoinCalibration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["caseId", "artifact"],
+      "properties": {
+        "caseId": {
+          "const": "resolve-zero-root-then-join"
+        },
+        "artifact": {
+          "$ref": "#/$defs/JcsArtifactIdentity"
+        }
+      }
+    },
+    "LiftRoles": {
+      "description": "Ordered labels prescribing the future lift proof-export inventory; no artifact identity or result is carried here.",
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "prefixItems": [
+        {"const": "claim-digest"},
+        {"const": "control-id"},
+        {"const": "image-id"},
+        {"const": "journal"},
+        {"const": "metadata"},
+        {"const": "raw-seal"},
+        {"const": "receipt-oracle"}
+      ],
+      "items": false
+    },
+    "RecursiveRoles": {
+      "description": "Ordered labels prescribing the future recursive proof-export inventory; no artifact identity or result is carried here.",
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "prefixItems": [
+        {"const": "ancestry"},
+        {"const": "calibration"},
+        {"const": "claim-digest"},
+        {"const": "control-id"},
+        {"const": "image-id"},
+        {"const": "journal"},
+        {"const": "raw-seal"},
+        {"const": "receipt-oracle"}
+      ],
+      "items": false
+    },
+    "Lift15": {
+      "$ref": "#/$defs/LiftCase15"
+    },
+    "Lift16": {
+      "$ref": "#/$defs/LiftCase16"
+    },
+    "Lift17": {
+      "$ref": "#/$defs/LiftCase17"
+    },
+    "Lift18": {
+      "$ref": "#/$defs/LiftCase18"
+    },
+    "Lift19": {
+      "$ref": "#/$defs/LiftCase19"
+    },
+    "Lift20": {
+      "$ref": "#/$defs/LiftCase20"
+    },
+    "Lift21": {
+      "$ref": "#/$defs/LiftCase21"
+    },
+    "Lift22": {
+      "$ref": "#/$defs/LiftCase22"
+    },
+    "LiftCase15": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "caseId", "family", "guestMode", "sourceSegments", "rootBranch", "terminal", "artifactRoles"],
+      "properties": {
+        "index": {"const": 0},
+        "caseId": {"const": "lift-po2-15"},
+        "family": {"const": "lift"},
+        "guestMode": {"const": "plain"},
+        "sourceSegments": {"const": 1},
+        "rootBranch": {"const": "none"},
+        "terminal": {"$ref": "#/$defs/LiftTerminal15"},
+        "artifactRoles": {"$ref": "#/$defs/LiftRoles"}
+      }
+    },
+    "LiftCase16": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "caseId", "family", "guestMode", "sourceSegments", "rootBranch", "terminal", "artifactRoles"],
+      "properties": {
+        "index": {"const": 1},
+        "caseId": {"const": "lift-po2-16"},
+        "family": {"const": "lift"},
+        "guestMode": {"const": "plain"},
+        "sourceSegments": {"const": 1},
+        "rootBranch": {"const": "none"},
+        "terminal": {"$ref": "#/$defs/LiftTerminal16"},
+        "artifactRoles": {"$ref": "#/$defs/LiftRoles"}
+      }
+    },
+    "LiftCase17": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "caseId", "family", "guestMode", "sourceSegments", "rootBranch", "terminal", "artifactRoles"],
+      "properties": {
+        "index": {"const": 2},
+        "caseId": {"const": "lift-po2-17"},
+        "family": {"const": "lift"},
+        "guestMode": {"const": "plain"},
+        "sourceSegments": {"const": 1},
+        "rootBranch": {"const": "none"},
+        "terminal": {"$ref": "#/$defs/LiftTerminal17"},
+        "artifactRoles": {"$ref": "#/$defs/LiftRoles"}
+      }
+    },
+    "LiftCase18": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "caseId", "family", "guestMode", "sourceSegments", "rootBranch", "terminal", "artifactRoles"],
+      "properties": {
+        "index": {"const": 3},
+        "caseId": {"const": "lift-po2-18"},
+        "family": {"const": "lift"},
+        "guestMode": {"const": "plain"},
+        "sourceSegments": {"const": 1},
+        "rootBranch": {"const": "none"},
+        "terminal": {"$ref": "#/$defs/LiftTerminal18"},
+        "artifactRoles": {"$ref": "#/$defs/LiftRoles"}
+      }
+    },
+    "LiftCase19": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "caseId", "family", "guestMode", "sourceSegments", "rootBranch", "terminal", "artifactRoles"],
+      "properties": {
+        "index": {"const": 4},
+        "caseId": {"const": "lift-po2-19"},
+        "family": {"const": "lift"},
+        "guestMode": {"const": "plain"},
+        "sourceSegments": {"const": 1},
+        "rootBranch": {"const": "none"},
+        "terminal": {"$ref": "#/$defs/LiftTerminal19"},
+        "artifactRoles": {"$ref": "#/$defs/LiftRoles"}
+      }
+    },
+    "LiftCase20": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "caseId", "family", "guestMode", "sourceSegments", "rootBranch", "terminal", "artifactRoles"],
+      "properties": {
+        "index": {"const": 5},
+        "caseId": {"const": "lift-po2-20"},
+        "family": {"const": "lift"},
+        "guestMode": {"const": "plain"},
+        "sourceSegments": {"const": 1},
+        "rootBranch": {"const": "none"},
+        "terminal": {"$ref": "#/$defs/LiftTerminal20"},
+        "artifactRoles": {"$ref": "#/$defs/LiftRoles"}
+      }
+    },
+    "LiftCase21": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "caseId", "family", "guestMode", "sourceSegments", "rootBranch", "terminal", "artifactRoles"],
+      "properties": {
+        "index": {"const": 6},
+        "caseId": {"const": "lift-po2-21"},
+        "family": {"const": "lift"},
+        "guestMode": {"const": "plain"},
+        "sourceSegments": {"const": 1},
+        "rootBranch": {"const": "none"},
+        "terminal": {"$ref": "#/$defs/LiftTerminal21"},
+        "artifactRoles": {"$ref": "#/$defs/LiftRoles"}
+      }
+    },
+    "LiftCase22": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "caseId", "family", "guestMode", "sourceSegments", "rootBranch", "terminal", "artifactRoles"],
+      "properties": {
+        "index": {"const": 7},
+        "caseId": {"const": "lift-po2-22"},
+        "family": {"const": "lift"},
+        "guestMode": {"const": "plain"},
+        "sourceSegments": {"const": 1},
+        "rootBranch": {"const": "none"},
+        "terminal": {"$ref": "#/$defs/LiftTerminal22"},
+        "artifactRoles": {"$ref": "#/$defs/LiftRoles"}
+      }
+    },
+    "TerminalJoin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "caseId", "family", "guestMode", "sourceSegments", "rootBranch", "terminal", "artifactRoles"],
+      "properties": {
+        "index": {"const": 8},
+        "caseId": {"const": "terminal-join"},
+        "family": {"const": "terminal-join"},
+        "guestMode": {"const": "plain"},
+        "sourceSegments": {"const": 2},
+        "rootBranch": {"const": "none"},
+        "terminal": {"$ref": "#/$defs/JoinTerminal"},
+        "artifactRoles": {"$ref": "#/$defs/RecursiveRoles"}
+      }
+    },
+    "TerminalResolve": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "caseId", "family", "guestMode", "sourceSegments", "rootBranch", "terminal", "artifactRoles"],
+      "properties": {
+        "index": {"const": 9},
+        "caseId": {"const": "terminal-resolve-explicit-root"},
+        "family": {"const": "terminal-resolve"},
+        "guestMode": {"const": "verify-assumption-explicit-root"},
+        "sourceSegments": {"const": 1},
+        "rootBranch": {"const": "explicit"},
+        "terminal": {"$ref": "#/$defs/ResolveTerminal"},
+        "artifactRoles": {"$ref": "#/$defs/RecursiveRoles"}
+      }
+    },
+    "ResolveThenJoin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "caseId", "family", "guestMode", "sourceSegments", "rootBranch", "terminal", "artifactRoles"],
+      "properties": {
+        "index": {"const": 10},
+        "caseId": {"const": "resolve-zero-root-then-join"},
+        "family": {"const": "resolve-then-join"},
+        "guestMode": {"const": "verify-assumption-zero-root"},
+        "sourceSegments": {"const": 2},
+        "rootBranch": {"const": "zero"},
+        "terminal": {"$ref": "#/$defs/JoinTerminal"},
+        "artifactRoles": {"$ref": "#/$defs/RecursiveRoles"}
+      }
+    },
+    "LiftTerminal15": {"type": "object", "additionalProperties": false, "required": ["kind", "parameter"], "properties": {"kind": {"const": "lift"}, "parameter": {"const": 15}}},
+    "LiftTerminal16": {"type": "object", "additionalProperties": false, "required": ["kind", "parameter"], "properties": {"kind": {"const": "lift"}, "parameter": {"const": 16}}},
+    "LiftTerminal17": {"type": "object", "additionalProperties": false, "required": ["kind", "parameter"], "properties": {"kind": {"const": "lift"}, "parameter": {"const": 17}}},
+    "LiftTerminal18": {"type": "object", "additionalProperties": false, "required": ["kind", "parameter"], "properties": {"kind": {"const": "lift"}, "parameter": {"const": 18}}},
+    "LiftTerminal19": {"type": "object", "additionalProperties": false, "required": ["kind", "parameter"], "properties": {"kind": {"const": "lift"}, "parameter": {"const": 19}}},
+    "LiftTerminal20": {"type": "object", "additionalProperties": false, "required": ["kind", "parameter"], "properties": {"kind": {"const": "lift"}, "parameter": {"const": 20}}},
+    "LiftTerminal21": {"type": "object", "additionalProperties": false, "required": ["kind", "parameter"], "properties": {"kind": {"const": "lift"}, "parameter": {"const": 21}}},
+    "LiftTerminal22": {"type": "object", "additionalProperties": false, "required": ["kind", "parameter"], "properties": {"kind": {"const": "lift"}, "parameter": {"const": 22}}},
+    "JoinTerminal": {"type": "object", "additionalProperties": false, "required": ["kind", "parameter"], "properties": {"kind": {"const": "join"}, "parameter": {"const": 0}}},
+    "ResolveTerminal": {"type": "object", "additionalProperties": false, "required": ["kind", "parameter"], "properties": {"kind": {"const": "resolve"}, "parameter": {"const": 0}}}
+  }
+}

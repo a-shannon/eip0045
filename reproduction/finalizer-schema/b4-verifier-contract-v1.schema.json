@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ergo:eip-0045:b4-verifier-contract-v1",
+  "title": "Eip0045B4VerifierContractV1",
+  "description": "Closed pre-proof binding of the dual-surface verifier CLI, canonical negative plan, reviewed 508-slot expectation set, and exact ordered twenty-schema raw-byte inventory. Each schema remains strict, readable checked-in JSON; insignificant whitespace is authenticated and is not normalized to JCS.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "formatVersion",
+    "interface",
+    "positiveSubcommand",
+    "negativeSubcommand",
+    "cliSpec",
+    "negativePlan",
+    "expectationSet",
+    "schemaIdentities"
+  ],
+  "properties": {
+    "format": {"const": "Eip0045B4VerifierContractV1"},
+    "formatVersion": {"const": 1},
+    "interface": {"const": "eip0045-b4-verifier-cli-v2"},
+    "positiveSubcommand": {"const": "verify-positive"},
+    "negativeSubcommand": {"const": "verify-negative"},
+    "cliSpec": {"$ref": "#/$defs/CliSpecIdentity"},
+    "negativePlan": {"$ref": "#/$defs/NegativePlanIdentity"},
+    "expectationSet": {"$ref": "#/$defs/ExpectationSetIdentity"},
+    "schemaIdentities": {
+      "type": "array",
+      "minItems": 20,
+      "maxItems": 20,
+      "prefixItems": [
+        {"$ref": "#/$defs/VerifierContractSchema"},
+        {"$ref": "#/$defs/CampaignExecutorContractSchema"},
+        {"$ref": "#/$defs/CampaignExecutorBuildDescriptorSchema"},
+        {"$ref": "#/$defs/CampaignPrecommitSchema"},
+        {"$ref": "#/$defs/TerminalEvidenceCampaignReceiptSchema"},
+        {"$ref": "#/$defs/NegativePlanSchema"},
+        {"$ref": "#/$defs/ExpandedCorpusRegistrySchema"},
+        {"$ref": "#/$defs/SequenceSubjectSchema"},
+        {"$ref": "#/$defs/SubjectCatalogSchema"},
+        {"$ref": "#/$defs/TerminalFixtureCatalogSchema"},
+        {"$ref": "#/$defs/NegativeBindingIndexSchema"},
+        {"$ref": "#/$defs/AbstractTreeSchema"},
+        {"$ref": "#/$defs/NegativeAncestryWitnessCatalogSchema"},
+        {"$ref": "#/$defs/NegativeMaterializationSetSchema"},
+        {"$ref": "#/$defs/MaterializationIdentitySchema"},
+        {"$ref": "#/$defs/NegativeVerifierInputSchema"},
+        {"$ref": "#/$defs/NegativeObservationSchema"},
+        {"$ref": "#/$defs/NegativeExpectationSetSchema"},
+        {"$ref": "#/$defs/ValidationResultSchema"},
+        {"$ref": "#/$defs/SemanticReportSchema"}
+      ],
+      "items": false
+    }
+  },
+  "$defs": {
+    "Hex32": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "not": {"const": "0000000000000000000000000000000000000000000000000000000000000000"}
+    },
+    "RelativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "pattern": "^[a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)*$",
+      "allOf": [
+        {"not": {"pattern": "(^|/)\\.{1,2}($|/)"}},
+        {"not": {"pattern": "(^|/)[^/]*\\.($|/)"}},
+        {"not": {"pattern": "(^|/)(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\.[^/]*)?($|/)"}}
+      ]
+    },
+    "IdentityBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "path": {"$ref": "#/$defs/RelativePath"},
+        "byteLength": {"type": "integer", "minimum": 1},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"enum": ["raw-bytes", "rfc8785-jcs"]}
+      }
+    },
+    "CliSpecIdentity": {
+      "allOf": [
+        {"$ref": "#/$defs/IdentityBase"},
+        {"properties": {"byteLength": {"maximum": 1048576}, "encoding": {"const": "raw-bytes"}}}
+      ]
+    },
+    "NegativePlanIdentity": {
+      "allOf": [
+        {"$ref": "#/$defs/IdentityBase"},
+        {"properties": {"byteLength": {"maximum": 131072}, "encoding": {"const": "rfc8785-jcs"}}}
+      ]
+    },
+    "ExpectationSetIdentity": {
+      "allOf": [
+        {"$ref": "#/$defs/IdentityBase"},
+        {"properties": {"byteLength": {"maximum": 262144}, "encoding": {"const": "rfc8785-jcs"}}}
+      ]
+    },
+    "SchemaIdentity": {
+      "allOf": [
+        {"$ref": "#/$defs/IdentityBase"},
+        {"properties": {"byteLength": {"maximum": 1048576}, "encoding": {"const": "raw-bytes"}}}
+      ]
+    },
+    "NamedSchemaIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "artifact"],
+      "properties": {
+        "role": {
+          "enum": [
+            "verifier-contract",
+            "campaign-executor-contract",
+            "campaign-executor-build-descriptor",
+            "campaign-precommit",
+            "terminal-evidence-campaign-receipt",
+            "negative-plan",
+            "expanded-corpus-registry",
+            "sequence-subject",
+            "subject-catalog",
+            "terminal-fixture-catalog",
+            "negative-binding-index",
+            "abstract-tree",
+            "negative-ancestry-witness-catalog",
+            "negative-materialization-set",
+            "materialization-identity",
+            "negative-verifier-input",
+            "negative-observation",
+            "negative-expectation-set",
+            "validation-result",
+            "semantic-report"
+          ]
+        },
+        "artifact": {"$ref": "#/$defs/SchemaIdentity"}
+      }
+    },
+    "VerifierContractSchema": {"allOf": [{"$ref": "#/$defs/NamedSchemaIdentity"}, {"properties": {"role": {"const": "verifier-contract"}}}]},
+    "CampaignExecutorContractSchema": {"allOf": [{"$ref": "#/$defs/NamedSchemaIdentity"}, {"properties": {"role": {"const": "campaign-executor-contract"}}}]},
+    "CampaignExecutorBuildDescriptorSchema": {"allOf": [{"$ref": "#/$defs/NamedSchemaIdentity"}, {"properties": {"role": {"const": "campaign-executor-build-descriptor"}}}]},
+    "CampaignPrecommitSchema": {"allOf": [{"$ref": "#/$defs/NamedSchemaIdentity"}, {"properties": {"role": {"const": "campaign-precommit"}}}]},
+    "TerminalEvidenceCampaignReceiptSchema": {"allOf": [{"$ref": "#/$defs/NamedSchemaIdentity"}, {"properties": {"role": {"const": "terminal-evidence-campaign-receipt"}}}]},
+    "NegativePlanSchema": {"allOf": [{"$ref": "#/$defs/NamedSchemaIdentity"}, {"properties": {"role": {"const": "negative-plan"}}}]},
+    "ExpandedCorpusRegistrySchema": {"allOf": [{"$ref": "#/$defs/NamedSchemaIdentity"}, {"properties": {"role": {"const": "expanded-corpus-registry"}}}]},
+    "SequenceSubjectSchema": {"allOf": [{"$ref": "#/$defs/NamedSchemaIdentity"}, {"properties": {"role": {"const": "sequence-subject"}}}]},
+    "SubjectCatalogSchema": {"allOf": [{"$ref": "#/$defs/NamedSchemaIdentity"}, {"properties": {"role": {"const": "subject-catalog"}}}]},
+    "TerminalFixtureCatalogSchema": {"allOf": [{"$ref": "#/$defs/NamedSchemaIdentity"}, {"properties": {"role": {"const": "terminal-fixture-catalog"}}}]},
+    "NegativeBindingIndexSchema": {"allOf": [{"$ref": "#/$defs/NamedSchemaIdentity"}, {"properties": {"role": {"const": "negative-binding-index"}}}]},
+    "AbstractTreeSchema": {"allOf": [{"$ref": "#/$defs/NamedSchemaIdentity"}, {"properties": {"role": {"const": "abstract-tree"}}}]},
+    "NegativeAncestryWitnessCatalogSchema": {"allOf": [{"$ref": "#/$defs/NamedSchemaIdentity"}, {"properties": {"role": {"const": "negative-ancestry-witness-catalog"}}}]},
+    "NegativeMaterializationSetSchema": {"allOf": [{"$ref": "#/$defs/NamedSchemaIdentity"}, {"properties": {"role": {"const": "negative-materialization-set"}}}]},
+    "MaterializationIdentitySchema": {"allOf": [{"$ref": "#/$defs/NamedSchemaIdentity"}, {"properties": {"role": {"const": "materialization-identity"}}}]},
+    "NegativeVerifierInputSchema": {"allOf": [{"$ref": "#/$defs/NamedSchemaIdentity"}, {"properties": {"role": {"const": "negative-verifier-input"}}}]},
+    "NegativeObservationSchema": {"allOf": [{"$ref": "#/$defs/NamedSchemaIdentity"}, {"properties": {"role": {"const": "negative-observation"}}}]},
+    "NegativeExpectationSetSchema": {"allOf": [{"$ref": "#/$defs/NamedSchemaIdentity"}, {"properties": {"role": {"const": "negative-expectation-set"}}}]},
+    "ValidationResultSchema": {"allOf": [{"$ref": "#/$defs/NamedSchemaIdentity"}, {"properties": {"role": {"const": "validation-result"}}}]},
+    "SemanticReportSchema": {"allOf": [{"$ref": "#/$defs/NamedSchemaIdentity"}, {"properties": {"role": {"const": "semantic-report"}}}]}
+  }
+}

@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ergo:eip-0045:b4-positive-generation-set-v1",
+  "title": "Eip0045B4PositiveGenerationSetV1",
+  "$comment": "This positive-finalizer schema is outside the legacy candidate-schema quarantine.",
+  "description": "Closed post-proof projection of the eleven fresh generator exports. It is finalizer-only provenance and is never verifier input.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "formatVersion", "inputSetCommitment", "proofGeneratorArtifact", "cases"],
+  "properties": {
+    "format": {"const": "Eip0045B4PositiveGenerationSetV1"},
+    "formatVersion": {"const": 1},
+    "inputSetCommitment": {"$ref": "#/$defs/InputSetCommitment"},
+    "proofGeneratorArtifact": {"$ref": "#/$defs/BinaryCommitment"},
+    "cases": {
+      "type": "array", "minItems": 11, "maxItems": 11,
+      "prefixItems": [
+        {"$ref": "#/$defs/Lift15"}, {"$ref": "#/$defs/Lift16"},
+        {"$ref": "#/$defs/Lift17"}, {"$ref": "#/$defs/Lift18"},
+        {"$ref": "#/$defs/Lift19"}, {"$ref": "#/$defs/Lift20"},
+        {"$ref": "#/$defs/Lift21"}, {"$ref": "#/$defs/Lift22"},
+        {"$ref": "#/$defs/TerminalJoin"},
+        {"$ref": "#/$defs/TerminalResolve"},
+        {"$ref": "#/$defs/ResolveThenJoin"}
+      ],
+      "items": false
+    }
+  },
+  "$defs": {
+    "Hex32": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "InputSetCommitment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["format", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "format": {"const": "Eip0045B4PositiveInputSetV1"},
+        "byteLength": {"type": "integer", "minimum": 2, "maximum": 1048576},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "rfc8785-jcs"}
+      }
+    },
+    "BinaryCommitment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["byteLength", "sha256", "encoding"],
+      "properties": {
+        "byteLength": {"type": "integer", "minimum": 1, "maximum": 1073741824},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "raw-bytes"}
+      }
+    },
+    "LiftManifest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["fileName", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "fileName": {"const": "candidate-proof-output-manifest.json"},
+        "byteLength": {"type": "integer", "minimum": 2, "maximum": 8192},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "rfc8785-jcs"}
+      }
+    },
+    "RecursiveManifest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["fileName", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "fileName": {"const": "candidate-recursive-output-manifest.json"},
+        "byteLength": {"type": "integer", "minimum": 2, "maximum": 16384},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "rfc8785-jcs"}
+      }
+    },
+    "DigestArtifactBase": {
+      "type": "object", "additionalProperties": false,
+      "required": ["role", "sourceFile", "byteLength", "sha256", "encoding", "contentHex"],
+      "properties": {
+        "role": {"enum": ["claim-digest", "control-id", "image-id"]},
+        "sourceFile": {"enum": ["candidate-claim-digest.bin", "candidate-control-id.bin", "candidate-image-id.bin"]},
+        "byteLength": {"const": 32},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "raw-bytes"},
+        "contentHex": {"$ref": "#/$defs/Hex32"}
+      }
+    },
+    "ClaimDigestArtifact": {"allOf": [{"$ref": "#/$defs/DigestArtifactBase"}, {"properties": {"role": {"const": "claim-digest"}, "sourceFile": {"const": "candidate-claim-digest.bin"}}}]},
+    "ControlIdArtifact": {"allOf": [{"$ref": "#/$defs/DigestArtifactBase"}, {"properties": {"role": {"const": "control-id"}, "sourceFile": {"const": "candidate-control-id.bin"}}}]},
+    "ImageIdArtifact": {"allOf": [{"$ref": "#/$defs/DigestArtifactBase"}, {"properties": {"role": {"const": "image-id"}, "sourceFile": {"const": "candidate-image-id.bin"}}}]},
+    "JournalArtifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["role", "sourceFile", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "role": {"const": "journal"}, "sourceFile": {"const": "candidate-journal.bin"},
+        "byteLength": {"type": "integer", "minimum": 159, "maximum": 16543},
+        "sha256": {"$ref": "#/$defs/Hex32"}, "encoding": {"const": "raw-bytes"}
+      }
+    },
+    "RawSealArtifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["role", "sourceFile", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "role": {"const": "raw-seal"}, "sourceFile": {"const": "candidate-raw-seal.bin"},
+        "byteLength": {"const": 222668}, "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "raw-bytes"}
+      }
+    },
+    "MetadataArtifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["role", "sourceFile", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "role": {"const": "metadata"}, "sourceFile": {"const": "candidate-metadata.json"},
+        "byteLength": {"type": "integer", "minimum": 2, "maximum": 16384},
+        "sha256": {"$ref": "#/$defs/Hex32"}, "encoding": {"const": "rfc8785-jcs"}
+      }
+    },
+    "AncestryArtifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["role", "sourceFile", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "role": {"const": "ancestry"}, "sourceFile": {"const": "candidate-ancestry.json"},
+        "byteLength": {"type": "integer", "minimum": 2, "maximum": 65536},
+        "sha256": {"$ref": "#/$defs/Hex32"}, "encoding": {"const": "rfc8785-jcs"}
+      }
+    },
+    "CalibrationArtifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["role", "sourceFile", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "role": {"const": "calibration"}, "sourceFile": {"const": "candidate-recursive-calibration.json"},
+        "byteLength": {"type": "integer", "minimum": 2, "maximum": 4096},
+        "sha256": {"$ref": "#/$defs/Hex32"}, "encoding": {"const": "rfc8785-jcs"}
+      }
+    },
+    "LiftOracleArtifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["role", "sourceFile", "byteLength", "sha256", "encoding", "codec"],
+      "properties": {
+        "role": {"const": "receipt-oracle"}, "sourceFile": {"const": "candidate-receipt-oracle.bincode"},
+        "byteLength": {"type": "integer", "minimum": 1, "maximum": 1048576},
+        "sha256": {"$ref": "#/$defs/Hex32"}, "encoding": {"const": "raw-bytes"},
+        "codec": {"const": "bincode-1.3.3-little-endian-fixed-int-reject-trailing"}
+      }
+    },
+    "RecursiveOracleArtifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["role", "sourceFile", "byteLength", "sha256", "encoding", "codec"],
+      "properties": {
+        "role": {"const": "receipt-oracle"}, "sourceFile": {"const": "candidate-recursive-oracle.borsh"},
+        "byteLength": {"type": "integer", "minimum": 1, "maximum": 33554432},
+        "sha256": {"$ref": "#/$defs/Hex32"}, "encoding": {"const": "raw-bytes"},
+        "codec": {"const": "eip0045-recursive-oracle-borsh-v1"}
+      }
+    },
+    "LiftArtifacts": {
+      "type": "array", "minItems": 7, "maxItems": 7,
+      "prefixItems": [
+        {"$ref": "#/$defs/ClaimDigestArtifact"}, {"$ref": "#/$defs/ControlIdArtifact"},
+        {"$ref": "#/$defs/ImageIdArtifact"}, {"$ref": "#/$defs/JournalArtifact"},
+        {"$ref": "#/$defs/MetadataArtifact"}, {"$ref": "#/$defs/RawSealArtifact"},
+        {"$ref": "#/$defs/LiftOracleArtifact"}
+      ], "items": false
+    },
+    "RecursiveArtifacts": {
+      "type": "array", "minItems": 8, "maxItems": 8,
+      "prefixItems": [
+        {"$ref": "#/$defs/AncestryArtifact"}, {"$ref": "#/$defs/CalibrationArtifact"},
+        {"$ref": "#/$defs/ClaimDigestArtifact"}, {"$ref": "#/$defs/ControlIdArtifact"},
+        {"$ref": "#/$defs/ImageIdArtifact"}, {"$ref": "#/$defs/JournalArtifact"},
+        {"$ref": "#/$defs/RawSealArtifact"}, {"$ref": "#/$defs/RecursiveOracleArtifact"}
+      ], "items": false
+    },
+    "LiftGeneration15": {"type": "object", "additionalProperties": false, "required": ["kind", "segmentPo2"], "properties": {"kind": {"const": "lift"}, "segmentPo2": {"const": 15}}},
+    "LiftGeneration16": {"type": "object", "additionalProperties": false, "required": ["kind", "segmentPo2"], "properties": {"kind": {"const": "lift"}, "segmentPo2": {"const": 16}}},
+    "LiftGeneration17": {"type": "object", "additionalProperties": false, "required": ["kind", "segmentPo2"], "properties": {"kind": {"const": "lift"}, "segmentPo2": {"const": 17}}},
+    "LiftGeneration18": {"type": "object", "additionalProperties": false, "required": ["kind", "segmentPo2"], "properties": {"kind": {"const": "lift"}, "segmentPo2": {"const": 18}}},
+    "LiftGeneration19": {"type": "object", "additionalProperties": false, "required": ["kind", "segmentPo2"], "properties": {"kind": {"const": "lift"}, "segmentPo2": {"const": 19}}},
+    "LiftGeneration20": {"type": "object", "additionalProperties": false, "required": ["kind", "segmentPo2"], "properties": {"kind": {"const": "lift"}, "segmentPo2": {"const": 20}}},
+    "LiftGeneration21": {"type": "object", "additionalProperties": false, "required": ["kind", "segmentPo2"], "properties": {"kind": {"const": "lift"}, "segmentPo2": {"const": 21}}},
+    "LiftGeneration22": {"type": "object", "additionalProperties": false, "required": ["kind", "segmentPo2"], "properties": {"kind": {"const": "lift"}, "segmentPo2": {"const": 22}}},
+    "TerminalJoinGeneration": {"type": "object", "additionalProperties": false, "required": ["kind", "family"], "properties": {"kind": {"const": "recursive"}, "family": {"const": "terminal-join"}}},
+    "TerminalResolveGeneration": {"type": "object", "additionalProperties": false, "required": ["kind", "family"], "properties": {"kind": {"const": "recursive"}, "family": {"const": "terminal-resolve"}}},
+    "ResolveThenJoinGeneration": {"type": "object", "additionalProperties": false, "required": ["kind", "family"], "properties": {"kind": {"const": "recursive"}, "family": {"const": "resolve-then-join"}}},
+    "LiftCaseBase": {
+      "type": "object", "additionalProperties": false,
+      "required": ["caseIndex", "caseId", "generation", "proofOutputManifest", "artifacts"],
+      "properties": {
+        "caseIndex": {"type": "integer", "minimum": 0, "maximum": 7},
+        "caseId": {"type": "string"}, "generation": {"type": "object"},
+        "proofOutputManifest": {"$ref": "#/$defs/LiftManifest"},
+        "artifacts": {"$ref": "#/$defs/LiftArtifacts"}
+      }
+    },
+    "RecursiveCaseBase": {
+      "type": "object", "additionalProperties": false,
+      "required": ["caseIndex", "caseId", "generation", "proofOutputManifest", "artifacts"],
+      "properties": {
+        "caseIndex": {"type": "integer", "minimum": 8, "maximum": 10},
+        "caseId": {"type": "string"}, "generation": {"type": "object"},
+        "proofOutputManifest": {"$ref": "#/$defs/RecursiveManifest"},
+        "artifacts": {"$ref": "#/$defs/RecursiveArtifacts"}
+      }
+    },
+    "Lift15": {"allOf": [{"$ref": "#/$defs/LiftCaseBase"}, {"properties": {"caseIndex": {"const": 0}, "caseId": {"const": "lift-po2-15"}, "generation": {"$ref": "#/$defs/LiftGeneration15"}}}]},
+    "Lift16": {"allOf": [{"$ref": "#/$defs/LiftCaseBase"}, {"properties": {"caseIndex": {"const": 1}, "caseId": {"const": "lift-po2-16"}, "generation": {"$ref": "#/$defs/LiftGeneration16"}}}]},
+    "Lift17": {"allOf": [{"$ref": "#/$defs/LiftCaseBase"}, {"properties": {"caseIndex": {"const": 2}, "caseId": {"const": "lift-po2-17"}, "generation": {"$ref": "#/$defs/LiftGeneration17"}}}]},
+    "Lift18": {"allOf": [{"$ref": "#/$defs/LiftCaseBase"}, {"properties": {"caseIndex": {"const": 3}, "caseId": {"const": "lift-po2-18"}, "generation": {"$ref": "#/$defs/LiftGeneration18"}}}]},
+    "Lift19": {"allOf": [{"$ref": "#/$defs/LiftCaseBase"}, {"properties": {"caseIndex": {"const": 4}, "caseId": {"const": "lift-po2-19"}, "generation": {"$ref": "#/$defs/LiftGeneration19"}}}]},
+    "Lift20": {"allOf": [{"$ref": "#/$defs/LiftCaseBase"}, {"properties": {"caseIndex": {"const": 5}, "caseId": {"const": "lift-po2-20"}, "generation": {"$ref": "#/$defs/LiftGeneration20"}}}]},
+    "Lift21": {"allOf": [{"$ref": "#/$defs/LiftCaseBase"}, {"properties": {"caseIndex": {"const": 6}, "caseId": {"const": "lift-po2-21"}, "generation": {"$ref": "#/$defs/LiftGeneration21"}}}]},
+    "Lift22": {"allOf": [{"$ref": "#/$defs/LiftCaseBase"}, {"properties": {"caseIndex": {"const": 7}, "caseId": {"const": "lift-po2-22"}, "generation": {"$ref": "#/$defs/LiftGeneration22"}}}]},
+    "TerminalJoin": {"allOf": [{"$ref": "#/$defs/RecursiveCaseBase"}, {"properties": {"caseIndex": {"const": 8}, "caseId": {"const": "terminal-join"}, "generation": {"$ref": "#/$defs/TerminalJoinGeneration"}}}]},
+    "TerminalResolve": {"allOf": [{"$ref": "#/$defs/RecursiveCaseBase"}, {"properties": {"caseIndex": {"const": 9}, "caseId": {"const": "terminal-resolve-explicit-root"}, "generation": {"$ref": "#/$defs/TerminalResolveGeneration"}}}]},
+    "ResolveThenJoin": {"allOf": [{"$ref": "#/$defs/RecursiveCaseBase"}, {"properties": {"caseIndex": {"const": 10}, "caseId": {"const": "resolve-zero-root-then-join"}, "generation": {"$ref": "#/$defs/ResolveThenJoinGeneration"}}}]}
+  }
+}

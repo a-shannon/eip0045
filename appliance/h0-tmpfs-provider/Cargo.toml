@@ -1,0 +1,25 @@
+[workspace]
+members = ["crates/contract", "crates/linux-abi"]
+default-members = ["crates/contract"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89.0"
+license = "Apache-2.0"
+authors = ["A. Shannon"]
+publish = false
+
+[workspace.dependencies]
+sha2 = { version = "=0.10.9", default-features = false }
+anyhow = "=1.0.99"
+elf = { version = "=0.7.4", default-features = false }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"

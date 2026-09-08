@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ergo:eip-0045:b4-campaign-executor-build-descriptor-v1",
+  "title": "Eip0045B4CampaignExecutorBuildDescriptorV1",
+  "description": "Closed direct binding of the measured campaign-executor artifact to its reviewed source, command contract, and exact command inventory.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "formatVersion",
+    "artifact",
+    "reviewedSource",
+    "executorContract",
+    "commands"
+  ],
+  "properties": {
+    "format": {"const": "Eip0045B4CampaignExecutorBuildDescriptorV1"},
+    "formatVersion": {"const": 1},
+    "artifact": {"$ref": "#/$defs/ExecutorArtifactIdentity"},
+    "reviewedSource": {"$ref": "#/$defs/ReviewedSource"},
+    "executorContract": {"$ref": "#/$defs/ExecutorContractIdentity"},
+    "commands": {
+      "type": "array",
+      "minItems": 11,
+      "maxItems": 11,
+      "prefixItems": [
+        {"const": "prepare-input-set"},
+        {"const": "prepare-campaign-precommit"},
+        {"const": "generate-case"},
+        {"const": "finalize-generation-set"},
+        {"const": "publish-terminal-evidence"},
+        {"const": "generate-negative-ancestry-witness-catalog"},
+        {"const": "prepare-negative-materialization-set"},
+        {"const": "run-positive-suite"},
+        {"const": "run-negative-suite"},
+        {"const": "finalize-corpus"},
+        {"const": "replay-corpus"}
+      ],
+      "items": false
+    }
+  },
+  "$defs": {
+    "Hex32": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "not": {"const": "0000000000000000000000000000000000000000000000000000000000000000"}
+    },
+    "GitObjectId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "not": {"const": "0000000000000000000000000000000000000000"}
+    },
+    "RelativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "pattern": "^[a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)*$",
+      "allOf": [
+        {"not": {"pattern": "(^|/)\\.{1,2}($|/)"}},
+        {"not": {"pattern": "(^|/)[^/]*\\.($|/)"}},
+        {"not": {"pattern": "(^|/)(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\.[^/]*)?($|/)"}}
+      ]
+    },
+    "IdentityBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "path": {"$ref": "#/$defs/RelativePath"},
+        "byteLength": {"type": "integer", "minimum": 1},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"enum": ["raw-bytes", "rfc8785-jcs", "git-bundle"]}
+      }
+    },
+    "ExecutorArtifactIdentity": {
+      "allOf": [
+        {"$ref": "#/$defs/IdentityBase"},
+        {"properties": {"byteLength": {"maximum": 1073741824}, "encoding": {"const": "raw-bytes"}}}
+      ]
+    },
+    "ExecutorContractIdentity": {
+      "allOf": [
+        {"$ref": "#/$defs/IdentityBase"},
+        {"properties": {"byteLength": {"maximum": 65536}, "encoding": {"const": "rfc8785-jcs"}}}
+      ]
+    },
+    "GitBundleIdentity": {
+      "allOf": [
+        {"$ref": "#/$defs/IdentityBase"},
+        {"properties": {"byteLength": {"maximum": 1073741824}, "encoding": {"const": "git-bundle"}}}
+      ]
+    },
+    "ReviewedSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit", "tree", "archive"],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 20,
+          "maxLength": 200,
+          "pattern": "^https://github\\.com/[a-z0-9][a-z0-9.-]*/[a-z0-9][a-z0-9._-]*\\.git$"
+        },
+        "commit": {"$ref": "#/$defs/GitObjectId"},
+        "tree": {"$ref": "#/$defs/GitObjectId"},
+        "archive": {"$ref": "#/$defs/GitBundleIdentity"}
+      }
+    }
+  }
+}

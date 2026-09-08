@@ -1,0 +1,332 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ergo:eip-0045:b4-positive-acceptance-v2",
+  "title": "Eip0045B4PositiveAcceptanceV2",
+  "$comment": "This positive-finalizer schema is outside the legacy candidate-schema quarantine.",
+  "description": "Trusted-finalizer record binding one successful cryptographic observation to its case, immutable inputs, reviewed validator, launched bytes, and runtime.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "formatVersion",
+    "caseId",
+    "caseIndex",
+    "inputSetCommitment",
+    "generationSetCommitment",
+    "verifierInputCommitment",
+    "observationCommitment",
+    "implementationBinding",
+    "observation"
+  ],
+  "properties": {
+    "format": {
+      "const": "Eip0045B4PositiveAcceptanceV2"
+    },
+    "formatVersion": {
+      "const": 2
+    },
+    "caseId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "caseIndex": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10
+    },
+    "inputSetCommitment": {
+      "$ref": "#/$defs/InputSetCommitment"
+    },
+    "generationSetCommitment": {
+      "$ref": "#/$defs/GenerationSetCommitment"
+    },
+    "verifierInputCommitment": {
+      "$ref": "#/$defs/VerifierInputCommitment"
+    },
+    "observationCommitment": {
+      "$ref": "#/$defs/ObservationCommitment"
+    },
+    "implementationBinding": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/RustImplementationBinding"
+        },
+        {
+          "$ref": "#/$defs/JvmImplementationBinding"
+        }
+      ]
+    },
+    "observation": {
+      "$ref": "#/$defs/Observation"
+    }
+  },
+  "allOf": [
+    {
+      "oneOf": [
+        {"properties": {"caseId": {"const": "lift-po2-15"}, "caseIndex": {"const": 0}, "observation": {"$ref": "#/$defs/LiftObservation15"}}},
+        {"properties": {"caseId": {"const": "lift-po2-16"}, "caseIndex": {"const": 1}, "observation": {"$ref": "#/$defs/LiftObservation16"}}},
+        {"properties": {"caseId": {"const": "lift-po2-17"}, "caseIndex": {"const": 2}, "observation": {"$ref": "#/$defs/LiftObservation17"}}},
+        {"properties": {"caseId": {"const": "lift-po2-18"}, "caseIndex": {"const": 3}, "observation": {"$ref": "#/$defs/LiftObservation18"}}},
+        {"properties": {"caseId": {"const": "lift-po2-19"}, "caseIndex": {"const": 4}, "observation": {"$ref": "#/$defs/LiftObservation19"}}},
+        {"properties": {"caseId": {"const": "lift-po2-20"}, "caseIndex": {"const": 5}, "observation": {"$ref": "#/$defs/LiftObservation20"}}},
+        {"properties": {"caseId": {"const": "lift-po2-21"}, "caseIndex": {"const": 6}, "observation": {"$ref": "#/$defs/LiftObservation21"}}},
+        {"properties": {"caseId": {"const": "lift-po2-22"}, "caseIndex": {"const": 7}, "observation": {"$ref": "#/$defs/LiftObservation22"}}},
+        {"properties": {"caseId": {"const": "terminal-join"}, "caseIndex": {"const": 8}, "observation": {"$ref": "#/$defs/JoinObservation"}}},
+        {"properties": {"caseId": {"const": "terminal-resolve-explicit-root"}, "caseIndex": {"const": 9}, "observation": {"$ref": "#/$defs/ResolveObservation"}}},
+        {"properties": {"caseId": {"const": "resolve-zero-root-then-join"}, "caseIndex": {"const": 10}, "observation": {"$ref": "#/$defs/JoinObservation"}}}
+      ]
+    }
+  ],
+  "$defs": {
+    "Hex32": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "GitObjectId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "InputSetCommitment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "format": {"const": "Eip0045B4PositiveInputSetV2"},
+        "byteLength": {"type": "integer", "minimum": 1, "maximum": 1048576},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "rfc8785-jcs"}
+      }
+    },
+    "GenerationSetCommitment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "format": {"const": "Eip0045B4PositiveGenerationSetV2"},
+        "byteLength": {"type": "integer", "minimum": 1, "maximum": 1048576},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "rfc8785-jcs"}
+      }
+    },
+    "VerifierInputCommitment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "format": {"const": "Eip0045B4PositiveVerifierInputV1"},
+        "byteLength": {"type": "integer", "minimum": 1, "maximum": 65536},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "rfc8785-jcs"}
+      }
+    },
+    "ObservationCommitment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "format": {"const": "Eip0045B4PositiveObservationV1"},
+        "byteLength": {"type": "integer", "minimum": 1, "maximum": 65536},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "rfc8785-jcs"}
+      }
+    },
+    "BuildDescriptorCommitment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "format": {"const": "Eip0045B4ValidatorBuildDescriptorV2"},
+        "byteLength": {"type": "integer", "minimum": 1, "maximum": 1048576},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "rfc8785-jcs"}
+      }
+    },
+    "OciRunnerProfileCommitment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "format": {"const": "Eip0045B4PositiveOciRunnerProfileV2"},
+        "byteLength": {"type": "integer", "minimum": 1, "maximum": 1048576},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "rfc8785-jcs"}
+      }
+    },
+    "BinaryCommitment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["byteLength", "sha256", "encoding"],
+      "properties": {
+        "byteLength": {"type": "integer", "minimum": 1, "maximum": 1073741824},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "raw-bytes"}
+      }
+    },
+    "ReviewedSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit", "tree"],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 20,
+          "maxLength": 200,
+          "pattern": "^https://github\\.com/[a-z0-9][a-z0-9.-]*/[a-z0-9][a-z0-9._-]*\\.git$"
+        },
+        "commit": {"$ref": "#/$defs/GitObjectId"},
+        "tree": {"$ref": "#/$defs/GitObjectId"}
+      }
+    },
+    "RustImplementationBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["implementationIndex", "implementation", "language", "lineageSha256", "reviewedSource", "buildDescriptor", "launchedArtifact", "executionRunnerProfile"],
+      "properties": {
+        "implementationIndex": {"const": 0},
+        "implementation": {"const": "rust-reference"},
+        "language": {"const": "rust"},
+        "lineageSha256": {"$ref": "#/$defs/Hex32"},
+        "reviewedSource": {"$ref": "#/$defs/ReviewedSource"},
+        "buildDescriptor": {"$ref": "#/$defs/BuildDescriptorCommitment"},
+        "launchedArtifact": {"$ref": "#/$defs/ElfCommitment"},
+        "executionRunnerProfile": {"$ref": "#/$defs/RustPositiveVerifierRunnerProfileBinding"}
+      }
+    },
+    "ElfCommitment": {
+      "allOf": [
+        {"$ref": "#/$defs/BinaryCommitment"},
+        {"properties": {"byteLength": {"minimum": 64}}}
+      ]
+    },
+    "JarCommitment": {
+      "allOf": [
+        {"$ref": "#/$defs/BinaryCommitment"},
+        {"properties": {"byteLength": {"minimum": 22}}}
+      ]
+    },
+    "JavaReleaseCommitment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["byteLength", "sha256", "encoding"],
+      "properties": {
+        "byteLength": {"type": "integer", "minimum": 1, "maximum": 65536},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "openjdk-release-file-utf8-v1"}
+      }
+    },
+    "RustPositiveVerifierRunnerProfileBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runnerProfileIndex", "purpose", "artifact"],
+      "properties": {
+        "runnerProfileIndex": {"const": 2},
+        "purpose": {"const": "rust-validator"},
+        "artifact": {"$ref": "#/$defs/OciRunnerProfileCommitment"}
+      }
+    },
+    "JvmPositiveVerifierRunnerProfileBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runnerProfileIndex", "purpose", "artifact"],
+      "properties": {
+        "runnerProfileIndex": {"const": 3},
+        "purpose": {"const": "jvm-validator"},
+        "artifact": {"$ref": "#/$defs/OciRunnerProfileCommitment"}
+      }
+    },
+    "JavaRuntime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binary", "release", "featureVersion", "vendor", "version", "options"],
+      "properties": {
+        "binary": {"$ref": "#/$defs/ElfCommitment"},
+        "release": {"$ref": "#/$defs/JavaReleaseCommitment"},
+        "featureVersion": {"const": 21},
+        "vendor": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[ -~]+$"},
+        "version": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[ -~]+$"},
+        "options": {
+          "type": "array",
+          "minItems": 9,
+          "maxItems": 9,
+          "prefixItems": [
+            {"const": "-Xms64m"},
+            {"const": "-Xmx3072m"},
+            {"const": "-XX:+UseSerialGC"},
+            {"const": "-XX:+DisableAttachMechanism"},
+            {"const": "-Djava.io.tmpdir=/tmp"},
+            {"const": "-Dfile.encoding=UTF-8"},
+            {"const": "-Duser.language=en"},
+            {"const": "-Duser.country=US"},
+            {"const": "-Duser.timezone=UTC"}
+          ],
+          "items": false
+        }
+      }
+    },
+    "JvmImplementationBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["implementationIndex", "implementation", "language", "lineageSha256", "reviewedSource", "buildDescriptor", "launchedArtifact", "javaRuntime", "executionRunnerProfile"],
+      "properties": {
+        "implementationIndex": {"const": 1},
+        "implementation": {"const": "independent-jvm"},
+        "language": {"const": "scala"},
+        "lineageSha256": {"$ref": "#/$defs/Hex32"},
+        "reviewedSource": {"$ref": "#/$defs/ReviewedSource"},
+        "buildDescriptor": {"$ref": "#/$defs/BuildDescriptorCommitment"},
+        "launchedArtifact": {"$ref": "#/$defs/JarCommitment"},
+        "javaRuntime": {"$ref": "#/$defs/JavaRuntime"},
+        "executionRunnerProfile": {"$ref": "#/$defs/JvmPositiveVerifierRunnerProfileBinding"}
+      }
+    },
+    "Observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "formatVersion", "verdict", "profileId", "programId", "statementSha256", "claimDigest", "finalStatus", "finalAssumptionCount", "terminal"],
+      "properties": {
+        "format": {"const": "Eip0045B4PositiveObservationV1"},
+        "formatVersion": {"const": 1},
+        "verdict": {"const": "accept"},
+        "profileId": {"const": "23c4a123ffb33a1c8db89436fe0e7972bd8e4e289459ee5fd71be5440607d383"},
+        "programId": {"$ref": "#/$defs/Hex32"},
+        "statementSha256": {"$ref": "#/$defs/Hex32"},
+        "claimDigest": {"$ref": "#/$defs/Hex32"},
+        "finalStatus": {"const": "ok"},
+        "finalAssumptionCount": {"const": 0},
+        "terminal": {"$ref": "#/$defs/TerminalObservation"}
+      }
+    },
+    "TerminalObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "parameter", "controlId"],
+      "properties": {
+        "kind": {"enum": ["lift", "join", "resolve"]},
+        "parameter": {"type": "integer", "minimum": 0, "maximum": 22},
+        "controlId": {"$ref": "#/$defs/Hex32"}
+      }
+    },
+    "LiftObservation15": {"properties": {"terminal": {"$ref": "#/$defs/LiftTerminal15"}}},
+    "LiftObservation16": {"properties": {"terminal": {"$ref": "#/$defs/LiftTerminal16"}}},
+    "LiftObservation17": {"properties": {"terminal": {"$ref": "#/$defs/LiftTerminal17"}}},
+    "LiftObservation18": {"properties": {"terminal": {"$ref": "#/$defs/LiftTerminal18"}}},
+    "LiftObservation19": {"properties": {"terminal": {"$ref": "#/$defs/LiftTerminal19"}}},
+    "LiftObservation20": {"properties": {"terminal": {"$ref": "#/$defs/LiftTerminal20"}}},
+    "LiftObservation21": {"properties": {"terminal": {"$ref": "#/$defs/LiftTerminal21"}}},
+    "LiftObservation22": {"properties": {"terminal": {"$ref": "#/$defs/LiftTerminal22"}}},
+    "JoinObservation": {"properties": {"terminal": {"$ref": "#/$defs/JoinTerminal"}}},
+    "ResolveObservation": {"properties": {"terminal": {"$ref": "#/$defs/ResolveTerminal"}}},
+    "LiftTerminal15": {"properties": {"kind": {"const": "lift"}, "parameter": {"const": 15}}},
+    "LiftTerminal16": {"properties": {"kind": {"const": "lift"}, "parameter": {"const": 16}}},
+    "LiftTerminal17": {"properties": {"kind": {"const": "lift"}, "parameter": {"const": 17}}},
+    "LiftTerminal18": {"properties": {"kind": {"const": "lift"}, "parameter": {"const": 18}}},
+    "LiftTerminal19": {"properties": {"kind": {"const": "lift"}, "parameter": {"const": 19}}},
+    "LiftTerminal20": {"properties": {"kind": {"const": "lift"}, "parameter": {"const": 20}}},
+    "LiftTerminal21": {"properties": {"kind": {"const": "lift"}, "parameter": {"const": 21}}},
+    "LiftTerminal22": {"properties": {"kind": {"const": "lift"}, "parameter": {"const": 22}}},
+    "JoinTerminal": {"properties": {"kind": {"const": "join"}, "parameter": {"const": 0}}},
+    "ResolveTerminal": {"properties": {"kind": {"const": "resolve"}, "parameter": {"const": 0}}}
+  }
+}

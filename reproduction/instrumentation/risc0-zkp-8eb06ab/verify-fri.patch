@@ -1,0 +1,89 @@
+diff --git a/risc0/zkp/src/verify/fri.rs b/risc0/zkp/src/verify/fri.rs
+index 2eefff59..fc38b9e1 100644
+--- a/risc0/zkp/src/verify/fri.rs
++++ b/risc0/zkp/src/verify/fri.rs
+@@ -67,6 +67,9 @@ where
+         round: &mut VerifyRoundInfo<'a, F>,
+         pos: &mut usize,
+         goal: &mut F::ExtElem,
++        query: usize,
++        round_index: usize,
++        observe: &mut impl FnMut(super::VerificationCheckpoint),
+     ) -> Result<(), VerificationError> {
+         let quot = *pos / round.domain;
+         let group = *pos % round.domain;
+@@ -84,6 +87,10 @@ where
+             .collect();
+         // Check the existing goal
+         if data_ext[quot] != *goal {
++            observe(super::VerificationCheckpoint::FriRoundGoal {
++                query,
++                round: round_index,
++            });
+             return Err(VerificationError::InvalidProof);
+         }
+         // Compute the new goal + pos
+@@ -98,7 +105,22 @@ where
+         Ok(())
+     }
+ 
++    #[allow(
++        dead_code,
++        reason = "preserve the stock unstable method while the checkpoint path is selected internally"
++    )]
+     pub fn fri_verify<InnerFn>(&self, mut inner: InnerFn) -> Result<(), VerificationError>
++    where
++        InnerFn: FnMut(usize) -> Result<F::ExtElem, VerificationError>,
++    {
++        self.fri_verify_with_checkpoints(&mut inner, &mut |_| {})
++    }
++
++    pub(super) fn fri_verify_with_checkpoints<InnerFn>(
++        &self,
++        mut inner: InnerFn,
++        observe: &mut impl FnMut(super::VerificationCheckpoint),
++    ) -> Result<(), VerificationError>
+     where
+         InnerFn: FnMut(usize) -> Result<F::ExtElem, VerificationError>,
+     {
+@@ -137,13 +159,28 @@ where
+         let gen = <F::Elem as RootsOfUnity>::ROU_FWD[log2_ceil(domain)];
+         // Do queries
+         let mut poly_buf: Vec<F::ExtElem> = Vec::with_capacity(degree);
+-        for _ in 0..QUERIES {
++        for query in 0..QUERIES {
+             let mut pos = self.iop().random_bits(log2_ceil(orig_domain)) as usize;
+             // Do the 'inner' verification for this index
+-            let mut goal = inner(pos)?;
++            let mut goal = match inner(pos) {
++                Ok(goal) => goal,
++                Err(error) => {
++                    if matches!(error, VerificationError::InvalidProof) {
++                        observe(super::VerificationCheckpoint::FriInnerQuery { query });
++                    }
++                    return Err(error);
++                }
++            };
+             // Verify the per-round proofs
+-            for round in &mut rounds {
+-                self.verify_query(round, &mut pos, &mut goal)?;
++            for (round_index, round) in rounds.iter_mut().enumerate() {
++                self.verify_query(
++                    round,
++                    &mut pos,
++                    &mut goal,
++                    query,
++                    round_index,
++                    observe,
++                )?;
+             }
+             // Do final verification
+             let x = gen.pow(pos);
+@@ -156,6 +193,7 @@ where
+             }));
+             let fx = self.poly_eval(poly_buf.as_slice(), F::ExtElem::from_subfield(&x));
+             if fx != goal {
++                observe(super::VerificationCheckpoint::FriFinalPolynomial { query });
+                 return Err(VerificationError::InvalidProof);
+             }
+         }

@@ -1,0 +1,5671 @@
+{
+  "$comment": "Pathless identities intentionally have no uniqueness constraint: distinct roles may legitimately deduplicate to the same exact bytes. Each execution prefix fixes the exact handler-owned context cardinality. Schema validity is structural only and does not confer campaign authority.",
+  "$defs": {
+    "ByteIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "byteLength": {
+          "maximum": 536870912,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hex32"
+        }
+      },
+      "required": [
+        "byteLength",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "Execution": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "materializationDomain": {
+                "const": "verifier-input"
+              },
+              "validationSurface": {
+                "const": "risc0-parser-internal"
+              }
+            },
+            "required": [
+              "materializationDomain",
+              "validationSurface"
+            ]
+          },
+          "else": {
+            "properties": {
+              "subject": {
+                "properties": {
+                  "byteLength": {
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "base": {
+          "$ref": "#/$defs/ByteIdentity"
+        },
+        "contexts": {
+          "items": {
+            "$ref": "#/$defs/ByteIdentity"
+          },
+          "maxItems": 64,
+          "minItems": 0,
+          "type": "array"
+        },
+        "executionId": {
+          "maxLength": 258,
+          "minLength": 4,
+          "pattern": "^(?=.{1,128}--.{1,128}$)[a-z](?:[a-z0-9]|-[a-z0-9])*--[a-z](?:[a-z0-9]|-[a-z0-9])*$",
+          "type": "string"
+        },
+        "executionIndex": {
+          "maximum": 253,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "materializationDomain": {
+          "enum": [
+            "verifier-input",
+            "artifact-validator",
+            "tree-validator"
+          ]
+        },
+        "materializationIdentity": {
+          "$ref": "#/$defs/ByteIdentity",
+          "properties": {
+            "byteLength": {
+              "maximum": 65536
+            }
+          }
+        },
+        "negativeInput": {
+          "$ref": "#/$defs/ByteIdentity",
+          "properties": {
+            "byteLength": {
+              "maximum": 65536
+            }
+          }
+        },
+        "subject": {
+          "$ref": "#/$defs/SubjectIdentity"
+        },
+        "validationSurface": {
+          "enum": [
+            "opcode-preflight",
+            "raw-statement-claim-binding",
+            "raw-seal-shape",
+            "risc0-parser-internal",
+            "risc0-cryptographic-verifier",
+            "terminal-policy",
+            "receipt-claim-policy",
+            "ancestry-replay",
+            "profile-manifest-codec",
+            "initial-profile-target",
+            "profile-artifact-envelope",
+            "activated-profile-package",
+            "terminal-fixture-catalog",
+            "sequence-subject-catalog",
+            "terminal-metadata",
+            "profile-id-preimage",
+            "candidate-registry",
+            "negative-binding-index",
+            "corpus-closure"
+          ]
+        }
+      },
+      "required": [
+        "executionIndex",
+        "executionId",
+        "materializationDomain",
+        "validationSurface",
+        "base",
+        "materializationIdentity",
+        "negativeInput",
+        "subject",
+        "contexts"
+      ],
+      "type": "object"
+    },
+    "Hex32": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "NegativeAncestryWitnessCatalogIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "byteLength": {
+          "maximum": 131072,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "encoding": {
+          "const": "rfc8785-jcs"
+        },
+        "path": {
+          "const": "reproduction/negative-ancestry-witness-catalog.json"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hex32",
+          "not": {
+            "const": "0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        }
+      },
+      "required": [
+        "path",
+        "byteLength",
+        "sha256",
+        "encoding"
+      ],
+      "type": "object"
+    },
+    "SubjectIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "byteLength": {
+          "maximum": 536870912,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hex32"
+        }
+      },
+      "required": [
+        "byteLength",
+        "sha256"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "urn:ergo:eip-0045:b4-negative-materialization-set-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Canonical pre-run commitments to the campaign precommit, positive generation set, terminal-evidence packet manifest and receipt, seven negative-corpus documents, and all 254 canonical-plan materializations.",
+  "properties": {
+    "abstractTree": {
+      "$ref": "#/$defs/ByteIdentity",
+      "properties": {
+        "byteLength": {
+          "maximum": 16384
+        }
+      }
+    },
+    "campaignPrecommit": {
+      "$ref": "#/$defs/ByteIdentity",
+      "properties": {
+        "byteLength": {
+          "maximum": 1048576
+        }
+      }
+    },
+    "domainTotals": {
+      "additionalProperties": false,
+      "properties": {
+        "artifactValidator": {
+          "const": 102
+        },
+        "treeValidator": {
+          "const": 21
+        },
+        "verifierInput": {
+          "const": 131
+        }
+      },
+      "required": [
+        "verifierInput",
+        "artifactValidator",
+        "treeValidator"
+      ],
+      "type": "object"
+    },
+    "executionCount": {
+      "const": 254
+    },
+    "executions": {
+      "items": false,
+      "maxItems": 254,
+      "minItems": 254,
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "statement-field-byte-sweep--chain-domain-byte-order-reversed"
+            },
+            "executionIndex": {
+              "const": 0
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-statement-claim-binding"
+            },
+            "contexts": {
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "statement-field-byte-sweep--profile-id"
+            },
+            "executionIndex": {
+              "const": 1
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-statement-claim-binding"
+            },
+            "contexts": {
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "statement-field-byte-sweep--program-id"
+            },
+            "executionIndex": {
+              "const": 2
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-statement-claim-binding"
+            },
+            "contexts": {
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "statement-field-byte-sweep--contract-id-byte-order-reversed"
+            },
+            "executionIndex": {
+              "const": 3
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-statement-claim-binding"
+            },
+            "contexts": {
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "statement-field-byte-sweep--application-payload"
+            },
+            "executionIndex": {
+              "const": 4
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-statement-claim-binding"
+            },
+            "contexts": {
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "statement-profile-id-byte-order--profile-id"
+            },
+            "executionIndex": {
+              "const": 5
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-statement-claim-binding"
+            },
+            "contexts": {
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "statement-program-id-byte-order--program-id"
+            },
+            "executionIndex": {
+              "const": 6
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-statement-claim-binding"
+            },
+            "contexts": {
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "opcode-profile-id-length-sweep--thirty-one-bytes"
+            },
+            "executionIndex": {
+              "const": 7
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "opcode-preflight"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "opcode-profile-id-length-sweep--thirty-three-bytes"
+            },
+            "executionIndex": {
+              "const": 8
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "opcode-preflight"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "opcode-program-id-length-sweep--thirty-one-bytes"
+            },
+            "executionIndex": {
+              "const": 9
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "opcode-preflight"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "opcode-program-id-length-sweep--thirty-three-bytes"
+            },
+            "executionIndex": {
+              "const": 10
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "opcode-preflight"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-fixture-catalog-binding-sweep--program-id"
+            },
+            "executionIndex": {
+              "const": 11
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "terminal-fixture-catalog"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-fixture-catalog-binding-sweep--claim-digest"
+            },
+            "executionIndex": {
+              "const": 12
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "terminal-fixture-catalog"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-fixture-catalog-binding-sweep--control-id"
+            },
+            "executionIndex": {
+              "const": 13
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "terminal-fixture-catalog"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "sequence-subject-provenance-target-sweep--registry-positive-cases"
+            },
+            "executionIndex": {
+              "const": 14
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "sequence-subject-catalog"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "sequence-subject-provenance-target-sweep--registry-negative-cases"
+            },
+            "executionIndex": {
+              "const": 15
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "sequence-subject-catalog"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "sequence-subject-provenance-target-sweep--registry-negative-classes"
+            },
+            "executionIndex": {
+              "const": 16
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "sequence-subject-catalog"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "sequence-subject-provenance-target-sweep--profile-package-files"
+            },
+            "executionIndex": {
+              "const": 17
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "sequence-subject-catalog"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "sequence-subject-provenance-target-sweep--proof-chunks"
+            },
+            "executionIndex": {
+              "const": 18
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "sequence-subject-catalog"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "statement-payload-over-maximum--maximum-plus-one"
+            },
+            "executionIndex": {
+              "const": 19
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "opcode-preflight"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "proof-chunk-count-sweep--three-chunks"
+            },
+            "executionIndex": {
+              "const": 20
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "opcode-preflight"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "proof-chunk-count-sweep--five-chunks"
+            },
+            "executionIndex": {
+              "const": 21
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "opcode-preflight"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "proof-empty-chunk--fourth-chunk-empty"
+            },
+            "executionIndex": {
+              "const": 22
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "opcode-preflight"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "proof-boundary-shift-sweep--boundary-zero-left-short-right-long"
+            },
+            "executionIndex": {
+              "const": 23
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "opcode-preflight"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "proof-boundary-shift-sweep--boundary-zero-left-long-right-short"
+            },
+            "executionIndex": {
+              "const": 24
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "opcode-preflight"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "proof-boundary-shift-sweep--boundary-one-left-short-right-long"
+            },
+            "executionIndex": {
+              "const": 25
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "opcode-preflight"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "proof-boundary-shift-sweep--boundary-one-left-long-right-short"
+            },
+            "executionIndex": {
+              "const": 26
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "opcode-preflight"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "proof-boundary-shift-sweep--boundary-two-left-short-right-long"
+            },
+            "executionIndex": {
+              "const": 27
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "opcode-preflight"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "proof-boundary-shift-sweep--boundary-two-left-long-right-short"
+            },
+            "executionIndex": {
+              "const": 28
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "opcode-preflight"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "proof-chunks-reordered--first-two-chunks-swapped"
+            },
+            "executionIndex": {
+              "const": 29
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "proof-seal-truncated-byte--last-chunk-short-one-byte"
+            },
+            "executionIndex": {
+              "const": 30
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "opcode-preflight"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "proof-seal-trailing-byte--last-chunk-long-one-byte"
+            },
+            "executionIndex": {
+              "const": 31
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "opcode-preflight"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "proof-seal-trailing-word--last-chunk-long-one-word"
+            },
+            "executionIndex": {
+              "const": 32
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "opcode-preflight"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-root-padding-sweep--padding-word-01"
+            },
+            "executionIndex": {
+              "const": 33
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-root-padding-sweep--padding-word-03"
+            },
+            "executionIndex": {
+              "const": 34
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-root-padding-sweep--padding-word-05"
+            },
+            "executionIndex": {
+              "const": 35
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-root-padding-sweep--padding-word-07"
+            },
+            "executionIndex": {
+              "const": 36
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-root-padding-sweep--padding-word-09"
+            },
+            "executionIndex": {
+              "const": 37
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-root-padding-sweep--padding-word-11"
+            },
+            "executionIndex": {
+              "const": 38
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-root-padding-sweep--padding-word-13"
+            },
+            "executionIndex": {
+              "const": 39
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-root-padding-sweep--padding-word-15"
+            },
+            "executionIndex": {
+              "const": 40
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-claim-halfword-overflow-sweep--claim-word-16"
+            },
+            "executionIndex": {
+              "const": 41
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-claim-halfword-overflow-sweep--claim-word-17"
+            },
+            "executionIndex": {
+              "const": 42
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-claim-halfword-overflow-sweep--claim-word-18"
+            },
+            "executionIndex": {
+              "const": 43
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-claim-halfword-overflow-sweep--claim-word-19"
+            },
+            "executionIndex": {
+              "const": 44
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-claim-halfword-overflow-sweep--claim-word-20"
+            },
+            "executionIndex": {
+              "const": 45
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-claim-halfword-overflow-sweep--claim-word-21"
+            },
+            "executionIndex": {
+              "const": 46
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-claim-halfword-overflow-sweep--claim-word-22"
+            },
+            "executionIndex": {
+              "const": 47
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-claim-halfword-overflow-sweep--claim-word-23"
+            },
+            "executionIndex": {
+              "const": 48
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-claim-halfword-overflow-sweep--claim-word-24"
+            },
+            "executionIndex": {
+              "const": 49
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-claim-halfword-overflow-sweep--claim-word-25"
+            },
+            "executionIndex": {
+              "const": 50
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-claim-halfword-overflow-sweep--claim-word-26"
+            },
+            "executionIndex": {
+              "const": 51
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-claim-halfword-overflow-sweep--claim-word-27"
+            },
+            "executionIndex": {
+              "const": 52
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-claim-halfword-overflow-sweep--claim-word-28"
+            },
+            "executionIndex": {
+              "const": 53
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-claim-halfword-overflow-sweep--claim-word-29"
+            },
+            "executionIndex": {
+              "const": 54
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-claim-halfword-overflow-sweep--claim-word-30"
+            },
+            "executionIndex": {
+              "const": 55
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-claim-halfword-overflow-sweep--claim-word-31"
+            },
+            "executionIndex": {
+              "const": 56
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-field-modulus-role-sweep--output-root"
+            },
+            "executionIndex": {
+              "const": 57
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-field-modulus-role-sweep--output-claim"
+            },
+            "executionIndex": {
+              "const": 58
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-field-modulus-role-sweep--merkle-top"
+            },
+            "executionIndex": {
+              "const": 59
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-field-modulus-role-sweep--coefficient"
+            },
+            "executionIndex": {
+              "const": 60
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-field-modulus-role-sweep--final-coefficient"
+            },
+            "executionIndex": {
+              "const": 61
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-field-modulus-role-sweep--merkle-opening-leaf"
+            },
+            "executionIndex": {
+              "const": 62
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-field-modulus-role-sweep--merkle-opening-sibling"
+            },
+            "executionIndex": {
+              "const": 63
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-field-byte-order-role-sweep--output-root"
+            },
+            "executionIndex": {
+              "const": 64
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-field-byte-order-role-sweep--output-claim"
+            },
+            "executionIndex": {
+              "const": 65
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-field-byte-order-role-sweep--merkle-top"
+            },
+            "executionIndex": {
+              "const": 66
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-field-byte-order-role-sweep--coefficient"
+            },
+            "executionIndex": {
+              "const": 67
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-field-byte-order-role-sweep--final-coefficient"
+            },
+            "executionIndex": {
+              "const": 68
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-field-byte-order-role-sweep--merkle-opening-leaf"
+            },
+            "executionIndex": {
+              "const": 69
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-field-byte-order-role-sweep--merkle-opening-sibling"
+            },
+            "executionIndex": {
+              "const": 70
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "outer-po2-montgomery-encoding--outer-po2-literal"
+            },
+            "executionIndex": {
+              "const": 71
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--output-before-read"
+            },
+            "executionIndex": {
+              "const": 72
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--output-at-last-required-word"
+            },
+            "executionIndex": {
+              "const": 73
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--outer-po2-before-read"
+            },
+            "executionIndex": {
+              "const": 74
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--code-top-before-read"
+            },
+            "executionIndex": {
+              "const": 75
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--code-top-at-last-required-word"
+            },
+            "executionIndex": {
+              "const": 76
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--data-top-before-read"
+            },
+            "executionIndex": {
+              "const": 77
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--data-top-at-last-required-word"
+            },
+            "executionIndex": {
+              "const": 78
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--accum-top-before-read"
+            },
+            "executionIndex": {
+              "const": 79
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--accum-top-at-last-required-word"
+            },
+            "executionIndex": {
+              "const": 80
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--check-top-before-read"
+            },
+            "executionIndex": {
+              "const": 81
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--check-top-at-last-required-word"
+            },
+            "executionIndex": {
+              "const": 82
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--coeff-u-before-read"
+            },
+            "executionIndex": {
+              "const": 83
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--coeff-u-at-last-required-word"
+            },
+            "executionIndex": {
+              "const": 84
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--fri-round-one-top-before-read"
+            },
+            "executionIndex": {
+              "const": 85
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--fri-round-one-top-at-last-required-word"
+            },
+            "executionIndex": {
+              "const": 86
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--fri-round-two-top-before-read"
+            },
+            "executionIndex": {
+              "const": 87
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--fri-round-two-top-at-last-required-word"
+            },
+            "executionIndex": {
+              "const": 88
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--fri-round-three-top-before-read"
+            },
+            "executionIndex": {
+              "const": 89
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--fri-round-three-top-at-last-required-word"
+            },
+            "executionIndex": {
+              "const": 90
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--final-coefficients-before-read"
+            },
+            "executionIndex": {
+              "const": 91
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--final-coefficients-at-last-required-word"
+            },
+            "executionIndex": {
+              "const": 92
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--queries-before-read"
+            },
+            "executionIndex": {
+              "const": 93
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--queries-at-last-required-word"
+            },
+            "executionIndex": {
+              "const": 94
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--query-zero-accum-opening-at-last-required-word"
+            },
+            "executionIndex": {
+              "const": 95
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--query-zero-code-opening-before-read"
+            },
+            "executionIndex": {
+              "const": 96
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--query-zero-code-opening-at-last-required-word"
+            },
+            "executionIndex": {
+              "const": 97
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--query-zero-data-opening-before-read"
+            },
+            "executionIndex": {
+              "const": 98
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--query-zero-data-opening-at-last-required-word"
+            },
+            "executionIndex": {
+              "const": 99
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--query-zero-check-opening-before-read"
+            },
+            "executionIndex": {
+              "const": 100
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--query-zero-check-opening-at-last-required-word"
+            },
+            "executionIndex": {
+              "const": 101
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--query-zero-fri-round-one-opening-before-read"
+            },
+            "executionIndex": {
+              "const": 102
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--query-zero-fri-round-one-opening-at-last-required-word"
+            },
+            "executionIndex": {
+              "const": 103
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--query-zero-fri-round-two-opening-before-read"
+            },
+            "executionIndex": {
+              "const": 104
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--query-zero-fri-round-two-opening-at-last-required-word"
+            },
+            "executionIndex": {
+              "const": 105
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--query-zero-fri-round-three-opening-before-read"
+            },
+            "executionIndex": {
+              "const": 106
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "parser-phase-truncation-sweep--query-zero-fri-round-three-opening-at-last-required-word"
+            },
+            "executionIndex": {
+              "const": 107
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-parser-internal"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-inner-root-mismatch--inner-control-root"
+            },
+            "executionIndex": {
+              "const": 108
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-outer-po2-mismatch--outer-po2"
+            },
+            "executionIndex": {
+              "const": 109
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "raw-seal-shape"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-metadata-field-sweep--kind"
+            },
+            "executionIndex": {
+              "const": 110
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "terminal-metadata"
+            },
+            "contexts": {
+              "minItems": 7,
+              "maxItems": 7
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-metadata-field-sweep--parameter"
+            },
+            "executionIndex": {
+              "const": 111
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "terminal-metadata"
+            },
+            "contexts": {
+              "minItems": 7,
+              "maxItems": 7
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-metadata-field-sweep--control-id"
+            },
+            "executionIndex": {
+              "const": 112
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "terminal-metadata"
+            },
+            "contexts": {
+              "minItems": 7,
+              "maxItems": 7
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-control-id-unknown--unknown-control-id"
+            },
+            "executionIndex": {
+              "const": 113
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "terminal-policy"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-excluded-control-id-sweep--identity"
+            },
+            "executionIndex": {
+              "const": 114
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "terminal-policy"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-excluded-control-id-sweep--join-povw"
+            },
+            "executionIndex": {
+              "const": 115
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "terminal-policy"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-excluded-control-id-sweep--join-unwrap-povw"
+            },
+            "executionIndex": {
+              "const": 116
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "terminal-policy"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-excluded-control-id-sweep--lift-po2-14"
+            },
+            "executionIndex": {
+              "const": 117
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "terminal-policy"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-excluded-control-id-sweep--lift-povw-po2-14"
+            },
+            "executionIndex": {
+              "const": 118
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "terminal-policy"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-excluded-control-id-sweep--lift-povw-po2-15"
+            },
+            "executionIndex": {
+              "const": 119
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "terminal-policy"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-excluded-control-id-sweep--lift-povw-po2-16"
+            },
+            "executionIndex": {
+              "const": 120
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "terminal-policy"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-excluded-control-id-sweep--lift-povw-po2-17"
+            },
+            "executionIndex": {
+              "const": 121
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "terminal-policy"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-excluded-control-id-sweep--lift-povw-po2-18"
+            },
+            "executionIndex": {
+              "const": 122
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "terminal-policy"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-excluded-control-id-sweep--lift-povw-po2-19"
+            },
+            "executionIndex": {
+              "const": 123
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "terminal-policy"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-excluded-control-id-sweep--lift-povw-po2-20"
+            },
+            "executionIndex": {
+              "const": 124
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "terminal-policy"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-excluded-control-id-sweep--lift-povw-po2-21"
+            },
+            "executionIndex": {
+              "const": 125
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "terminal-policy"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-excluded-control-id-sweep--lift-povw-po2-22"
+            },
+            "executionIndex": {
+              "const": 126
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "terminal-policy"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-excluded-control-id-sweep--resolve-povw"
+            },
+            "executionIndex": {
+              "const": 127
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "terminal-policy"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-excluded-control-id-sweep--resolve-unwrap-povw"
+            },
+            "executionIndex": {
+              "const": 128
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "terminal-policy"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-excluded-control-id-sweep--union"
+            },
+            "executionIndex": {
+              "const": 129
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "terminal-policy"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-excluded-control-id-sweep--unwrap-povw"
+            },
+            "executionIndex": {
+              "const": 130
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "terminal-policy"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-excluded-shipping-family-sweep--lift-po2-14"
+            },
+            "executionIndex": {
+              "const": 131
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "terminal-policy"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-excluded-shipping-family-sweep--lift-povw-po2-18"
+            },
+            "executionIndex": {
+              "const": 132
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "terminal-policy"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-excluded-shipping-family-sweep--join-povw"
+            },
+            "executionIndex": {
+              "const": 133
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "terminal-policy"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-excluded-shipping-family-sweep--join-unwrap-povw"
+            },
+            "executionIndex": {
+              "const": 134
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "terminal-policy"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-excluded-shipping-family-sweep--resolve-povw"
+            },
+            "executionIndex": {
+              "const": 135
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "terminal-policy"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-excluded-shipping-family-sweep--resolve-unwrap-povw"
+            },
+            "executionIndex": {
+              "const": 136
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "terminal-policy"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-excluded-shipping-family-sweep--union"
+            },
+            "executionIndex": {
+              "const": 137
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "terminal-policy"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "terminal-excluded-shipping-family-sweep--unwrap-povw"
+            },
+            "executionIndex": {
+              "const": 138
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "terminal-policy"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "claim-final-status-non-ok--non-ok-status"
+            },
+            "executionIndex": {
+              "const": 139
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "receipt-claim-policy"
+            },
+            "contexts": {
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "claim-final-assumptions-nonempty--nonempty-assumptions"
+            },
+            "executionIndex": {
+              "const": 140
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "receipt-claim-policy"
+            },
+            "contexts": {
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "claim-edge-family-sweep--terminal-join"
+            },
+            "executionIndex": {
+              "const": 141
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "ancestry-replay"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "claim-edge-family-sweep--terminal-resolve-explicit-root"
+            },
+            "executionIndex": {
+              "const": 142
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "ancestry-replay"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "claim-edge-family-sweep--resolve-zero-root-then-join"
+            },
+            "executionIndex": {
+              "const": 143
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "ancestry-replay"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "resolve-explicit-field-sweep--declared-explicit-root"
+            },
+            "executionIndex": {
+              "const": 144
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "ancestry-replay"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "resolve-explicit-field-sweep--assumption-claim"
+            },
+            "executionIndex": {
+              "const": 145
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "ancestry-replay"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "resolve-explicit-field-sweep--assumption-receipt-root"
+            },
+            "executionIndex": {
+              "const": 146
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "ancestry-replay"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "resolve-explicit-field-sweep--program-id"
+            },
+            "executionIndex": {
+              "const": 147
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "ancestry-replay"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "resolve-explicit-field-sweep--final-claim"
+            },
+            "executionIndex": {
+              "const": 148
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "ancestry-replay"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "resolve-zero-root-field-sweep--substituted-nonzero-root"
+            },
+            "executionIndex": {
+              "const": 149
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "ancestry-replay"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "resolve-zero-root-field-sweep--assumption-claim"
+            },
+            "executionIndex": {
+              "const": 150
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "ancestry-replay"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "resolve-zero-root-field-sweep--program-id"
+            },
+            "executionIndex": {
+              "const": 151
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "ancestry-replay"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "resolve-zero-root-field-sweep--final-claim"
+            },
+            "executionIndex": {
+              "const": 152
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "ancestry-replay"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "resolve-assumption-inventory-sweep--missing-assumption"
+            },
+            "executionIndex": {
+              "const": 153
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "ancestry-replay"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "resolve-assumption-inventory-sweep--extra-assumption"
+            },
+            "executionIndex": {
+              "const": 154
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "ancestry-replay"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "resolve-assumption-inventory-sweep--pruned-assumption"
+            },
+            "executionIndex": {
+              "const": 155
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "ancestry-replay"
+            },
+            "contexts": {
+              "minItems": 1,
+              "maxItems": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "crypto-early-check-value-mismatch--check-value"
+            },
+            "executionIndex": {
+              "const": 156
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-cryptographic-verifier"
+            },
+            "contexts": {
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "crypto-middle-fri-round-two-mismatch--fri-query-00"
+            },
+            "executionIndex": {
+              "const": 157
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-cryptographic-verifier"
+            },
+            "contexts": {
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "crypto-late-final-opening-mismatch--fri-query-00"
+            },
+            "executionIndex": {
+              "const": 158
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-cryptographic-verifier"
+            },
+            "contexts": {
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "crypto-final-expected-claim-mismatch--claim-query-49"
+            },
+            "executionIndex": {
+              "const": 159
+            },
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "const": "risc0-cryptographic-verifier"
+            },
+            "contexts": {
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-manifest-short--manifest-unexpected-eof"
+            },
+            "executionIndex": {
+              "const": 160
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-manifest-codec"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-manifest-trailing-byte--manifest-trailing-byte"
+            },
+            "executionIndex": {
+              "const": 161
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-manifest-codec"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-manifest-version--format-version"
+            },
+            "executionIndex": {
+              "const": 162
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-manifest-codec"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-manifest-exact-proof-bytes--exact-proof-bytes"
+            },
+            "executionIndex": {
+              "const": 163
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "initial-profile-target"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-manifest-maximum-payload--maximum-payload"
+            },
+            "executionIndex": {
+              "const": 164
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "initial-profile-target"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-manifest-outer-po2--outer-po2"
+            },
+            "executionIndex": {
+              "const": 165
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "initial-profile-target"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-manifest-inner-control-root--inner-control-root"
+            },
+            "executionIndex": {
+              "const": 166
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "initial-profile-target"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--lift-po2-15-kind"
+            },
+            "executionIndex": {
+              "const": 167
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-manifest-codec"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--lift-po2-15-parameter"
+            },
+            "executionIndex": {
+              "const": 168
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-manifest-codec"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--lift-po2-15-control-id"
+            },
+            "executionIndex": {
+              "const": 169
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "initial-profile-target"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--lift-po2-16-kind"
+            },
+            "executionIndex": {
+              "const": 170
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-manifest-codec"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--lift-po2-16-parameter"
+            },
+            "executionIndex": {
+              "const": 171
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-manifest-codec"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--lift-po2-16-control-id"
+            },
+            "executionIndex": {
+              "const": 172
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "initial-profile-target"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--lift-po2-17-kind"
+            },
+            "executionIndex": {
+              "const": 173
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-manifest-codec"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--lift-po2-17-parameter"
+            },
+            "executionIndex": {
+              "const": 174
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-manifest-codec"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--lift-po2-17-control-id"
+            },
+            "executionIndex": {
+              "const": 175
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "initial-profile-target"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--lift-po2-18-kind"
+            },
+            "executionIndex": {
+              "const": 176
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-manifest-codec"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--lift-po2-18-parameter"
+            },
+            "executionIndex": {
+              "const": 177
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-manifest-codec"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--lift-po2-18-control-id"
+            },
+            "executionIndex": {
+              "const": 178
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "initial-profile-target"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--lift-po2-19-kind"
+            },
+            "executionIndex": {
+              "const": 179
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-manifest-codec"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--lift-po2-19-parameter"
+            },
+            "executionIndex": {
+              "const": 180
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-manifest-codec"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--lift-po2-19-control-id"
+            },
+            "executionIndex": {
+              "const": 181
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "initial-profile-target"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--lift-po2-20-kind"
+            },
+            "executionIndex": {
+              "const": 182
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-manifest-codec"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--lift-po2-20-parameter"
+            },
+            "executionIndex": {
+              "const": 183
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-manifest-codec"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--lift-po2-20-control-id"
+            },
+            "executionIndex": {
+              "const": 184
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "initial-profile-target"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--lift-po2-21-kind"
+            },
+            "executionIndex": {
+              "const": 185
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-manifest-codec"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--lift-po2-21-parameter"
+            },
+            "executionIndex": {
+              "const": 186
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-manifest-codec"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--lift-po2-21-control-id"
+            },
+            "executionIndex": {
+              "const": 187
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "initial-profile-target"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--lift-po2-22-kind"
+            },
+            "executionIndex": {
+              "const": 188
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-manifest-codec"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--lift-po2-22-parameter"
+            },
+            "executionIndex": {
+              "const": 189
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-manifest-codec"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--lift-po2-22-control-id"
+            },
+            "executionIndex": {
+              "const": 190
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "initial-profile-target"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--terminal-join-kind"
+            },
+            "executionIndex": {
+              "const": 191
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-manifest-codec"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--terminal-join-parameter"
+            },
+            "executionIndex": {
+              "const": 192
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-manifest-codec"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--terminal-join-control-id"
+            },
+            "executionIndex": {
+              "const": 193
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "initial-profile-target"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--terminal-resolve-kind"
+            },
+            "executionIndex": {
+              "const": 194
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-manifest-codec"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--terminal-resolve-parameter"
+            },
+            "executionIndex": {
+              "const": 195
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-manifest-codec"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-field-sweep--terminal-resolve-control-id"
+            },
+            "executionIndex": {
+              "const": 196
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "initial-profile-target"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-control-id-duplicate--first-two-control-ids"
+            },
+            "executionIndex": {
+              "const": 197
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-manifest-codec"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-terminal-controls-reordered--first-two-controls"
+            },
+            "executionIndex": {
+              "const": 198
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-manifest-codec"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-artifact-ref-field-sweep--algorithm-kind"
+            },
+            "executionIndex": {
+              "const": 199
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-manifest-codec"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-artifact-ref-field-sweep--algorithm-length"
+            },
+            "executionIndex": {
+              "const": 200
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-artifact-envelope"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-artifact-ref-field-sweep--algorithm-digest"
+            },
+            "executionIndex": {
+              "const": 201
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-artifact-envelope"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-artifact-ref-field-sweep--binary-data-kind"
+            },
+            "executionIndex": {
+              "const": 202
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-manifest-codec"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-artifact-ref-field-sweep--binary-data-length"
+            },
+            "executionIndex": {
+              "const": 203
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-artifact-envelope"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-artifact-ref-field-sweep--binary-data-digest"
+            },
+            "executionIndex": {
+              "const": 204
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-artifact-envelope"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-artifact-refs-reordered--algorithm-and-binary-data"
+            },
+            "executionIndex": {
+              "const": 205
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-manifest-codec"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-artifact-bytes-sweep--algorithm"
+            },
+            "executionIndex": {
+              "const": 206
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-artifact-envelope"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-artifact-bytes-sweep--constants"
+            },
+            "executionIndex": {
+              "const": 207
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-artifact-envelope"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-id-mismatch--profile-id"
+            },
+            "executionIndex": {
+              "const": 208
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "activated-profile-package"
+            },
+            "contexts": {
+              "minItems": 3,
+              "maxItems": 3
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "profile-id-preimage-mismatch--profile-id-preimage"
+            },
+            "executionIndex": {
+              "const": 209
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "profile-id-preimage"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "corpus-representative-stratum-omit-sweep--profile-manifest"
+            },
+            "executionIndex": {
+              "const": 210
+            },
+            "materializationDomain": {
+              "const": "tree-validator"
+            },
+            "validationSurface": {
+              "const": "corpus-closure"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "corpus-representative-stratum-omit-sweep--statement-bundle-manifest"
+            },
+            "executionIndex": {
+              "const": 211
+            },
+            "materializationDomain": {
+              "const": "tree-validator"
+            },
+            "validationSurface": {
+              "const": "corpus-closure"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "corpus-representative-stratum-omit-sweep--guest-elf"
+            },
+            "executionIndex": {
+              "const": 212
+            },
+            "materializationDomain": {
+              "const": "tree-validator"
+            },
+            "validationSurface": {
+              "const": "corpus-closure"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "corpus-representative-stratum-omit-sweep--source-lock"
+            },
+            "executionIndex": {
+              "const": 213
+            },
+            "materializationDomain": {
+              "const": "tree-validator"
+            },
+            "validationSurface": {
+              "const": "corpus-closure"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "corpus-representative-stratum-omit-sweep--proof-generator"
+            },
+            "executionIndex": {
+              "const": 214
+            },
+            "materializationDomain": {
+              "const": "tree-validator"
+            },
+            "validationSurface": {
+              "const": "corpus-closure"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "corpus-representative-stratum-omit-sweep--rust-verifier"
+            },
+            "executionIndex": {
+              "const": 215
+            },
+            "materializationDomain": {
+              "const": "tree-validator"
+            },
+            "validationSurface": {
+              "const": "corpus-closure"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "corpus-representative-stratum-omit-sweep--jvm-verifier"
+            },
+            "executionIndex": {
+              "const": 216
+            },
+            "materializationDomain": {
+              "const": "tree-validator"
+            },
+            "validationSurface": {
+              "const": "corpus-closure"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "corpus-representative-stratum-omit-sweep--positive-raw-seal"
+            },
+            "executionIndex": {
+              "const": 217
+            },
+            "materializationDomain": {
+              "const": "tree-validator"
+            },
+            "validationSurface": {
+              "const": "corpus-closure"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "corpus-representative-stratum-omit-sweep--recursive-ancestry"
+            },
+            "executionIndex": {
+              "const": 218
+            },
+            "materializationDomain": {
+              "const": "tree-validator"
+            },
+            "validationSurface": {
+              "const": "corpus-closure"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "corpus-representative-stratum-omit-sweep--negative-plan"
+            },
+            "executionIndex": {
+              "const": 219
+            },
+            "materializationDomain": {
+              "const": "tree-validator"
+            },
+            "validationSurface": {
+              "const": "corpus-closure"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "corpus-representative-stratum-omit-sweep--subject-catalog"
+            },
+            "executionIndex": {
+              "const": 220
+            },
+            "materializationDomain": {
+              "const": "tree-validator"
+            },
+            "validationSurface": {
+              "const": "corpus-closure"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "corpus-representative-stratum-omit-sweep--terminal-fixture-catalog"
+            },
+            "executionIndex": {
+              "const": 221
+            },
+            "materializationDomain": {
+              "const": "tree-validator"
+            },
+            "validationSurface": {
+              "const": "corpus-closure"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "corpus-representative-stratum-omit-sweep--positive-registry"
+            },
+            "executionIndex": {
+              "const": 222
+            },
+            "materializationDomain": {
+              "const": "tree-validator"
+            },
+            "validationSurface": {
+              "const": "corpus-closure"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "corpus-representative-stratum-omit-sweep--expanded-negative-registry"
+            },
+            "executionIndex": {
+              "const": 223
+            },
+            "materializationDomain": {
+              "const": "tree-validator"
+            },
+            "validationSurface": {
+              "const": "corpus-closure"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "corpus-representative-stratum-omit-sweep--mutation-identities"
+            },
+            "executionIndex": {
+              "const": 224
+            },
+            "materializationDomain": {
+              "const": "tree-validator"
+            },
+            "validationSurface": {
+              "const": "corpus-closure"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "corpus-representative-stratum-omit-sweep--rust-negative-results"
+            },
+            "executionIndex": {
+              "const": 225
+            },
+            "materializationDomain": {
+              "const": "tree-validator"
+            },
+            "validationSurface": {
+              "const": "corpus-closure"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "corpus-representative-stratum-omit-sweep--jvm-negative-results"
+            },
+            "executionIndex": {
+              "const": 226
+            },
+            "materializationDomain": {
+              "const": "tree-validator"
+            },
+            "validationSurface": {
+              "const": "corpus-closure"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "corpus-representative-stratum-omit-sweep--semantic-report"
+            },
+            "executionIndex": {
+              "const": 227
+            },
+            "materializationDomain": {
+              "const": "tree-validator"
+            },
+            "validationSurface": {
+              "const": "corpus-closure"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "corpus-representative-stratum-omit-sweep--tree-manifest"
+            },
+            "executionIndex": {
+              "const": 228
+            },
+            "materializationDomain": {
+              "const": "tree-validator"
+            },
+            "validationSurface": {
+              "const": "corpus-closure"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "corpus-representative-stratum-omit-sweep--lock"
+            },
+            "executionIndex": {
+              "const": 229
+            },
+            "materializationDomain": {
+              "const": "tree-validator"
+            },
+            "validationSurface": {
+              "const": "corpus-closure"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "corpus-extra-file--unregistered-file"
+            },
+            "executionIndex": {
+              "const": 230
+            },
+            "materializationDomain": {
+              "const": "tree-validator"
+            },
+            "validationSurface": {
+              "const": "corpus-closure"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "registry-positive-case-omit-sweep--lift-po2-15"
+            },
+            "executionIndex": {
+              "const": 231
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "candidate-registry"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "registry-positive-case-omit-sweep--lift-po2-16"
+            },
+            "executionIndex": {
+              "const": 232
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "candidate-registry"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "registry-positive-case-omit-sweep--lift-po2-17"
+            },
+            "executionIndex": {
+              "const": 233
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "candidate-registry"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "registry-positive-case-omit-sweep--lift-po2-18"
+            },
+            "executionIndex": {
+              "const": 234
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "candidate-registry"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "registry-positive-case-omit-sweep--lift-po2-19"
+            },
+            "executionIndex": {
+              "const": 235
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "candidate-registry"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "registry-positive-case-omit-sweep--lift-po2-20"
+            },
+            "executionIndex": {
+              "const": 236
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "candidate-registry"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "registry-positive-case-omit-sweep--lift-po2-21"
+            },
+            "executionIndex": {
+              "const": 237
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "candidate-registry"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "registry-positive-case-omit-sweep--lift-po2-22"
+            },
+            "executionIndex": {
+              "const": 238
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "candidate-registry"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "registry-positive-case-omit-sweep--terminal-join"
+            },
+            "executionIndex": {
+              "const": 239
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "candidate-registry"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "registry-positive-case-omit-sweep--terminal-resolve-explicit-root"
+            },
+            "executionIndex": {
+              "const": 240
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "candidate-registry"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "registry-positive-case-omit-sweep--resolve-zero-root-then-join"
+            },
+            "executionIndex": {
+              "const": 241
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "candidate-registry"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "registry-positive-case-id-duplicate--positive-case-id"
+            },
+            "executionIndex": {
+              "const": 242
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "candidate-registry"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "registry-negative-case-id-duplicate--negative-case-id"
+            },
+            "executionIndex": {
+              "const": 243
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "negative-binding-index"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "registry-positive-cases-reordered--first-two-positive-cases"
+            },
+            "executionIndex": {
+              "const": 244
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "candidate-registry"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "registry-positive-case-relabel--terminal-resolve-explicit-root"
+            },
+            "executionIndex": {
+              "const": 245
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "candidate-registry"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "registry-negative-class-unknown--unknown-negative-class"
+            },
+            "executionIndex": {
+              "const": 246
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "candidate-registry"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "registry-unknown-field--unknown-registry-field"
+            },
+            "executionIndex": {
+              "const": 247
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "candidate-registry"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "registry-noncanonical-jcs--noncanonical-registry-source"
+            },
+            "executionIndex": {
+              "const": 248
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "candidate-registry"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "negative-plan-registry-bijection-sweep--missing-execution"
+            },
+            "executionIndex": {
+              "const": 249
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "negative-binding-index"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "negative-plan-registry-bijection-sweep--unexpected-execution"
+            },
+            "executionIndex": {
+              "const": 250
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "negative-binding-index"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "negative-plan-registry-bijection-sweep--wrong-base-selector-binding"
+            },
+            "executionIndex": {
+              "const": 251
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "negative-binding-index"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "negative-plan-registry-bijection-sweep--wrong-materialization-domain"
+            },
+            "executionIndex": {
+              "const": 252
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "negative-binding-index"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/Execution",
+          "properties": {
+            "executionId": {
+              "const": "negative-plan-registry-bijection-sweep--wrong-materialization-binding"
+            },
+            "executionIndex": {
+              "const": 253
+            },
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "const": "negative-binding-index"
+            },
+            "contexts": {
+              "minItems": 0,
+              "maxItems": 0
+            }
+          }
+        }
+      ],
+      "type": "array"
+    },
+    "expandedRegistry": {
+      "$ref": "#/$defs/ByteIdentity",
+      "properties": {
+        "byteLength": {
+          "maximum": 8388608
+        }
+      }
+    },
+    "format": {
+      "const": "Eip0045B4NegativeMaterializationSetV1"
+    },
+    "formatVersion": {
+      "const": 1
+    },
+    "negativeBindingIndex": {
+      "$ref": "#/$defs/ByteIdentity",
+      "properties": {
+        "byteLength": {
+          "maximum": 8388608
+        }
+      }
+    },
+    "negativeAncestryWitnessCatalog": {
+      "$ref": "#/$defs/NegativeAncestryWitnessCatalogIdentity"
+    },
+    "negativePlan": {
+      "$ref": "#/$defs/ByteIdentity",
+      "properties": {
+        "byteLength": {
+          "maximum": 131072
+        }
+      }
+    },
+    "positiveGenerationSet": {
+      "$ref": "#/$defs/ByteIdentity",
+      "properties": {
+        "byteLength": {
+          "maximum": 1048576
+        }
+      }
+    },
+    "terminalEvidenceCampaignReceipt": {
+      "$ref": "#/$defs/ByteIdentity",
+      "properties": {
+        "byteLength": {
+          "maximum": 65536
+        }
+      }
+    },
+    "terminalEvidencePacketManifest": {
+      "$ref": "#/$defs/ByteIdentity",
+      "properties": {
+        "byteLength": {
+          "maximum": 65536
+        }
+      }
+    },
+    "subjectCatalog": {
+      "$ref": "#/$defs/ByteIdentity",
+      "properties": {
+        "byteLength": {
+          "maximum": 131072
+        }
+      }
+    },
+    "terminalFixtureCatalog": {
+      "$ref": "#/$defs/ByteIdentity",
+      "properties": {
+        "byteLength": {
+          "maximum": 262144
+        }
+      }
+    }
+  },
+  "required": [
+    "format",
+    "formatVersion",
+    "campaignPrecommit",
+    "positiveGenerationSet",
+    "terminalEvidencePacketManifest",
+    "terminalEvidenceCampaignReceipt",
+    "negativePlan",
+    "expandedRegistry",
+    "subjectCatalog",
+    "terminalFixtureCatalog",
+    "negativeBindingIndex",
+    "abstractTree",
+    "negativeAncestryWitnessCatalog",
+    "domainTotals",
+    "executionCount",
+    "executions"
+  ],
+  "title": "Eip0045B4NegativeMaterializationSetV1",
+  "type": "object"
+}

@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ergo:eip-0045:b4-jvm-copy-only-inclusion-manifest-v1",
+  "title": "Eip0045B4JvmCopyOnlyInclusionManifestV1",
+  "$comment": "This positive-finalizer schema is outside the legacy candidate-schema quarantine. Normative selection and physical replay semantics are in docs/specs/b4-jvm-artifact-policy-v1.md.",
+  "description": "Exact reviewed copy list for deterministic dependency-pruned JVM packaging. It records byte-identical source-to-output entry mappings; it is not a reachability proof.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "formatVersion", "policy", "applicationSelection", "dependencySelection", "inputArchivePolicy", "archivePolicy", "inputs", "entries", "generatedEntries", "output"],
+  "properties": {
+    "format": {"const": "Eip0045B4JvmCopyOnlyInclusionManifestV1"},
+    "formatVersion": {"const": 1},
+    "policy": {"const": "eip0045-b4-jvm-copy-only-packaging-v1"},
+    "applicationSelection": {"const": "all-regular-entries"},
+    "dependencySelection": {"const": "reviewed-exact-copy-list"},
+    "inputArchivePolicy": {"const": "eip0045-b4-jar-source-read-v1"},
+    "archivePolicy": {"const": "eip0045-b4-canonical-jar-zip-v1"},
+    "inputs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 513,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/InputArchive"}
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4096,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/CopyEntry"}
+    },
+    "generatedEntries": {
+      "type": "array",
+      "maxItems": 0
+    },
+    "output": {"$ref": "#/$defs/OutputArchive"}
+  },
+  "$defs": {
+    "Hex32": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "RelativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "pattern": "^[a-z0-9][a-z0-9._/-]{0,239}$",
+      "allOf": [
+        {"not": {"pattern": "/$"}},
+        {"not": {"pattern": "(^|/)\\.{1,2}($|/)"}},
+        {"not": {"pattern": "//"}},
+        {"not": {"pattern": "(^|/)[^/]*\\.($|/)"}},
+        {"not": {"pattern": "(^|/)(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\.[^/]*)?($|/)"}}
+      ]
+    },
+    "RegularEntryName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "pattern": "^[\\x20-\\x39\\x3b-\\x5b\\x5d-\\x7e]{1,240}$",
+      "allOf": [
+        {"not": {"pattern": "^/"}},
+        {"not": {"pattern": "/$"}},
+        {"not": {"pattern": "//"}},
+        {"not": {"pattern": "(^|/)\\.{1,2}($|/)"}}
+      ]
+    },
+    "InputArchive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "role", "path", "byteLength", "sha256", "encoding", "fileFormat", "regularEntryCount"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^(?:application|dependency-[0-9]{3})$"},
+        "role": {"enum": ["application-intermediate", "dependency-artifact"]},
+        "path": {"$ref": "#/$defs/RelativePath"},
+        "byteLength": {"type": "integer", "minimum": 22, "maximum": 1073741824},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "raw-bytes"},
+        "fileFormat": {"const": "zip-jar"},
+        "regularEntryCount": {"type": "integer", "minimum": 1, "maximum": 65534}
+      }
+    },
+    "CopyEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "sourceInputId", "sourceEntryName", "byteLength", "sha256"],
+      "properties": {
+        "kind": {"const": "regular-file"},
+        "name": {"$ref": "#/$defs/RegularEntryName"},
+        "sourceInputId": {"type": "string", "pattern": "^(?:application|dependency-[0-9]{3})$"},
+        "sourceEntryName": {"$ref": "#/$defs/RegularEntryName"},
+        "byteLength": {"type": "integer", "minimum": 0, "maximum": 1073741824},
+        "sha256": {"$ref": "#/$defs/Hex32"}
+      }
+    },
+    "OutputArchive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byteLength", "sha256", "encoding", "fileFormat"],
+      "properties": {
+        "path": {"$ref": "#/$defs/RelativePath"},
+        "byteLength": {"type": "integer", "minimum": 22, "maximum": 1073741824},
+        "sha256": {"$ref": "#/$defs/Hex32"},
+        "encoding": {"const": "raw-bytes"},
+        "fileFormat": {"const": "zip-jar"}
+      }
+    }
+  }
+}

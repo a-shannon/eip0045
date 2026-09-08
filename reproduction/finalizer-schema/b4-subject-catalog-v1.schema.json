@@ -1,0 +1,225 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ergo:eip-0045:b4-subject-catalog-v1",
+  "title": "Eip0045B4SubjectCatalogV1",
+  "description": "Closed-shape catalogue for the fifteen detached B4 sequence subjects. Exact subject order, target/provenance pairing, reserved path derivation, shared plan digest, artifact digest recomputation, and equality with live-derived subject bytes remain parser/bundle-gate obligations.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "formatVersion",
+    "subjects"
+  ],
+  "properties": {
+    "format": {
+      "const": "Eip0045B4SubjectCatalogV1"
+    },
+    "formatVersion": {
+      "const": 1
+    },
+    "subjects": {
+      "type": "array",
+      "minItems": 15,
+      "maxItems": 15,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/Subject"
+      }
+    }
+  },
+  "$defs": {
+    "Hex32": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "LowerKebab128": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z](?:[a-z0-9]|-[a-z0-9])*$"
+    },
+    "SequenceTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targetKind"
+      ],
+      "properties": {
+        "targetKind": {
+          "enum": [
+            "abstract-tree-probe",
+            "registry-positive-cases",
+            "registry-negative-cases",
+            "registry-negative-classes",
+            "registry-negative-bindings",
+            "profile-package-files",
+            "proof-chunks"
+          ]
+        }
+      }
+    },
+    "Artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "byteLength",
+        "path",
+        "sha256"
+      ],
+      "properties": {
+        "byteLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8388608
+        },
+        "path": {
+          "type": "string",
+          "maxLength": 512,
+          "pattern": "^reproduction/schema/b4-corpus-v1\\.candidate/subjects/[a-z](?:[a-z0-9]|-[a-z0-9])*\\.subject\\.json$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hex32"
+        }
+      }
+    },
+    "PositiveProjection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provenanceKind",
+        "positiveCaseCount"
+      ],
+      "properties": {
+        "provenanceKind": {
+          "const": "positive-projection"
+        },
+        "positiveCaseCount": {
+          "const": 11
+        }
+      }
+    },
+    "NegativePlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provenanceKind",
+        "planSha256"
+      ],
+      "properties": {
+        "provenanceKind": {
+          "const": "negative-plan"
+        },
+        "planSha256": {
+          "$ref": "#/$defs/Hex32"
+        }
+      }
+    },
+    "NegativeClasses": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provenanceKind",
+        "planSha256"
+      ],
+      "properties": {
+        "provenanceKind": {
+          "const": "negative-classes"
+        },
+        "planSha256": {
+          "$ref": "#/$defs/Hex32"
+        }
+      }
+    },
+    "ProfilePackage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provenanceKind",
+        "profileId"
+      ],
+      "properties": {
+        "provenanceKind": {
+          "const": "profile-package"
+        },
+        "profileId": {
+          "$ref": "#/$defs/Hex32"
+        }
+      }
+    },
+    "ProofChunks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provenanceKind",
+        "caseId",
+        "rawSealSha256"
+      ],
+      "properties": {
+        "provenanceKind": {
+          "const": "proof-chunks"
+        },
+        "caseId": {
+          "enum": [
+            "lift-po2-15",
+            "lift-po2-16",
+            "lift-po2-17",
+            "lift-po2-18",
+            "lift-po2-19",
+            "lift-po2-20",
+            "lift-po2-21",
+            "lift-po2-22",
+            "terminal-join",
+            "terminal-resolve-explicit-root",
+            "resolve-zero-root-then-join"
+          ]
+        },
+        "rawSealSha256": {
+          "$ref": "#/$defs/Hex32"
+        }
+      }
+    },
+    "Provenance": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/PositiveProjection"
+        },
+        {
+          "$ref": "#/$defs/NegativePlan"
+        },
+        {
+          "$ref": "#/$defs/NegativeClasses"
+        },
+        {
+          "$ref": "#/$defs/ProfilePackage"
+        },
+        {
+          "$ref": "#/$defs/ProofChunks"
+        }
+      ]
+    },
+    "Subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact",
+        "provenance",
+        "subjectId",
+        "target"
+      ],
+      "properties": {
+        "artifact": {
+          "$ref": "#/$defs/Artifact"
+        },
+        "provenance": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "subjectId": {
+          "$ref": "#/$defs/LowerKebab128"
+        },
+        "target": {
+          "$ref": "#/$defs/SequenceTarget"
+        }
+      }
+    }
+  }
+}

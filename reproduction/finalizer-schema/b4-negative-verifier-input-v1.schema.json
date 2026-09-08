@@ -1,0 +1,323 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ergo:eip-0045:b4-negative-verifier-input-v1",
+  "title": "Eip0045B4NegativeVerifierInputV1",
+  "$comment": "The fixed subject and positional context prefix make role/path uniqueness, order, and the component-prefix antichain schema-complete for every schema-valid V1 instance. The matching parser additionally rechecks the antichain as defense in depth. Exact per-dispatch context cardinalities remain a fail-closed handler-freeze gate: schema validity alone does not make an input campaign-precommit eligible.",
+  "description": "One implementation-neutral B4 negative verifier input containing only one of the 20 canonical dispatch pairs and exact positional physical identities. It contains no execution, QA, expectation, implementation, descriptor, or attribution field.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "formatVersion",
+    "materializationDomain",
+    "validationSurface",
+    "subject",
+    "context"
+  ],
+  "properties": {
+    "format": {
+      "const": "Eip0045B4NegativeVerifierInputV1"
+    },
+    "formatVersion": {
+      "const": 1
+    },
+    "materializationDomain": {
+      "$ref": "#/$defs/MaterializationDomain"
+    },
+    "validationSurface": {
+      "$ref": "#/$defs/ValidationSurface"
+    },
+    "subject": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/SubjectIdentity"
+        },
+        {
+          "properties": {
+            "role": {
+              "const": "subject"
+            },
+            "path": {
+              "const": "subject.bin"
+            }
+          }
+        }
+      ]
+    },
+    "context": {
+      "type": "array",
+      "maxItems": 64,
+      "prefixItems": [
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-00"}, "path": {"const": "context/00.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-01"}, "path": {"const": "context/01.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-02"}, "path": {"const": "context/02.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-03"}, "path": {"const": "context/03.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-04"}, "path": {"const": "context/04.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-05"}, "path": {"const": "context/05.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-06"}, "path": {"const": "context/06.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-07"}, "path": {"const": "context/07.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-08"}, "path": {"const": "context/08.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-09"}, "path": {"const": "context/09.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-10"}, "path": {"const": "context/10.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-11"}, "path": {"const": "context/11.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-12"}, "path": {"const": "context/12.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-13"}, "path": {"const": "context/13.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-14"}, "path": {"const": "context/14.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-15"}, "path": {"const": "context/15.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-16"}, "path": {"const": "context/16.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-17"}, "path": {"const": "context/17.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-18"}, "path": {"const": "context/18.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-19"}, "path": {"const": "context/19.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-20"}, "path": {"const": "context/20.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-21"}, "path": {"const": "context/21.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-22"}, "path": {"const": "context/22.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-23"}, "path": {"const": "context/23.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-24"}, "path": {"const": "context/24.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-25"}, "path": {"const": "context/25.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-26"}, "path": {"const": "context/26.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-27"}, "path": {"const": "context/27.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-28"}, "path": {"const": "context/28.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-29"}, "path": {"const": "context/29.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-30"}, "path": {"const": "context/30.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-31"}, "path": {"const": "context/31.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-32"}, "path": {"const": "context/32.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-33"}, "path": {"const": "context/33.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-34"}, "path": {"const": "context/34.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-35"}, "path": {"const": "context/35.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-36"}, "path": {"const": "context/36.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-37"}, "path": {"const": "context/37.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-38"}, "path": {"const": "context/38.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-39"}, "path": {"const": "context/39.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-40"}, "path": {"const": "context/40.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-41"}, "path": {"const": "context/41.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-42"}, "path": {"const": "context/42.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-43"}, "path": {"const": "context/43.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-44"}, "path": {"const": "context/44.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-45"}, "path": {"const": "context/45.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-46"}, "path": {"const": "context/46.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-47"}, "path": {"const": "context/47.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-48"}, "path": {"const": "context/48.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-49"}, "path": {"const": "context/49.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-50"}, "path": {"const": "context/50.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-51"}, "path": {"const": "context/51.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-52"}, "path": {"const": "context/52.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-53"}, "path": {"const": "context/53.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-54"}, "path": {"const": "context/54.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-55"}, "path": {"const": "context/55.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-56"}, "path": {"const": "context/56.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-57"}, "path": {"const": "context/57.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-58"}, "path": {"const": "context/58.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-59"}, "path": {"const": "context/59.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-60"}, "path": {"const": "context/60.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-61"}, "path": {"const": "context/61.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-62"}, "path": {"const": "context/62.bin"}}},
+        {"$ref": "#/$defs/NamedIdentity", "properties": {"role": {"const": "context-63"}, "path": {"const": "context/63.bin"}}}
+      ],
+      "items": false
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "#/$defs/DispatchPair"
+    },
+    {
+      "if": {
+        "properties": {
+          "materializationDomain": {
+            "const": "verifier-input"
+          },
+          "validationSurface": {
+            "const": "risc0-parser-internal"
+          }
+        },
+        "required": [
+          "materializationDomain",
+          "validationSurface"
+        ]
+      },
+      "else": {
+        "properties": {
+          "subject": {
+            "properties": {
+              "byteLength": {
+                "minimum": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "MaterializationDomain": {
+      "enum": [
+        "verifier-input",
+        "artifact-validator",
+        "tree-validator"
+      ]
+    },
+    "ValidationSurface": {
+      "enum": [
+        "opcode-preflight",
+        "raw-statement-claim-binding",
+        "raw-seal-shape",
+        "risc0-parser-internal",
+        "risc0-cryptographic-verifier",
+        "terminal-policy",
+        "receipt-claim-policy",
+        "ancestry-replay",
+        "profile-manifest-codec",
+        "initial-profile-target",
+        "profile-artifact-envelope",
+        "activated-profile-package",
+        "terminal-fixture-catalog",
+        "sequence-subject-catalog",
+        "terminal-metadata",
+        "profile-id-preimage",
+        "candidate-registry",
+        "negative-binding-index",
+        "corpus-closure"
+      ]
+    },
+    "DispatchPair": {
+      "oneOf": [
+        {
+          "properties": {
+            "materializationDomain": {
+              "const": "verifier-input"
+            },
+            "validationSurface": {
+              "enum": [
+                "opcode-preflight",
+                "raw-statement-claim-binding",
+                "raw-seal-shape",
+                "risc0-parser-internal",
+                "risc0-cryptographic-verifier",
+                "terminal-policy",
+                "receipt-claim-policy",
+                "ancestry-replay"
+              ]
+            }
+          },
+          "required": [
+            "materializationDomain",
+            "validationSurface"
+          ]
+        },
+        {
+          "properties": {
+            "materializationDomain": {
+              "const": "artifact-validator"
+            },
+            "validationSurface": {
+              "enum": [
+                "terminal-policy",
+                "profile-manifest-codec",
+                "initial-profile-target",
+                "profile-artifact-envelope",
+                "activated-profile-package",
+                "terminal-fixture-catalog",
+                "sequence-subject-catalog",
+                "terminal-metadata",
+                "profile-id-preimage",
+                "candidate-registry",
+                "negative-binding-index"
+              ]
+            }
+          },
+          "required": [
+            "materializationDomain",
+            "validationSurface"
+          ]
+        },
+        {
+          "properties": {
+            "materializationDomain": {
+              "const": "tree-validator"
+            },
+            "validationSurface": {
+              "const": "corpus-closure"
+            }
+          },
+          "required": [
+            "materializationDomain",
+            "validationSurface"
+          ]
+        }
+      ]
+    },
+    "LowerKebabRole": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z](?:[a-z0-9]|-[a-z0-9])*$"
+    },
+    "SafeRelativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "pattern": "^[a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)*$",
+      "not": {
+        "anyOf": [
+          {
+            "pattern": "\\.(?:/|$)"
+          },
+          {
+            "pattern": "(?:^|/)(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\.|/|$)"
+          },
+          {
+            "pattern": "^negative-input\\.json(?:/|$)"
+          }
+        ]
+      }
+    },
+    "Hex32": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "SubjectIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "path",
+        "byteLength",
+        "sha256",
+        "encoding"
+      ],
+      "properties": {
+        "role": {
+          "$ref": "#/$defs/LowerKebabRole"
+        },
+        "path": {
+          "$ref": "#/$defs/SafeRelativePath"
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 536870912
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "encoding": {
+          "const": "raw-bytes"
+        }
+      }
+    },
+    "NamedIdentity": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/SubjectIdentity"
+        },
+        {
+          "properties": {
+            "byteLength": {
+              "minimum": 1
+            }
+          }
+        }
+      ]
+    }
+  }
+}

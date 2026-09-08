@@ -1,0 +1,32 @@
+name: Non-proving checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  libraries:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CARGO_BUILD_JOBS: "2"
+      CARGO_INCREMENTAL: "0"
+      CARGO_TARGET_DIR: ${{ runner.temp }}/eip0045-target
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Install pinned host Rust
+        run: rustup toolchain install 1.89.0 --profile minimal
+      - name: Fetch locked guest metadata dependencies
+        run: cargo +1.89.0 fetch --manifest-path methods/guest/Cargo.toml --locked
+      - name: Guest ABI and build-contract tests
+        run: cargo +1.89.0 test --manifest-path methods/Cargo.toml --no-default-features --locked
+      - name: Reproduction library and profile tests
+        run: cargo +1.89.0 test --manifest-path reproduction/Cargo.toml --no-default-features --features profile --lib --tests --locked
+      - name: Non-proving generator library tests
+        run: cargo +1.89.0 test --manifest-path generator/Cargo.toml --no-default-features --lib --locked

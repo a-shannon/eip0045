@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ergo:eip-0045:b4-positive-verifier-input-v1",
+  "title": "Eip0045B4PositiveVerifierInputV1",
+  "$comment": "This positive-finalizer schema is outside the legacy candidate-schema quarantine.",
+  "description": "One authority-minimal B4 positive verifier input containing only identities of the six cryptographic files visible in the isolated verifier root.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "formatVersion",
+    "profileManifest",
+    "profileAlgorithm",
+    "profileConstants",
+    "guestElf",
+    "statement",
+    "rawSeal"
+  ],
+  "properties": {
+    "format": {
+      "const": "Eip0045B4PositiveVerifierInputV1"
+    },
+    "formatVersion": {
+      "const": 1
+    },
+    "profileManifest": {
+      "$ref": "#/$defs/ProfileManifestIdentity"
+    },
+    "profileAlgorithm": {
+      "$ref": "#/$defs/ProfileAlgorithmIdentity"
+    },
+    "profileConstants": {
+      "$ref": "#/$defs/ProfileConstantsIdentity"
+    },
+    "guestElf": {
+      "$ref": "#/$defs/GuestElfIdentity"
+    },
+    "statement": {
+      "$ref": "#/$defs/StatementIdentity"
+    },
+    "rawSeal": {
+      "$ref": "#/$defs/RawSealIdentity"
+    }
+  },
+  "$defs": {
+    "Hex32": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "ProfileManifestIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "path": {
+          "const": "profile-manifest.bin"
+        },
+        "byteLength": {
+          "const": 458
+        },
+        "sha256": {
+          "const": "deffb2cb231f98a348cbd166d5f1c43315661ccd8bd212099f16f238d0fe8946"
+        },
+        "encoding": {
+          "const": "raw-bytes"
+        }
+      }
+    },
+    "ProfileAlgorithmIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "path": {
+          "const": "profile-algorithm.txt"
+        },
+        "byteLength": {
+          "const": 29773
+        },
+        "sha256": {
+          "const": "90a884da420a09f2c1108d7388c2ac74db8dbdb195de704206e2bf8ec1ad0bee"
+        },
+        "encoding": {
+          "const": "raw-bytes"
+        }
+      }
+    },
+    "ProfileConstantsIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "path": {
+          "const": "profile-constants.bin"
+        },
+        "byteLength": {
+          "const": 65119
+        },
+        "sha256": {
+          "const": "8c4a92b7d354890481eefdef233d4ca43f6bcd9f7cb00e4dd9e709da47789ef3"
+        },
+        "encoding": {
+          "const": "raw-bytes"
+        }
+      }
+    },
+    "GuestElfIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "path": {
+          "const": "guest.elf"
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4194304
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "encoding": {
+          "const": "raw-bytes"
+        }
+      }
+    },
+    "StatementIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "path": {
+          "const": "statement.bin"
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 159,
+          "maximum": 16543
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "encoding": {
+          "const": "raw-bytes"
+        }
+      }
+    },
+    "RawSealIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "path": {
+          "const": "raw-seal.bin"
+        },
+        "byteLength": {
+          "const": 222668
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "encoding": {
+          "const": "raw-bytes"
+        }
+      }
+    }
+  }
+}

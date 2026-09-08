@@ -1,0 +1,412 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ergo:eip-0045:b4-terminal-fixture-catalog-v1",
+  "title": "Eip0045B4TerminalFixtureCatalogV1",
+  "description": "Closed-shape catalogue for the 27 stock controls and nine terminal fixtures. Exact stock-table and fixture ordering, stock/fixture/root linkage, status derivation, assumptions semantics, union witness exhaustiveness, path derivation, artifact digest recomputation, and upstream cryptographic replay remain parser and evidence-gate obligations.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "formatVersion",
+    "stage",
+    "upstream",
+    "programId",
+    "innerControlRoot",
+    "stockControls",
+    "fixtures"
+  ],
+  "properties": {
+    "format": {
+      "const": "Eip0045B4TerminalFixtureCatalogV1"
+    },
+    "formatVersion": {
+      "const": 1
+    },
+    "stage": {
+      "const": "candidate"
+    },
+    "upstream": {
+      "$ref": "#/$defs/Upstream"
+    },
+    "programId": {
+      "$ref": "#/$defs/Hex32"
+    },
+    "innerControlRoot": {
+      "const": "a54dc85ac99f851c92d7c96d7318af41dbe7c0194edfcc37eb4d422a998c1f56"
+    },
+    "stockControls": {
+      "type": "array",
+      "minItems": 27,
+      "maxItems": 27,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/StockControl"
+      }
+    },
+    "fixtures": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/Fixture"
+      }
+    }
+  },
+  "$defs": {
+    "Hex32": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "SemanticId96": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 96,
+      "pattern": "^[a-z](?:[a-z0-9]|-[a-z0-9])*$"
+    },
+    "FixtureId": {
+      "enum": [
+        "lift-po2-14",
+        "lift-povw-po2-18",
+        "join-povw",
+        "join-unwrap-povw",
+        "resolve-povw",
+        "resolve-unwrap-povw",
+        "union",
+        "unwrap-povw",
+        "allowed-terminal-non-ok"
+      ]
+    },
+    "Upstream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "commit",
+        "risc0ZkvmVersion",
+        "receiptOracleCodec"
+      ],
+      "properties": {
+        "repository": {
+          "const": "https://github.com/risc0/risc0.git"
+        },
+        "commit": {
+          "const": "8eb06ab020a92dc5b63ba6dd0836d432aba6d890"
+        },
+        "risc0ZkvmVersion": {
+          "const": "3.0.5"
+        },
+        "receiptOracleCodec": {
+          "const": "bincode-1.3.3-fixint-little-endian-reject-trailing-limit-1048576"
+        }
+      }
+    },
+    "StockControl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stockIndex",
+        "family",
+        "upstreamProgram",
+        "controlId",
+        "eipAllowed"
+      ],
+      "properties": {
+        "stockIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 26
+        },
+        "family": {
+          "$ref": "#/$defs/SemanticId96"
+        },
+        "upstreamProgram": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 96,
+          "pattern": "^[a-z0-9_]+\\.zkr$"
+        },
+        "controlId": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "eipAllowed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "TerminalBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stockIndex",
+        "controlId",
+        "controlRoot",
+        "eipAllowed"
+      ],
+      "properties": {
+        "stockIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 26
+        },
+        "controlId": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "controlRoot": {
+          "const": "a54dc85ac99f851c92d7c96d7318af41dbe7c0194edfcc37eb4d422a998c1f56"
+        },
+        "eipAllowed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "ExitStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "system",
+        "user",
+        "ok"
+      ],
+      "properties": {
+        "system": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "user": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "ok": {
+          "type": "boolean"
+        }
+      }
+    },
+    "NoOutputAssumptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "no-output"
+        }
+      }
+    },
+    "CommitmentAssumptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "digest",
+        "empty"
+      ],
+      "properties": {
+        "kind": {
+          "const": "commitment"
+        },
+        "digest": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "empty": {
+          "type": "boolean"
+        }
+      }
+    },
+    "Assumptions": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/NoOutputAssumptions"
+        },
+        {
+          "$ref": "#/$defs/CommitmentAssumptions"
+        }
+      ]
+    },
+    "DirectBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "applicationClaimDigest",
+        "status",
+        "assumptions"
+      ],
+      "properties": {
+        "applicationClaimDigest": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "status": {
+          "$ref": "#/$defs/ExitStatus"
+        },
+        "assumptions": {
+          "$ref": "#/$defs/Assumptions"
+        }
+      }
+    },
+    "UnionSide": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assumptionDigest",
+        "sourceClaimDigest",
+        "witnessFixtureIds"
+      ],
+      "properties": {
+        "assumptionDigest": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "sourceClaimDigest": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "witnessFixtureIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 9,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/FixtureId"
+          }
+        }
+      }
+    },
+    "DirectApplication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "binding"
+      ],
+      "properties": {
+        "kind": {
+          "const": "direct"
+        },
+        "binding": {
+          "$ref": "#/$defs/DirectBinding"
+        }
+      }
+    },
+    "UnionApplication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "left",
+        "right"
+      ],
+      "properties": {
+        "kind": {
+          "const": "union"
+        },
+        "left": {
+          "$ref": "#/$defs/UnionSide"
+        },
+        "right": {
+          "$ref": "#/$defs/UnionSide"
+        }
+      }
+    },
+    "Application": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/DirectApplication"
+        },
+        {
+          "$ref": "#/$defs/UnionApplication"
+        }
+      ]
+    },
+    "RawSealArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "byteLength",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "maxLength": 256,
+          "pattern": "^reproduction/schema/b4-corpus-v1\\.candidate/terminal-fixtures/[a-z](?:[a-z0-9]|-[a-z0-9])*\\.raw-seal\\.bin$"
+        },
+        "byteLength": {
+          "const": 222668
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hex32"
+        }
+      }
+    },
+    "ReceiptOracleArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "byteLength",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "maxLength": 256,
+          "pattern": "^reproduction/schema/b4-corpus-v1\\.candidate/terminal-fixtures/[a-z](?:[a-z0-9]|-[a-z0-9])*\\.receipt-oracle\\.bincode$"
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1048576
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hex32"
+        }
+      }
+    },
+    "Fixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fixtureId",
+        "family",
+        "claimKind",
+        "claimDigest",
+        "terminal",
+        "application",
+        "rawSeal",
+        "receiptOracle"
+      ],
+      "properties": {
+        "fixtureId": {
+          "$ref": "#/$defs/FixtureId"
+        },
+        "family": {
+          "$ref": "#/$defs/SemanticId96"
+        },
+        "claimKind": {
+          "enum": [
+            "receipt-claim",
+            "work-receipt-claim",
+            "union-claim"
+          ]
+        },
+        "claimDigest": {
+          "$ref": "#/$defs/Hex32"
+        },
+        "terminal": {
+          "$ref": "#/$defs/TerminalBinding"
+        },
+        "application": {
+          "$ref": "#/$defs/Application"
+        },
+        "rawSeal": {
+          "$ref": "#/$defs/RawSealArtifact"
+        },
+        "receiptOracle": {
+          "$ref": "#/$defs/ReceiptOracleArtifact"
+        }
+      }
+    }
+  }
+}

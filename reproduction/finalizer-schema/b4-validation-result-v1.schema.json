@@ -1,0 +1,242 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ergo:eip-0045:b4-validation-result-v1",
+  "title": "Eip0045B4ValidationResultV1",
+  "description": "Canonical result shape for one plan execution and one implementation. Plan/domain/surface/QA equality, materialization-identity equality, validator-artifact authority, and independent observed-rejection equality remain semantic replay-gate obligations.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "formatVersion",
+    "executionId",
+    "implementation",
+    "materializationIdentityByteLength",
+    "materializationIdentitySha256",
+    "materializationDomain",
+    "negativePlanByteLength",
+    "negativePlanSha256",
+    "qaResultCode",
+    "rejection",
+    "validatorArtifact",
+    "validationSurface"
+  ],
+  "properties": {
+    "format": {
+      "const": "Eip0045B4ValidationResultV1"
+    },
+    "formatVersion": {
+      "const": 1
+    },
+    "executionId": {
+      "$ref": "#/$defs/ExecutionId"
+    },
+    "implementation": {
+      "enum": [
+        "rust-reference",
+        "independent-jvm"
+      ]
+    },
+    "materializationIdentityByteLength": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65536
+    },
+    "materializationIdentitySha256": {
+      "$ref": "#/$defs/Hex32"
+    },
+    "materializationDomain": {
+      "$ref": "#/$defs/MaterializationDomain"
+    },
+    "negativePlanByteLength": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 131072
+    },
+    "negativePlanSha256": {
+      "$ref": "#/$defs/Hex32"
+    },
+    "qaResultCode": {
+      "$ref": "#/$defs/QaResultCode"
+    },
+    "rejection": {
+      "$ref": "#/$defs/ObservedRejection"
+    },
+    "validatorArtifact": {
+      "$ref": "#/$defs/ValidatorArtifact"
+    },
+    "validationSurface": {
+      "$ref": "#/$defs/ExecutionSurface"
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "#/$defs/DispatchBoundary"
+    }
+  ],
+  "$defs": {
+    "Hex32": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "ExecutionId": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 386,
+      "pattern": "^(?=.{1,192}--.{1,192}$)[a-z](?:[a-z0-9]|-[a-z0-9])*--[a-z](?:[a-z0-9]|-[a-z0-9])*$"
+    },
+    "RejectionId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 192,
+      "pattern": "^[a-z](?:[a-z0-9]|-[a-z0-9])*$",
+      "not": {
+        "pattern": "(?:^|-)(?:error|failure|fixme|generic|pending|placeholder|reject|tbd|todo|unclassified|unknown|unspecified)(?:-|$)"
+      }
+    },
+    "MaterializationDomain": {
+      "enum": [
+        "verifier-input",
+        "artifact-validator",
+        "tree-validator"
+      ]
+    },
+    "ExecutionSurface": {
+      "enum": [
+        "opcode-preflight",
+        "raw-statement-claim-binding",
+        "raw-seal-shape",
+        "risc0-parser-internal",
+        "risc0-cryptographic-verifier",
+        "terminal-policy",
+        "receipt-claim-policy",
+        "ancestry-replay",
+        "profile-manifest-codec",
+        "initial-profile-target",
+        "profile-artifact-envelope",
+        "activated-profile-package",
+        "terminal-fixture-catalog",
+        "sequence-subject-catalog",
+        "terminal-metadata",
+        "profile-id-preimage",
+        "candidate-registry",
+        "negative-binding-index",
+        "corpus-closure"
+      ]
+    },
+    "DispatchBoundary": {
+      "oneOf": [
+        {"properties":{"materializationDomain":{"const":"verifier-input"},"validationSurface":{"const":"opcode-preflight"},"rejection":{"properties":{"class":{"const":"opcode-input-shape-invalid"},"stage":{"enum":["opcode-profile-id-byte-length","opcode-program-id-byte-length","opcode-application-payload-byte-length","opcode-proof-chunk-count","opcode-proof-chunk-byte-length"]}},"required":["class","stage"]}},"required":["materializationDomain","validationSurface","rejection"]},
+        {"properties":{"materializationDomain":{"const":"verifier-input"},"validationSurface":{"const":"raw-statement-claim-binding"},"rejection":{"properties":{"class":{"const":"receipt-claim-mismatch"},"stage":{"const":"expected-claim-binding"}},"required":["class","stage"]}},"required":["materializationDomain","validationSurface","rejection"]},
+        {"properties":{"materializationDomain":{"const":"verifier-input"},"validationSurface":{"const":"raw-seal-shape"},"rejection":{"oneOf":[{"properties":{"class":{"const":"raw-seal-shape-invalid"},"stage":{"enum":["babybear-word-reduction","inner-root-padding","claim-halfword-decoding","outer-po2-preflight"]}},"required":["class","stage"]},{"properties":{"class":{"const":"inner-control-root-mismatch"},"stage":{"const":"inner-control-root-binding"}},"required":["class","stage"]}]}},"required":["materializationDomain","validationSurface","rejection"]},
+        {"properties":{"materializationDomain":{"const":"verifier-input"},"validationSurface":{"const":"risc0-parser-internal"},"rejection":{"properties":{"class":{"const":"risc0-parser-invalid"},"stage":{"enum":["risc0-read-iop-output-before-read","risc0-read-iop-output-at-last-required-word","risc0-read-iop-outer-po2-before-read","risc0-read-iop-code-top-before-read","risc0-read-iop-code-top-at-last-required-word","risc0-read-iop-data-top-before-read","risc0-read-iop-data-top-at-last-required-word","risc0-read-iop-accum-top-before-read","risc0-read-iop-accum-top-at-last-required-word","risc0-read-iop-check-top-before-read","risc0-read-iop-check-top-at-last-required-word","risc0-read-iop-coeff-u-before-read","risc0-read-iop-coeff-u-at-last-required-word","risc0-read-iop-fri-round-one-top-before-read","risc0-read-iop-fri-round-one-top-at-last-required-word","risc0-read-iop-fri-round-two-top-before-read","risc0-read-iop-fri-round-two-top-at-last-required-word","risc0-read-iop-fri-round-three-top-before-read","risc0-read-iop-fri-round-three-top-at-last-required-word","risc0-read-iop-final-coefficients-before-read","risc0-read-iop-final-coefficients-at-last-required-word","risc0-read-iop-queries-before-read","risc0-read-iop-queries-at-last-required-word","risc0-read-iop-query-zero-accum-opening-at-last-required-word","risc0-read-iop-query-zero-code-opening-before-read","risc0-read-iop-query-zero-code-opening-at-last-required-word","risc0-read-iop-query-zero-data-opening-before-read","risc0-read-iop-query-zero-data-opening-at-last-required-word","risc0-read-iop-query-zero-check-opening-before-read","risc0-read-iop-query-zero-check-opening-at-last-required-word","risc0-read-iop-query-zero-fri-round-one-opening-before-read","risc0-read-iop-query-zero-fri-round-one-opening-at-last-required-word","risc0-read-iop-query-zero-fri-round-two-opening-before-read","risc0-read-iop-query-zero-fri-round-two-opening-at-last-required-word","risc0-read-iop-query-zero-fri-round-three-opening-before-read","risc0-read-iop-query-zero-fri-round-three-opening-at-last-required-word"]}},"required":["class","stage"]}},"required":["materializationDomain","validationSurface","rejection"]},
+        {"properties":{"materializationDomain":{"const":"verifier-input"},"validationSurface":{"const":"risc0-cryptographic-verifier"},"rejection":{"properties":{"class":{"const":"risc0-proof-invalid"},"stage":{"enum":["risc0-validity-check","risc0-fri-round-two-query-zero","risc0-fri-final-polynomial-query-zero","risc0-fri-inner-query-forty-nine"]}},"required":["class","stage"]}},"required":["materializationDomain","validationSurface","rejection"]},
+        {"properties":{"materializationDomain":{"const":"verifier-input"},"validationSurface":{"const":"terminal-policy"},"rejection":{"properties":{"class":{"const":"terminal-policy-mismatch"},"stage":{"const":"terminal-control-id"}},"required":["class","stage"]}},"required":["materializationDomain","validationSurface","rejection"]},
+        {"properties":{"materializationDomain":{"const":"verifier-input"},"validationSurface":{"const":"receipt-claim-policy"},"rejection":{"properties":{"class":{"const":"receipt-claim-mismatch"},"stage":{"const":"expected-claim-binding"}},"required":["class","stage"]}},"required":["materializationDomain","validationSurface","rejection"]},
+        {"properties":{"materializationDomain":{"const":"verifier-input"},"validationSurface":{"const":"ancestry-replay"},"rejection":{"properties":{"class":{"const":"ancestry-replay-mismatch"},"stage":{"enum":["claim-edge","resolve-explicit-semantics","resolve-zero-root-semantics","resolve-assumption-inventory"]}},"required":["class","stage"]}},"required":["materializationDomain","validationSurface","rejection"]},
+        {"properties":{"materializationDomain":{"const":"artifact-validator"},"validationSurface":{"const":"terminal-policy"},"rejection":{"properties":{"class":{"const":"terminal-policy-mismatch"},"stage":{"const":"terminal-control-id"}},"required":["class","stage"]}},"required":["materializationDomain","validationSurface","rejection"]},
+        {"properties":{"materializationDomain":{"const":"artifact-validator"},"validationSurface":{"const":"profile-manifest-codec"},"rejection":{"properties":{"class":{"const":"profile-manifest-invalid"},"stage":{"enum":["profile-manifest-byte-length","profile-manifest-format-version","profile-manifest-terminal-kind","profile-manifest-terminal-parameter","profile-manifest-terminal-order","profile-manifest-terminal-control-id-uniqueness","profile-manifest-artifact-kind"]}},"required":["class","stage"]}},"required":["materializationDomain","validationSurface","rejection"]},
+        {"properties":{"materializationDomain":{"const":"artifact-validator"},"validationSurface":{"const":"initial-profile-target"},"rejection":{"properties":{"class":{"const":"initial-profile-target-mismatch"},"stage":{"enum":["exact-proof-bytes","maximum-application-payload-bytes","outer-po2","inner-control-root","terminal-control-id"]}},"required":["class","stage"]}},"required":["materializationDomain","validationSurface","rejection"]},
+        {"properties":{"materializationDomain":{"const":"artifact-validator"},"validationSurface":{"const":"profile-artifact-envelope"},"rejection":{"properties":{"class":{"const":"profile-artifact-package-mismatch"},"stage":{"enum":["profile-artifact-byte-length","profile-artifact-digest"]}},"required":["class","stage"]}},"required":["materializationDomain","validationSurface","rejection"]},
+        {"properties":{"materializationDomain":{"const":"artifact-validator"},"validationSurface":{"const":"activated-profile-package"},"rejection":{"properties":{"class":{"const":"activated-profile-package-mismatch"},"stage":{"const":"activated-profile-id"}},"required":["class","stage"]}},"required":["materializationDomain","validationSurface","rejection"]},
+        {"properties":{"materializationDomain":{"const":"artifact-validator"},"validationSurface":{"const":"terminal-fixture-catalog"},"rejection":{"properties":{"class":{"const":"terminal-fixture-catalog-mismatch"},"stage":{"const":"terminal-fixture-catalog-binding"}},"required":["class","stage"]}},"required":["materializationDomain","validationSurface","rejection"]},
+        {"properties":{"materializationDomain":{"const":"artifact-validator"},"validationSurface":{"const":"sequence-subject-catalog"},"rejection":{"properties":{"class":{"const":"sequence-subject-catalog-invalid"},"stage":{"const":"sequence-subject-catalog-validation"}},"required":["class","stage"]}},"required":["materializationDomain","validationSurface","rejection"]},
+        {"properties":{"materializationDomain":{"const":"artifact-validator"},"validationSurface":{"const":"terminal-metadata"},"rejection":{"properties":{"class":{"const":"terminal-metadata-mismatch"},"stage":{"const":"terminal-metadata-binding"}},"required":["class","stage"]}},"required":["materializationDomain","validationSurface","rejection"]},
+        {"properties":{"materializationDomain":{"const":"artifact-validator"},"validationSurface":{"const":"profile-id-preimage"},"rejection":{"properties":{"class":{"const":"profile-id-preimage-mismatch"},"stage":{"const":"profile-id-preimage-binding"}},"required":["class","stage"]}},"required":["materializationDomain","validationSurface","rejection"]},
+        {"properties":{"materializationDomain":{"const":"artifact-validator"},"validationSurface":{"const":"candidate-registry"},"rejection":{"properties":{"class":{"const":"candidate-registry-invalid"},"stage":{"const":"candidate-registry-validation"}},"required":["class","stage"]}},"required":["materializationDomain","validationSurface","rejection"]},
+        {"properties":{"materializationDomain":{"const":"artifact-validator"},"validationSurface":{"const":"negative-binding-index"},"rejection":{"properties":{"class":{"const":"negative-binding-index-invalid"},"stage":{"enum":["negative-binding-index-codec","negative-binding-index-plan-binding"]}},"required":["class","stage"]}},"required":["materializationDomain","validationSurface","rejection"]},
+        {"properties":{"materializationDomain":{"const":"tree-validator"},"validationSurface":{"const":"corpus-closure"},"rejection":{"properties":{"class":{"const":"corpus-closure-mismatch"},"stage":{"enum":["corpus-required-role","corpus-unexpected-role"]}},"required":["class","stage"]}},"required":["materializationDomain","validationSurface","rejection"]}
+      ]
+    },
+    "QaResultCode": {
+      "enum": [
+        "raw-seal-claim-mismatch",
+        "opcode-profile-id-length-invalid",
+        "opcode-program-id-length-invalid",
+        "opcode-application-payload-too-large",
+        "opcode-proof-chunk-count-invalid",
+        "opcode-proof-chunk-length-invalid",
+        "raw-seal-word-not-reduced",
+        "raw-seal-nonzero-root-padding",
+        "raw-seal-claim-halfword-out-of-range",
+        "b4-byte-order-rejected-at-bound-checkpoint",
+        "raw-seal-wrong-outer-po2",
+        "b4-parser-unexpected-eof-at-phase",
+        "raw-seal-inner-control-root-mismatch",
+        "b4-terminal-metadata-mismatch",
+        "raw-seal-control-id-not-allowed",
+        "b4-ancestry-claim-edge-mismatch",
+        "b4-resolve-explicit-semantics-mismatch",
+        "b4-resolve-zero-root-semantics-mismatch",
+        "b4-resolve-assumption-inventory-invalid",
+        "b4-crypto-early-checkpoint-rejected",
+        "b4-crypto-middle-checkpoint-rejected",
+        "b4-crypto-late-checkpoint-rejected",
+        "b4-crypto-final-checkpoint-rejected",
+        "b4-profile-manifest-length-invalid",
+        "b4-profile-manifest-version-unsupported",
+        "b4-profile-exact-proof-bytes-invalid",
+        "b4-profile-maximum-payload-invalid",
+        "b4-profile-outer-po2-invalid",
+        "b4-profile-identity-mismatch",
+        "b4-profile-terminal-field-invalid",
+        "b4-profile-terminal-control-id-duplicate",
+        "b4-profile-terminal-order-invalid",
+        "b4-profile-artifact-reference-invalid",
+        "b4-profile-artifact-kind-position-invalid",
+        "b4-profile-artifact-digest-mismatch",
+        "b4-profile-id-mismatch",
+        "b4-profile-id-preimage-mismatch",
+        "b4-terminal-fixture-catalog-binding-mismatch",
+        "b4-sequence-subject-provenance-mismatch",
+        "b4-corpus-representative-stratum-missing",
+        "b4-corpus-extra-file",
+        "b4-registry-mandatory-positive-missing",
+        "b4-registry-case-id-duplicate",
+        "b4-registry-positive-order-invalid",
+        "b4-registry-positive-label-invalid",
+        "b4-registry-negative-class-unknown",
+        "b4-registry-unknown-field",
+        "b4-registry-noncanonical-jcs",
+        "b4-negative-plan-registry-bijection-mismatch"
+      ]
+    },
+    "ObservedRejection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "class",
+        "stage",
+        "verdict"
+      ],
+      "properties": {
+        "class": {
+          "$ref": "#/$defs/RejectionId"
+        },
+        "stage": {
+          "$ref": "#/$defs/RejectionId"
+        },
+        "verdict": {
+          "const": "reject"
+        }
+      }
+    },
+    "ValidatorArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "byteLength",
+        "sha256"
+      ],
+      "properties": {
+        "byteLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1073741824
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hex32"
+        }
+      }
+    }
+  }
+}

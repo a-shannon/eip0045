@@ -1,0 +1,53 @@
+[package]
+name = "eip0045-h0-linux-abi"
+build = false
+workspace = "../.."
+description = "Isolated exact-target Linux ABI boundary for the EIP-0045 H0 appliance"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[[test]]
+name = "worker-post-exec-fd-inventory"
+path = "tests/worker_post_exec_fd_inventory.rs"
+harness = false
+required-features = ["h0-tmpfs-provider-v2-g0"]
+
+[[bin]]
+name = "worker-post-exec-fd-inventory-leaf"
+path = "tests/fixtures/worker_post_exec_fd_inventory_leaf.rs"
+test = false
+bench = false
+doc = false
+harness = false
+required-features = ["h0-tmpfs-provider-v2-g0"]
+
+[features]
+default = []
+h0-tmpfs-provider-v2-g0 = []
+
+[dependencies]
+eip0045-h0-contract = { path = "../contract", default-features = false }
+
+[target.'cfg(all(target_arch = "x86_64", target_os = "linux", target_env = "musl"))'.dependencies]
+rustix = { version = "=1.1.4", default-features = false, features = ["std", "event", "fs", "mount", "net", "process", "thread", "time"] }
+
+[lints.rust]
+unsafe_code = "allow"
+unsafe_op_in_unsafe_fn = "deny"
+missing_docs = "warn"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"
+
+[package.metadata.eip0045]
+selected-target = "x86_64-unknown-linux-musl"
+linux-version = "v7.1.8"
+linux-commit = "25c76bea853d0db65b51fb4697a47cbfd9e35e76"
+rustix-version = "1.1.4"
+rustix-crate-sha256 = "b6fe4565b9518b83ef4f91bb47ce29620ca828bd32cb7e408f0062e9930ba190"
+non-selected-target-policy = "inventory-only"

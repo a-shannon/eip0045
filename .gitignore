@@ -1,0 +1,9 @@
+# Build outputs and local execution state.
+**/target/
+/.cargo-target/
+/.ci-risc0/
+/.env
+/.env.*
+/reproduction/runs/.work/
+**/__pycache__/
+*.pyc
