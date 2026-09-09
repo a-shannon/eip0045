@@ -1169,6 +1169,17 @@ fn stock_replay_error(error: StockReceiptReplayError) -> anyhow::Error {
     anyhow::Error::new(error)
 }
 
+/// Local test facts only: this does not construct campaign or publication authority.
+#[cfg(test)]
+pub(crate) fn replay_local_ancestry_receipt(
+    raw_seal: &[u8],
+    receipt_oracle: &[u8],
+) -> Result<(RecursiveAncestryClaim, RecursiveAncestryTerminal, String)> {
+    let verified = CompiledNegativeAncestryWitnessReplayV1::from_compiled_profile()?
+        .replay(raw_seal, receipt_oracle)?;
+    Ok((verified.claim, verified.terminal, verified.control_root))
+}
+
 fn project_verified_direct_receipt(
     verified: &VerifiedStockSuccinctReceiptV1<ReceiptClaim>,
 ) -> Result<B4VerifiedDirectAncestryReceiptV1> {

@@ -201,7 +201,7 @@ impl<'a> ErgoStatementV1<'a> {
     }
 
     /// Chain-domain identifier bound by the statement.
-    #[cfg(feature = "positive-gate")]
+    #[cfg(any(feature = "positive-gate", feature = "recursive-ancestry"))]
     #[must_use]
     pub(crate) const fn chain_domain_id(&self) -> [u8; DIGEST_BYTES] {
         self.chain_domain_id
@@ -220,14 +220,14 @@ impl<'a> ErgoStatementV1<'a> {
     }
 
     /// BLAKE2b-256 contract identifier bound by the statement.
-    #[cfg(feature = "positive-gate")]
+    #[cfg(any(feature = "positive-gate", feature = "recursive-ancestry"))]
     #[must_use]
     pub(crate) const fn contract_id(&self) -> [u8; DIGEST_BYTES] {
         self.contract_id
     }
 
     /// Exact application payload trailing the fixed statement prefix.
-    #[cfg(feature = "positive-gate")]
+    #[cfg(any(feature = "positive-gate", feature = "recursive-ancestry"))]
     #[must_use]
     pub(crate) const fn application_payload(&self) -> &'a [u8] {
         self.application_payload

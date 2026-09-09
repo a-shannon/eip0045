@@ -9,7 +9,12 @@
 use std::{fmt, str::FromStr};
 
 use anyhow::{Context, Result, bail, ensure};
-use borsh::{BorshDeserialize, BorshSerialize};
+#[cfg(feature = "embedded-method")]
+use borsh::BorshDeserialize;
+pub use crate::recursive_oracle::{
+    RECURSIVE_ORACLE_MAX_BYTES, RecursiveFamily, RecursiveInputs, RecursiveOperation,
+    RecursiveOracle, RecursiveStep, decode_recursive_oracle, encode_recursive_oracle,
+};
 use eip_0045_methods::{GuestInputHeader, GuestMode};
 #[cfg(feature = "b4-negative-ancestry-finalization")]
 use eip_0045_reproduction::b4_negative_ancestry_authority::{
@@ -46,23 +51,8 @@ use crate::{
     validate_ergo_statement_v1,
 };
 
-/// Maximum encoded size of the candidate-only ancestry oracle.
-pub const RECURSIVE_ORACLE_MAX_BYTES: usize = 32 * 1024 * 1024;
 const PLAIN_PO2_18_TARGET_PO2: u32 = 18;
 
-/// The three additional pre-activation receipt families required by B4.
-#[derive(
-    BorshDeserialize, BorshSerialize, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize,
-)]
-#[serde(rename_all = "kebab-case")]
-pub enum RecursiveFamily {
-    /// Exactly two execution segments, ending in stock `join.zkr`.
-    TerminalJoin,
-    /// One conditional segment, ending in stock `resolve.zkr`.
-    TerminalResolve,
-    /// A resolved second segment joined to the first, ending in `join.zkr`.
-    ResolveThenJoin,
-}
 
 /// Execute-only evidence that the explicit-root guest accepts only the exact
 /// pinned assumption-cache root.
@@ -468,74 +458,6 @@ impl FromStr for RecursiveFamily {
     }
 }
 
-/// One stock recursion program invoked while constructing the final receipt.
-#[derive(
-    BorshDeserialize, BorshSerialize, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize,
-)]
-#[serde(rename_all = "kebab-case")]
-pub enum RecursiveOperation {
-    /// Lift one RV32IM segment receipt.
-    Lift,
-    /// Join two adjacent continuation receipts.
-    Join,
-    /// Resolve the one recorded receipt assumption.
-    Resolve,
-}
-
-/// Exact upstream inputs consumed by one recorded recursion operation.
-#[derive(BorshDeserialize, BorshSerialize, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase", tag = "kind", deny_unknown_fields)]
-pub enum RecursiveInputs {
-    /// Lift the source composite's segment at `segment_index`.
-    Lift {
-        /// Zero-based source composite segment index.
-        segment_index: u32,
-    },
-    /// Join two earlier ancestry steps.
-    Join {
-        /// Earlier step proving the left continuation span.
-        left_step: u32,
-        /// Earlier step proving the adjacent right continuation span.
-        right_step: u32,
-    },
-    /// Resolve the exported assumption receipt from one conditional step.
-    Resolve {
-        /// Earlier step whose claim contains the required assumption.
-        conditional_step: u32,
-    },
-}
-
-/// One replayable intermediate succinct receipt.
-#[derive(BorshDeserialize, BorshSerialize, Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct RecursiveStep {
-    /// Zero-based ordinal in the deterministic ancestry graph.
-    pub ordinal: u32,
-    /// Stock recursion operation which produced this receipt.
-    pub operation: RecursiveOperation,
-    /// Exact graph inputs for this operation.
-    pub inputs: RecursiveInputs,
-    /// Full upstream succinct receipt produced at this step.
-    pub receipt: SuccinctReceipt<ReceiptClaim>,
-}
-
-/// Complete replayable source and ancestry archive for one candidate.
-#[derive(BorshDeserialize, BorshSerialize, Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct RecursiveOracle {
-    /// Candidate schema version. This is not a consensus version.
-    pub format_version: u8,
-    /// Requested recursive family.
-    pub family: RecursiveFamily,
-    /// Full composite receipt whose segments and assumption receipts are consumed.
-    pub source_receipt: Receipt,
-    /// Independent same-program receipt used to resolve the conditional execution.
-    pub assumption_receipt: Option<Receipt>,
-    /// Every upstream-produced intermediate succinct receipt in execution order.
-    pub steps: Vec<RecursiveStep>,
-    /// Ordinal of the final receipt in `steps`.
-    pub final_step: u32,
-}
 
 /// Deterministic graph node used before any proving is attempted.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -624,35 +546,6 @@ pub fn planned_steps(family: RecursiveFamily, segment_count: usize) -> Result<Ve
     Ok(plan)
 }
 
-/// Encode one candidate ancestry oracle with upstream-supported Borsh.
-///
-/// # Errors
-///
-/// Returns an error if serialization fails or the result exceeds the fixed
-/// candidate-only byte limit.
-pub fn encode_recursive_oracle(oracle: &RecursiveOracle) -> Result<Vec<u8>> {
-    let bytes =
-        borsh::to_vec(oracle).context("cannot encode recursive ancestry oracle as Borsh")?;
-    ensure!(
-        bytes.len() <= RECURSIVE_ORACLE_MAX_BYTES,
-        "recursive ancestry oracle exceeds its byte limit"
-    );
-    Ok(bytes)
-}
-
-/// Decode one exact, bounded candidate ancestry oracle encoded with Borsh.
-///
-/// # Errors
-///
-/// Returns an error if the input exceeds the byte limit, is malformed, or has
-/// trailing bytes. `borsh::from_slice` requires exact end of input.
-pub fn decode_recursive_oracle(bytes: &[u8]) -> Result<RecursiveOracle> {
-    ensure!(
-        bytes.len() <= RECURSIVE_ORACLE_MAX_BYTES,
-        "recursive ancestry oracle exceeds its byte limit"
-    );
-    borsh::from_slice(bytes).context("cannot decode recursive ancestry oracle as exact Borsh")
-}
 
 fn authenticate_case9_recursive_oracle_parts(
     recursive_oracle_borsh: &[u8],

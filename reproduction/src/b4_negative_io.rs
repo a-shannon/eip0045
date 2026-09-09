@@ -799,21 +799,19 @@ mod tests {
     }
 
     #[test]
-    fn negative_input_campaign_gate_fails_closed_until_handler_cardinalities_are_frozen() {
+    fn frozen_handlers_preserve_exact_campaign_input_cardinality() {
         input().validate().unwrap();
-        assert!(
-            require_b4_negative_handler_contract_frozen()
-                .unwrap_err()
-                .to_string()
-                .contains("campaign precommit is forbidden")
-        );
+        require_b4_negative_handler_contract_frozen().unwrap();
         assert!(
             input()
                 .validate_for_campaign_precommit()
                 .unwrap_err()
                 .to_string()
-                .contains("campaign precommit is forbidden")
+                .contains("B4 negative context cardinality differs from the reviewed handler contract")
         );
+        let mut exact = input();
+        exact.context.pop();
+        exact.validate_for_campaign_precommit().unwrap();
     }
 
     #[test]

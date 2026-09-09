@@ -27,7 +27,7 @@ use crate::{
         DIGEST_BYTES, PROOF_BYTES, RISC0_INNER_CONTROL_ROOT_HEX, RISC0_JOIN_CONTROL_ID_HEX,
         RISC0_NORMAL_LIFT_CONTROL_IDS_HEX, RISC0_RESOLVE_CONTROL_ID_HEX, SUPPORTED_SEGMENT_PO2,
     },
-    ergo_statement::parse_ergo_statement_v1,
+    ergo_statement::{ErgoStatementV1, parse_ergo_statement_v1},
 };
 
 /// Exact format discriminator of the provisional inventory-aware wire.
@@ -585,6 +585,9 @@ pub fn classify_recursive_ancestry_semantics(
                 // source-output/inventory coordination remains private.
                 return Ok(RecursiveAncestrySemanticOutcome::ClaimEdge);
             }
+            if matches_exact_alternate_program_step_zero(projection, statement)? {
+                return Ok(RecursiveAncestrySemanticOutcome::ResolveExplicit);
+            }
             classify_stock_inventory(
                 family,
                 projection,
@@ -716,6 +719,52 @@ pub fn classify_recursive_ancestry_semantics(
         }
     }
     Ok(RecursiveAncestrySemanticOutcome::Canonical)
+}
+
+/// Recognize only the alternate-program OK replacement of the explicit family's
+/// conditional Lift. Its independently authenticated output belongs to the
+/// alternate journal with no assumptions, so the original conditional inventory
+/// cannot reconstruct it. Other inventory/output coordination stays private.
+fn matches_exact_alternate_program_step_zero(
+    projection: &RecursiveAncestryProjection,
+    statement: &[u8],
+) -> Result<bool> {
+    if projection.family != RecursiveAncestryFamily::TerminalResolve {
+        return Ok(false);
+    }
+    let [source, final_step] = projection.steps.as_slice() else { return Ok(false) };
+    let Some(assumption) = projection.assumption_receipt.as_ref() else { return Ok(false) };
+    let parsed = parse_ergo_statement_v1(statement)?;
+    let expected = derive_empty_assumption_ok_recursive_ancestry_claim(&parsed.program_id(), statement)?;
+    let expected_head = RecursiveAncestryInventoryEntry::Revealed {
+        claim_digest: hex::encode(recursive_ancestry_claim_digest(&expected)?),
+        control_root: RISC0_INNER_CONTROL_ROOT_HEX.to_owned(),
+    };
+    let expected_lift = RecursiveAncestryTerminal::Lift {
+        segment_po2: 15, control_id: RISC0_NORMAL_LIFT_CONTROL_IDS_HEX[0].to_owned(),
+    };
+    if assumption.claim != expected
+        || assumption.requested_control_root != RISC0_INNER_CONTROL_ROOT_HEX
+        || assumption.source_inventory.entries.as_slice() != [expected_head]
+        || assumption.terminal != expected_lift
+        || final_step.claim != expected
+        || source.ordinal != 0 || final_step.ordinal != 1
+        || source.operation != (RecursiveAncestryOperation::Lift { segment_index: 0 })
+        || final_step.operation != (RecursiveAncestryOperation::Resolve { conditional_step: 0 })
+        || source.terminal != expected_lift
+        || final_step.terminal != (RecursiveAncestryTerminal::Resolve {
+            control_id: RISC0_RESOLVE_CONTROL_ID_HEX.to_owned(),
+        })
+    {
+        return Ok(false);
+    }
+    let alternate_program = parse_digest(&source.claim.pre_state_digest, "alternate source program")?;
+    if alternate_program == parsed.program_id() { return Ok(false); }
+    let alternate_statement = ErgoStatementV1::new(parsed.chain_domain_id(), parsed.profile_id(),
+        alternate_program, parsed.contract_id(), parsed.application_payload())?.encode()?;
+    let alternate_claim = derive_empty_assumption_ok_recursive_ancestry_claim(
+        &alternate_program, &alternate_statement)?;
+    Ok(source.claim == alternate_claim)
 }
 
 /// Require exact canonical semantics with no negative classification.
@@ -2086,6 +2135,148 @@ pub(crate) mod tests {
                 .unwrap(),
             RecursiveAncestrySemanticOutcome::ClaimEdge
         );
+    }
+
+    fn alternate_program_step_zero_fixture(statement: &[u8]) -> RecursiveAncestryProjection {
+        let mut projection = synthetic_terminal_resolve(statement);
+        let parsed = parse_ergo_statement_v1(statement).unwrap();
+        let alternate = ErgoStatementV1::new(parsed.chain_domain_id(), parsed.profile_id(),
+            [0x99; DIGEST_BYTES], parsed.contract_id(), parsed.application_payload()).unwrap().encode().unwrap();
+        projection.steps[0].claim = derive_empty_assumption_ok_recursive_ancestry_claim(
+            &[0x99; DIGEST_BYTES], &alternate).unwrap();
+        projection
+    }
+
+    #[test]
+    fn exact_alternate_program_step_zero_reaches_shared_resolve_explicit() {
+        let statement = fixture_statement();
+        let positive = synthetic_terminal_resolve(&statement);
+        assert_eq!(classify_recursive_ancestry_semantics(&positive, &statement, [0x22; DIGEST_BYTES]).unwrap(),
+            RecursiveAncestrySemanticOutcome::Canonical);
+        let alternate = alternate_program_step_zero_fixture(&statement);
+        assert_eq!(alternate.assumption_receipt, positive.assumption_receipt);
+        assert_eq!(alternate.steps[1], positive.steps[1]);
+        assert_eq!(classify_recursive_ancestry_semantics(&alternate, &statement, [0x22; DIGEST_BYTES]).unwrap(),
+            RecursiveAncestrySemanticOutcome::ResolveExplicit);
+    }
+
+    fn mutate_one_claim_field(claim: &mut RecursiveAncestryClaim, field: usize) {
+        match field {
+            0 => claim.input_digest = "88".repeat(DIGEST_BYTES),
+            1 => claim.pre_state_digest = "88".repeat(DIGEST_BYTES),
+            2 => claim.post_state_digest = "88".repeat(DIGEST_BYTES),
+            3 => claim.system_exit = 1,
+            4 => claim.user_exit = 1,
+            5 => claim.output_digest = "88".repeat(DIGEST_BYTES),
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn alternate_program_route_requires_every_source_and_final_claim_field() {
+        let statement = fixture_statement();
+        let exact = alternate_program_step_zero_fixture(&statement);
+        assert!(matches_exact_alternate_program_step_zero(&exact, &statement).unwrap());
+        for selected in 0..2 {
+            for field in 0..6 {
+                let mut changed = exact.clone();
+                mutate_one_claim_field(&mut changed.steps[selected].claim, field);
+                validate_recursive_ancestry_structure(&changed, &statement, [0x22; DIGEST_BYTES]).unwrap();
+                assert!(!matches_exact_alternate_program_step_zero(&changed, &statement).unwrap(),
+                    "step {selected} field {field}");
+                assert!(classify_recursive_ancestry_semantics(&changed, &statement, [0x22; DIGEST_BYTES]).is_err(),
+                    "step {selected} field {field} became a typed observation");
+            }
+        }
+        // The older conditional-output/program mismatch path is not this new route.
+        let mut old_case = synthetic_terminal_resolve(&statement);
+        old_case.steps[0].claim.pre_state_digest = "88".repeat(DIGEST_BYTES);
+        assert!(!matches_exact_alternate_program_step_zero(&old_case, &statement).unwrap());
+        assert_eq!(classify_recursive_ancestry_semantics(&old_case, &statement, [0x22; DIGEST_BYTES]).unwrap(),
+            RecursiveAncestrySemanticOutcome::ResolveExplicit);
+    }
+
+    #[test]
+    fn alternate_program_route_requires_original_assumption_root_and_inventory() {
+        let statement = fixture_statement();
+        let exact = alternate_program_step_zero_fixture(&statement);
+        assert!(matches_exact_alternate_program_step_zero(&exact, &statement).unwrap());
+        for field in 0..6 {
+            let mut changed = exact.clone();
+            mutate_one_claim_field(&mut changed.assumption_receipt.as_mut().unwrap().claim, field);
+            assert!(!matches_exact_alternate_program_step_zero(&changed, &statement).unwrap());
+            // Existing assumption-claim precedence remains a distinct semantic route.
+            assert_eq!(classify_recursive_ancestry_semantics(&changed, &statement, [0x22; DIGEST_BYTES]).unwrap(),
+                RecursiveAncestrySemanticOutcome::ResolveExplicit);
+        }
+        let mut changed = exact.clone();
+        changed.assumption_receipt.as_mut().unwrap().requested_control_root = "00".repeat(DIGEST_BYTES);
+        assert!(!matches_exact_alternate_program_step_zero(&changed, &statement).unwrap());
+        let original = exact.assumption_receipt.as_ref().unwrap().source_inventory.entries[0].clone();
+        let head = recursive_ancestry_revealed_head_witness(&exact).unwrap();
+        for entries in [vec![], vec![original.clone(), original],
+            vec![RecursiveAncestryInventoryEntry::Pruned { digest: hex::encode(head.exact_digest) }],
+            vec![RecursiveAncestryInventoryEntry::Revealed {
+                claim_digest: "88".repeat(DIGEST_BYTES), control_root: RISC0_INNER_CONTROL_ROOT_HEX.to_owned() }],
+            vec![RecursiveAncestryInventoryEntry::Revealed {
+                claim_digest: hex::encode(head.claim_digest), control_root: "88".repeat(DIGEST_BYTES) }],
+        ] {
+            let mut changed = exact.clone();
+            changed.assumption_receipt.as_mut().unwrap().source_inventory.entries = entries;
+            validate_recursive_ancestry_structure(&changed, &statement, [0x22; DIGEST_BYTES]).unwrap();
+            assert!(!matches_exact_alternate_program_step_zero(&changed, &statement).unwrap());
+            assert!(classify_recursive_ancestry_semantics(&changed, &statement, [0x22; DIGEST_BYTES]).is_err());
+        }
+    }
+
+    #[test]
+    fn alternate_program_route_derives_only_the_program_field_journal_change() {
+        let statement = fixture_statement();
+        let parsed = parse_ergo_statement_v1(&statement).unwrap();
+        let exact = alternate_program_step_zero_fixture(&statement);
+        assert!(matches_exact_alternate_program_step_zero(&exact, &statement).unwrap());
+        for field in 0..4 {
+            let mut chain = parsed.chain_domain_id();
+            let mut profile = parsed.profile_id();
+            let mut contract = parsed.contract_id();
+            let mut payload = parsed.application_payload().to_vec();
+            match field { 0 => chain[0] ^= 1, 1 => profile[0] ^= 1,
+                2 => contract[0] ^= 1, 3 => payload.push(1), _ => unreachable!() }
+            let journal = ErgoStatementV1::new(chain, profile, [0x99; DIGEST_BYTES], contract, &payload)
+                .unwrap().encode().unwrap();
+            let mut changed = exact.clone();
+            changed.steps[0].claim = derive_empty_assumption_ok_recursive_ancestry_claim(
+                &[0x99; DIGEST_BYTES], &journal).unwrap();
+            validate_recursive_ancestry_structure(&changed, &statement, [0x22; DIGEST_BYTES]).unwrap();
+            assert!(!matches_exact_alternate_program_step_zero(&changed, &statement).unwrap());
+            assert!(classify_recursive_ancestry_semantics(&changed, &statement, [0x22; DIGEST_BYTES]).is_err());
+        }
+    }
+
+    #[test]
+    fn alternate_program_route_is_explicit_family_graph_and_lift15_only() {
+        let statement = fixture_statement();
+        let exact = alternate_program_step_zero_fixture(&statement);
+        assert!(matches_exact_alternate_program_step_zero(&exact, &statement).unwrap());
+        assert!(!matches_exact_alternate_program_step_zero(&synthetic_resolve_then_join(&statement), &statement).unwrap());
+        for target in 0..2 {
+            let mut changed = exact.clone();
+            let terminal = if target == 0 { &mut changed.steps[0].terminal }
+                else { &mut changed.assumption_receipt.as_mut().unwrap().terminal };
+            *terminal = RecursiveAncestryTerminal::Lift { segment_po2: 16,
+                control_id: RISC0_NORMAL_LIFT_CONTROL_IDS_HEX[1].to_owned() };
+            validate_recursive_ancestry_structure(&changed, &statement, [0x22; DIGEST_BYTES]).unwrap();
+            assert!(!matches_exact_alternate_program_step_zero(&changed, &statement).unwrap());
+            assert!(classify_recursive_ancestry_semantics(&changed, &statement, [0x22; DIGEST_BYTES]).is_err());
+        }
+        for step in 0..2 {
+            let mut changed = exact.clone(); changed.steps[step].ordinal += 1;
+            assert!(!matches_exact_alternate_program_step_zero(&changed, &statement).unwrap());
+            assert!(validate_recursive_ancestry_structure(&changed, &statement, [0x22; DIGEST_BYTES]).is_err());
+        }
+        let mut changed = exact.clone(); changed.steps[1].operation = RecursiveAncestryOperation::Resolve { conditional_step: 1 };
+        assert!(!matches_exact_alternate_program_step_zero(&changed, &statement).unwrap());
+        assert!(validate_recursive_ancestry_structure(&changed, &statement, [0x22; DIGEST_BYTES]).is_err());
     }
 
     pub(crate) fn synthetic_terminal_resolve(statement: &[u8]) -> RecursiveAncestryProjection {

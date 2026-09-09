@@ -79,6 +79,10 @@ name = "eip-0045-profile"
 path = "src/bin/eip-0045-profile.rs"
 
 [[bin]]
+name = "eip-0045-ancestry-pair"
+path = "src/bin/eip-0045-ancestry-pair.rs"
+
+[[bin]]
 name = "eip-0045-root-gate"
 path = "src/bin/eip-0045-root-gate.rs"
 required-features = ["proof-generation"]

@@ -13,15 +13,25 @@ Resolve/Join finals. Each workflow has a separate verification command.
 The two alternate-statement finals reuse the same retained assumption receipt;
 a newly generated receipt for an equivalent claim is not interchangeable.
 
-These workflows are building blocks for the negative-ancestry test corpus.
-They keep candidate generation separate from campaign qualification.
-The source also includes the pinned profile package, receipt and ancestry
-validators, fixture schemas, and their direct tests.
+The follow-up adds a non-proving ancestry codec, extraction of the retained
+Case-9 receipt encodings, and the `eip-0045-ancestry-pair` command. The command
+compares complete retained assumption bytes from Resolve/Join oracles against
+supplied length and SHA-256 pins; it does not verify proofs or authenticate
+provenance. The validator also exercises 15 retained-receipt negative-ancestry
+cases through its local Linux test path.
 
-The accepted embedded-generator build passed 52 focused tests; nine
-environment-gated tests remained ignored. That result covers the reviewed
-local-checkpoint build, not every feature combination or the complete B4
-campaign. Proof generation and subsequent replay are separate validation steps.
+Focused validation passed those 15 cases, 56 consumer tests and 21 targeted
+minimal-generator, CLI and integration tests. The default embedded-generator
+build produced the library and five binaries, and its 37 selected ordinary
+recursive tests passed. These are scoped checks, not the full default test
+harness or every feature combination. Source changes and execution evidence
+received independent review.
+
+These workflows are building blocks for the negative-ancestry test corpus.
+Candidate generation, retained-byte comparison, cryptographic replay and
+campaign qualification remain separate steps. The source also includes the
+pinned profile package, receipt and ancestry validators, fixture schemas and
+their direct tests.
 
 ## Source layout
 
@@ -34,7 +44,7 @@ campaign. Proof generation and subsequent replay are separate validation steps.
 | `appliance/h0-tmpfs-provider/crates/` | Dependencies of the optional campaign tooling |
 | `docs/specs/` | Verifier and execution-boundary specifications |
 
-Rust 1.89.0 and dependency lockfiles are pinned. The generator is a separate
+Host Rust 1.89.0 and dependency lockfiles are pinned. The generator is a separate
 Cargo workspace. Its default `embedded-method` feature builds the guest and
 requires the exact environment checked by `methods/build.rs` and
 `methods/build_contract.rs`; it is not a portable, unrestricted

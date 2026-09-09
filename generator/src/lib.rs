@@ -30,6 +30,10 @@ mod receipt_oracle_wire;
 /// Candidate-only construction and replay of join/resolve receipt ancestries.
 #[cfg(feature = "proof-generation")]
 pub mod recursive;
+/// Bounded ancestry wire codec and retained-byte comparison, without proving.
+pub mod recursive_oracle;
+/// Pure extraction of retained Case-9 direct receipt encodings, without proving.
+pub mod local_case9_oracle_extraction;
 /// Minimal canonical claim-algebra projection for recursive B4 ancestry.
 #[cfg(feature = "proof-generation")]
 pub mod recursive_ancestry;

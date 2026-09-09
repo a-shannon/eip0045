@@ -10,6 +10,555 @@
 //! referenced producer seal before any typed rejection can be observed.
 
 #[cfg(all(test, feature = "negative-materialization-set"))]
+mod genuine_local_fifteen {
+    use super::*;
+    use crate::{
+        b4_alternate_root_authority::genuine_alternate_root as alternate,
+        b4_c2_alternate_root::reconstruct_genuine_alternate_root,
+        b4_c2_ancestry::reconstruct_genuine_reusable_ancestry,
+        b4_c2_negative_ancestry_witness::{LocalWitnessAncestryInput, reconstruct_genuine_witness_ancestry},
+        b4_negative_ancestry_witness::compiled_negative_ancestry_witness_layout,
+        b4_plan::{B4NegativeExecutionSurface, Eip0045B4NegativePlanV1},
+        b4_subject_envelope::encode_subject_envelope,
+        constants::MAX_STATEMENT_BYTES,
+        receipt_oracle_codec::RECEIPT_ORACLE_MAX_BYTES,
+        recursive_ancestry::RECURSIVE_ANCESTRY_MAX_BYTES,
+    };
+    use serde::Deserialize;
+    use sha2::{Digest as _, Sha256};
+    use std::{fs, io::Read, path::{Component, Path, PathBuf}};
+
+    const MANIFEST: &[u8] = include_bytes!("../../../profiles/risc0-v3-succinct/manifest.bin");
+    const DESCRIPTOR_MAX: usize = 64 * 1024;
+    const TOTAL_MAX: u64 = 32 * 1024 * 1024;
+    const GUEST_MAX: usize = 16 * 1024 * 1024;
+    const REPRESENTATIVES: [usize; 7] = [141, 143, 145, 147, 148, 152, 154];
+    const FAMILIES: [(&str, RecursiveAncestryFamily); 3] = [
+        ("join", RecursiveAncestryFamily::TerminalJoin),
+        ("resolve", RecursiveAncestryFamily::TerminalResolve),
+        ("resolve-join", RecursiveAncestryFamily::ResolveThenJoin),
+    ];
+
+    #[derive(Clone, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct FilePin { role: String, path: PathBuf, bytes: u64, sha256: String }
+    #[derive(Clone, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Descriptor { files: Vec<FilePin> }
+
+    fn roles() -> Vec<(String, usize, usize)> {
+        let mut result = Vec::new();
+        for (prefix, family) in FAMILIES {
+            result.extend([
+                (format!("{prefix}.ancestry"), 1, RECURSIVE_ANCESTRY_MAX_BYTES),
+                (format!("{prefix}.statement"), 159, MAX_STATEMENT_BYTES),
+                (format!("{prefix}.final"), PROOF_BYTES, PROOF_BYTES),
+            ]);
+            for path in recursive_ancestry_expected_auxiliary_paths(family) {
+                result.push((format!("{prefix}.aux.{path}"), PROOF_BYTES, PROOF_BYTES));
+            }
+        }
+        for row in REPRESENTATIVES {
+            result.push((format!("witness.{row}.raw"), PROOF_BYTES, PROOF_BYTES));
+            result.push((format!("witness.{row}.oracle"), 1, RECEIPT_ORACLE_MAX_BYTES));
+        }
+        result.push(("alternate-guest".to_owned(), 1, GUEST_MAX));
+        result
+    }
+
+    fn digest_shape(value: &str) -> bool {
+        value.len() == 64 && value.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    }
+
+    fn validate_descriptor(value: &Descriptor) -> Result<()> {
+        let expected = roles();
+        ensure!(value.files.len() == expected.len(), "local ancestry input count differs");
+        let mut total = 0u64;
+        for (pin, (role, minimum, maximum)) in value.files.iter().zip(expected) {
+            ensure!(pin.role == role, "local ancestry input role or order differs");
+            ensure!(pin.bytes >= minimum as u64 && pin.bytes <= maximum as u64,
+                "local ancestry input role bounds differ");
+            ensure!(pin.path.is_absolute() && !pin.path.components().any(|p| p == Component::ParentDir),
+                "local ancestry input path is not absolute and normalized");
+            ensure!(digest_shape(&pin.sha256), "local ancestry input digest shape differs");
+            total = total.checked_add(pin.bytes).context("local ancestry input total overflow")?;
+            ensure!(total <= TOTAL_MAX, "local ancestry input total exceeds bound");
+        }
+        Ok(())
+    }
+
+    fn redirected(metadata: &fs::Metadata) -> bool {
+        #[cfg(windows)]
+        { use std::os::windows::fs::MetadataExt; metadata.file_attributes() & 0x400 != 0 }
+        #[cfg(not(windows))]
+        { let _ = metadata; false }
+    }
+
+    fn same_file(left: &fs::Metadata, right: &fs::Metadata) -> Result<bool> {
+        let common = left.is_file() && right.is_file() && left.len() == right.len()
+            && left.modified()? == right.modified()? && !redirected(left) && !redirected(right);
+        #[cfg(unix)]
+        { use std::os::unix::fs::MetadataExt;
+          Ok(common && left.dev() == right.dev() && left.ino() == right.ino()
+            && left.nlink() == right.nlink() && left.ctime() == right.ctime()
+            && left.ctime_nsec() == right.ctime_nsec()) }
+        #[cfg(not(unix))]
+        { Ok(common) }
+    }
+
+    fn read_bounded(path: &Path, maximum: usize) -> Result<Vec<u8>> {
+        ensure!(path.is_absolute() && !path.components().any(|p| p == Component::ParentDir),
+            "local ancestry reader requires absolute normalized path");
+        for parent in path.ancestors().skip(1) {
+            let metadata = fs::symlink_metadata(parent)?;
+            ensure!(metadata.is_dir() && !metadata.file_type().is_symlink() && !redirected(&metadata),
+                "local ancestry reader rejects parent redirect");
+        }
+        let before = fs::symlink_metadata(path)?;
+        ensure!(before.is_file() && !before.file_type().is_symlink() && !redirected(&before)
+            && before.len() <= maximum as u64, "local ancestry reader rejects file or bound");
+        let mut file = fs::File::open(path)?;
+        ensure!(same_file(&before, &file.metadata()?)?, "local ancestry opened file changed");
+        let mut bytes = Vec::new();
+        (&mut file).take(maximum as u64 + 1).read_to_end(&mut bytes)?;
+        ensure!(bytes.len() <= maximum && bytes.len() as u64 == before.len()
+            && same_file(&before, &file.metadata()?)?
+            && same_file(&before, &fs::symlink_metadata(path)?)?, "local ancestry read changed");
+        Ok(bytes)
+    }
+
+    fn parse_descriptor(bytes: &[u8], digest: &str) -> Result<Descriptor> {
+        ensure!(bytes.len() <= DESCRIPTOR_MAX && digest_shape(digest)
+            && hex::encode(Sha256::digest(bytes)) == digest, "local ancestry descriptor pin differs");
+        let descriptor: Descriptor = serde_json::from_slice(bytes)?;
+        validate_descriptor(&descriptor)?;
+        Ok(descriptor)
+    }
+
+    fn require_file_pin(pin: &FilePin, bytes: &[u8]) -> Result<()> {
+        ensure!(bytes.len() as u64 == pin.bytes && hex::encode(Sha256::digest(bytes)) == pin.sha256,
+            "local ancestry file pin differs");
+        Ok(())
+    }
+
+    fn load() -> Result<BTreeMap<String, Vec<u8>>> {
+        let path = std::env::var_os("EIP0045_B4_LOCAL_ANCESTRY_INPUTS").context("local ancestry descriptor required")?;
+        let digest = std::env::var("EIP0045_B4_LOCAL_ANCESTRY_INPUTS_SHA256")
+            .context("local ancestry descriptor SHA-256 required")?;
+        let bytes = read_bounded(Path::new(&path), DESCRIPTOR_MAX)?;
+        let descriptor = parse_descriptor(&bytes, &digest)?;
+        // All roles and aggregate bounds have been checked before opening any payload.
+        let mut result = BTreeMap::new();
+        for (pin, (_, _, maximum)) in descriptor.files.iter().zip(roles()) {
+            let bytes = read_bounded(&pin.path, maximum)?;
+            require_file_pin(pin, &bytes)?;
+            ensure!(result.insert(pin.role.clone(), bytes).is_none(), "local ancestry role duplicated");
+        }
+        Ok(result)
+    }
+
+    struct Positive<'a> {
+        ancestry: &'a [u8], statement: &'a [u8], final_seal: &'a [u8], map: Vec<u8>,
+    }
+
+    impl Positive<'_> {
+        fn subject(&self) -> Result<Vec<u8>> {
+            Ok(encode_subject_envelope(&[self.ancestry, self.statement, self.final_seal, &self.map],
+                ancestry_subject_envelope_contract())?)
+        }
+        fn witness_input<'a>(&'a self, guest: &'a [u8]) -> LocalWitnessAncestryInput<'a> {
+            LocalWitnessAncestryInput { ancestry: self.ancestry, statement: self.statement,
+                final_raw_seal: self.final_seal, auxiliary_map: &self.map, manifest: MANIFEST,
+                alternate_guest: guest }
+        }
+    }
+
+    fn positive<'a>(files: &'a BTreeMap<String, Vec<u8>>, prefix: &str,
+        family: RecursiveAncestryFamily) -> Result<Positive<'a>> {
+        let paths = recursive_ancestry_expected_auxiliary_paths(family);
+        let entries = paths.iter().map(|path| (path.as_str(), files[&format!("{prefix}.aux.{path}")].as_slice()))
+            .collect::<Vec<_>>();
+        let map = encode_recursive_auxiliary_map(&B4RecursiveAuxiliaryMapV1::from_exact_entries(family, &entries)?)?;
+        let input = Positive { ancestry: &files[&format!("{prefix}.ancestry")],
+            statement: &files[&format!("{prefix}.statement")], final_seal: &files[&format!("{prefix}.final")], map };
+        ensure!(parse_recursive_ancestry_jcs(input.ancestry)?.family == family,
+            "local positive family differs from acquisition role");
+        let prepared = prepare_ancestry(input.ancestry, input.statement, input.final_seal, &input.map, MANIFEST)?;
+        ensure!(classify_semantics(&prepared)?.is_none(), "local positive ancestry did not accept");
+        Ok(input)
+    }
+
+    fn expected(index: usize) -> Result<B4AncestryRejection> {
+        match index {
+            141..=143 => Ok(B4AncestryRejection::ClaimEdge),
+            144..=148 => Ok(B4AncestryRejection::ResolveExplicit),
+            149..=152 => Ok(B4AncestryRejection::ResolveZeroRoot),
+            153..=155 => Ok(B4AncestryRejection::AssumptionInventory),
+            _ => anyhow::bail!("local ancestry outcome row outside fixed fifteen"),
+        }
+    }
+
+    fn require_outcome(index: usize, result: Result<B4AncestryRejection>) -> Result<()> {
+        ensure!(result? == expected(index)?, "local ancestry consumer returned another typed boundary");
+        Ok(())
+    }
+
+    #[test]
+    fn local_input_contract_is_closed_before_payload_reads() {
+        let value = Descriptor { files: roles().iter().map(|(role, minimum, _)| FilePin {
+            role: role.clone(), path: std::env::current_dir().unwrap().join("not-opened"),
+            bytes: *minimum as u64, sha256: "00".repeat(32),
+        }).collect() };
+        validate_descriptor(&value).unwrap();
+        assert_eq!(value.files.len(), 32);
+        let mut changed = value.clone(); changed.files.pop(); assert!(validate_descriptor(&changed).is_err());
+        let mut changed = value.clone(); changed.files.push(value.files[0].clone()); assert!(validate_descriptor(&changed).is_err());
+        let mut changed = value.clone(); changed.files.swap(0, 1); assert!(validate_descriptor(&changed).is_err());
+        for index in 0..value.files.len() {
+            let mut changed = value.clone(); changed.files[index].bytes = roles()[index].2 as u64 + 1;
+            assert!(validate_descriptor(&changed).is_err());
+            let mut changed = value.clone(); changed.files[index].sha256 = "00".repeat(31);
+            assert!(validate_descriptor(&changed).is_err());
+            let mut changed = value.clone(); changed.files[index].path = PathBuf::from("relative");
+            assert!(validate_descriptor(&changed).is_err());
+        }
+        assert!(parse_descriptor(b"{}", &"00".repeat(32)).is_err());
+        let pin = FilePin { role: "test".into(), path: PathBuf::new(), bytes: 3,
+            sha256: hex::encode(Sha256::digest(b"abc")) };
+        require_file_pin(&pin, b"abc").unwrap();
+        assert!(require_file_pin(&pin, b"abd").is_err());
+        assert!(require_file_pin(&pin, b"ab").is_err());
+    }
+
+    #[test]
+    fn local_typed_outcomes_do_not_swallow_private_failures_or_wrong_boundaries() {
+        for index in 141..=155 {
+            require_outcome(index, Ok(expected(index).unwrap())).unwrap();
+            assert!(require_outcome(index, Err(anyhow::anyhow!("private failure"))).is_err());
+            for other in [B4AncestryRejection::ClaimEdge, B4AncestryRejection::ResolveExplicit,
+                B4AncestryRejection::ResolveZeroRoot, B4AncestryRejection::AssumptionInventory] {
+                if other != expected(index).unwrap() { assert!(require_outcome(index, Ok(other)).is_err()); }
+            }
+        }
+        assert!(expected(140).is_err()); assert!(expected(156).is_err());
+    }
+
+    #[test]
+    fn local_reader_accepts_exact_bytes_and_rejects_bounds_and_relative_paths() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("payload");
+        fs::write(&path, b"abc").unwrap();
+        assert_eq!(read_bounded(&path, 3).unwrap(), b"abc");
+        assert!(read_bounded(&path, 2).is_err());
+        assert!(read_bounded(root.path(), 3).is_err());
+        assert!(read_bounded(Path::new("relative"), 3).is_err());
+        assert!(read_bounded(&root.path().join("../payload"), 3).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn local_reader_rejects_leaf_and_parent_symlinks() {
+        use std::os::unix::fs::symlink;
+        let root = tempfile::tempdir().unwrap();
+        let physical = root.path().join("physical");
+        fs::create_dir(&physical).unwrap();
+        fs::write(physical.join("payload"), b"abc").unwrap();
+        symlink(physical.join("payload"), root.path().join("leaf")).unwrap();
+        symlink(&physical, root.path().join("parent")).unwrap();
+        assert!(read_bounded(&root.path().join("leaf"), 3).is_err());
+        assert!(read_bounded(&root.path().join("parent/payload"), 3).is_err());
+        assert_eq!(read_bounded(&physical.join("payload"), 3).unwrap(), b"abc");
+    }
+
+    #[test]
+    #[ignore = "requires externally pinned retained ancestry inputs and genuine alternate-root export; local diagnostics only"]
+    fn retained_local_fifteen_producer_consumer_matrix() {
+        retained_fifteen_matrix(|index, subject| {
+            if let Some(index) = index {
+                require_outcome(index, reject_ancestry_replay(subject, &[MANIFEST])).unwrap();
+            } else {
+                assert!(reject_ancestry_replay(subject, &[MANIFEST]).is_err());
+            }
+        });
+    }
+
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    #[test]
+    #[ignore = "requires pinned retained inputs, alternate-root export, and Linux/x86_64 openat2 custody"]
+    fn retained_physical_fifteen_dispatch_matrix() {
+        let mut rows = Vec::new();
+        let mut private = 0;
+        retained_fifteen_matrix(|index, subject| {
+            let (root, input, source) = physical::fixture(subject, MANIFEST);
+            let result = super::super::negative::verify_negative_root(root.path());
+            if let Some(index) = index {
+                physical::require_observation(index, &input, &source, result.unwrap()).unwrap();
+                if index == 141 { physical::isolated_custody_faults(subject); }
+                rows.push(index);
+                println!("physicalAncestryRow={index} exactObservation=PASS");
+            } else {
+                assert_eq!(result.unwrap_err().to_string(), physical::PRIVATE);
+                private += 1;
+            }
+        });
+        assert_eq!(rows, (141..=155).collect::<Vec<_>>());
+        assert_eq!(private, 33); // Three valid positives, fifteen corrupt seals, fifteen malformed maps.
+    }
+
+    // Compiled on native hosts as well; execution is Linux-only and never skip-passes.
+    #[allow(dead_code, reason = "physical fixture execution requires Linux/x86_64")]
+    mod physical {
+        use super::*;
+        use crate::b4_negative_io::*;
+        use crate::b4_plan::B4MaterializationDomain;
+
+        pub(super) const PRIVATE: &str = "selected negative adapter VerifierAncestryReplay failed privately; no observation was produced";
+
+        fn identity(role: &str, path: &str, bytes: &[u8]) -> B4NegativeNamedIdentityV1 {
+            B4NegativeNamedIdentityV1 { role: role.into(), path: path.into(),
+                byte_length: bytes.len() as u64, sha256: hex::encode(Sha256::digest(bytes)),
+                encoding: B4NegativeFileEncoding::RawBytes }
+        }
+
+        pub(super) fn fixture(subject: &[u8], manifest: &[u8])
+            -> (tempfile::TempDir, Eip0045B4NegativeVerifierInputV1, Vec<u8>) {
+            let input = Eip0045B4NegativeVerifierInputV1 {
+                format: B4_NEGATIVE_VERIFIER_INPUT_FORMAT.into(),
+                format_version: B4_NEGATIVE_VERIFIER_INPUT_FORMAT_VERSION,
+                materialization_domain: B4MaterializationDomain::VerifierInput,
+                validation_surface: B4NegativeExecutionSurface::AncestryReplay,
+                subject: identity("subject", "subject.bin", subject),
+                context: vec![identity("context-00", "context/00.bin", manifest)],
+            };
+            input.validate_for_campaign_precommit().unwrap();
+            let source = input.to_canonical_jcs().unwrap();
+            let root = tempfile::tempdir().unwrap();
+            fs::create_dir(root.path().join("context")).unwrap();
+            fs::write(root.path().join("subject.bin"), subject).unwrap();
+            fs::write(root.path().join("context/00.bin"), manifest).unwrap();
+            fs::write(root.path().join("negative-input.json"), &source).unwrap();
+            (root, input, source)
+        }
+
+        fn expected_observation_bytes(index: usize, input: &Eip0045B4NegativeVerifierInputV1,
+            source: &[u8]) -> Vec<u8> {
+            let stage = match expected(index).unwrap() {
+                B4AncestryRejection::ClaimEdge => "claim-edge",
+                B4AncestryRejection::ResolveExplicit => "resolve-explicit-semantics",
+                B4AncestryRejection::ResolveZeroRoot => "resolve-zero-root-semantics",
+                B4AncestryRejection::AssumptionInventory => "resolve-assumption-inventory",
+            };
+            // Independent literal wire oracle: no production observation serializer.
+            format!(concat!("{{\"format\":\"Eip0045B4NegativeObservationV1\",\"formatVersion\":1,",
+                "\"materializationDomain\":\"verifier-input\",\"negativeInputSha256\":\"{}\",",
+                "\"rejection\":{{\"class\":\"ancestry-replay-mismatch\",\"stage\":\"{}\"}},",
+                "\"subjectByteLength\":{},\"subjectSha256\":\"{}\",",
+                "\"validationSurface\":\"ancestry-replay\",\"verdict\":\"reject\"}}"),
+                hex::encode(Sha256::digest(source)), stage, input.subject.byte_length, input.subject.sha256).into_bytes()
+        }
+
+        pub(super) fn require_observation(index: usize, input: &Eip0045B4NegativeVerifierInputV1,
+            source: &[u8], observation: Eip0045B4NegativeObservationV1) -> Result<()> {
+            ensure!(observation.to_canonical_jcs()? == expected_observation_bytes(index, input, source),
+                "physical ancestry observation differs from independent literal oracle");
+            Ok(())
+        }
+
+        pub(super) fn isolated_custody_faults(subject: &[u8]) {
+            use super::super::super::negative::verify_negative_root;
+            for fault in 0..16 {
+                let (root, mut input, source) = fixture(subject, MANIFEST);
+                let link = tempfile::tempdir().unwrap();
+                match fault {
+                    0 => { let mut bytes = subject.to_vec(); bytes[0] ^= 1;
+                        fs::write(root.path().join("subject.bin"), bytes).unwrap(); }
+                    1 => { let mut bytes = MANIFEST.to_vec(); bytes[0] ^= 1;
+                        fs::write(root.path().join("context/00.bin"), bytes).unwrap(); }
+                    2 => fs::write(root.path().join("subject.bin"), &subject[..subject.len()-1]).unwrap(),
+                    3 => fs::write(root.path().join("extra.bin"), b"extra").unwrap(),
+                    4 => fs::write(root.path().join("context/01.bin"), MANIFEST).unwrap(),
+                    5 => { let mut bytes = source; bytes.push(b'\n');
+                        fs::write(root.path().join("negative-input.json"), bytes).unwrap(); }
+                    6 => { fs::remove_file(root.path().join("subject.bin")).unwrap();
+                        fs::create_dir(root.path().join("subject.bin")).unwrap(); }
+                    7 => fs::remove_file(root.path().join("context/00.bin")).unwrap(),
+                    8 => fs::hard_link(root.path().join("subject.bin"), link.path().join("alias")).unwrap(),
+                    9 => fs::write(root.path().join("context/00.bin"), &MANIFEST[..MANIFEST.len()-1]).unwrap(),
+                    10 => fs::hard_link(root.path().join("context/00.bin"), link.path().join("alias")).unwrap(),
+                    11 => fs::remove_file(root.path().join("negative-input.json")).unwrap(),
+                    12 => fs::remove_file(root.path().join("subject.bin")).unwrap(),
+                    13 | 14 => {
+                        let digest = if fault == 13 { &mut input.subject.sha256 } else { &mut input.context[0].sha256 };
+                        let first = if digest.starts_with('0') { "1" } else { "0" };
+                        digest.replace_range(..1, first);
+                        fs::write(root.path().join("negative-input.json"), input.to_canonical_jcs().unwrap()).unwrap();
+                    }
+                    15 => { fs::remove_file(root.path().join("context/00.bin")).unwrap();
+                        fs::remove_dir(root.path().join("context")).unwrap(); }
+                    _ => unreachable!(),
+                }
+                let error = verify_negative_root(root.path()).unwrap_err().to_string();
+                let expected = match fault {
+                    0 | 13 => "negative verifier file subject.bin SHA-256 differs from its descriptor",
+                    1 | 14 => "negative verifier file context/00.bin SHA-256 differs from its descriptor",
+                    2 => "negative verifier file subject.bin length is outside its bound",
+                    3 => "negative verifier root contains an unexpected or duplicate entry",
+                    4 => "negative context entry lies outside the exact positional prefix",
+                    5 => "B4 negative verifier input is not exact RFC 8785 JCS",
+                    6 => "negative verifier path is not a regular file: subject.bin",
+                    7 => "negative context directory is not the exact NN.bin positional prefix",
+                    8 => "hard-linked negative verifier file is forbidden: subject.bin",
+                    9 => "negative verifier file context/00.bin length is outside its bound",
+                    10 => "hard-linked negative verifier file is forbidden: context/00.bin",
+                    11 => "cannot pin negative verifier file negative-input.json",
+                    12 => "negative verifier root does not contain the exact V1 inventory",
+                    15 => "cannot pin negative context directory with the closed resolver policy",
+                    _ => unreachable!(),
+                };
+                assert_eq!(error, expected, "custody fault {fault}");
+            }
+            #[cfg(unix)]
+            for parent_redirect in [false, true] {
+                let (root, _, _) = fixture(subject, MANIFEST);
+                let external = tempfile::tempdir().unwrap();
+                let path = if parent_redirect { "context" } else { "subject.bin" };
+                fs::rename(root.path().join(path), external.path().join(path)).unwrap();
+                std::os::unix::fs::symlink(external.path().join(path), root.path().join(path)).unwrap();
+                let expected = if parent_redirect {
+                    "cannot pin negative context directory with the closed resolver policy"
+                } else { "negative verifier path is not a regular file: subject.bin" };
+                assert_eq!(verify_negative_root(root.path()).unwrap_err().to_string(), expected);
+            }
+            // Re-pinned wrong manifest reaches the adapter but remains private.
+            let mut manifest = MANIFEST.to_vec(); manifest[0] ^= 1;
+            let (root, _, _) = fixture(subject, &manifest);
+            assert_eq!(verify_negative_root(root.path()).unwrap_err().to_string(), PRIVATE);
+        }
+
+        #[test]
+        fn physical_fixture_uses_exact_neutral_cardinality_and_boundaries() {
+            let (root, input, source) = fixture(b"invalid envelope", MANIFEST);
+            assert_eq!(input.context.len(), 1);
+            assert_eq!(input.context[0].byte_length, 458);
+            assert_eq!(fs::read(root.path().join("negative-input.json")).unwrap(), source);
+            assert_eq!(Eip0045B4NegativeVerifierInputV1::from_canonical_jcs(&source).unwrap(), input);
+        }
+
+        #[test]
+        fn literal_observation_oracle_rejects_isolated_field_drift() {
+            let (_, input, source) = fixture(b"invalid envelope", MANIFEST);
+            for index in 141..=155 {
+                let bytes = expected_observation_bytes(index, &input, &source);
+                let positive = Eip0045B4NegativeObservationV1::from_canonical_jcs(&bytes).unwrap();
+                require_observation(index, &input, &source, positive.clone()).unwrap();
+                for fault in 0..9 {
+                    let mut changed = positive.clone();
+                    match fault {
+                        0 => changed.format.push('x'),
+                        1 => changed.format_version += 1,
+                        2 => changed.materialization_domain = B4MaterializationDomain::ArtifactValidator,
+                        3 => changed.validation_surface = B4NegativeExecutionSurface::RawSealShape,
+                        4 => changed.negative_input_sha256 = "00".repeat(32),
+                        5 => changed.subject_byte_length += 1,
+                        6 => changed.subject_sha256 = "00".repeat(32),
+                        7 => changed.rejection.class = "raw-seal-shape-invalid".into(),
+                        8 => changed.rejection.stage = if index < 144 { "resolve-explicit-semantics" } else { "claim-edge" }.into(),
+                        _ => unreachable!(),
+                    }
+                    assert!(require_observation(index, &input, &source, changed).is_err(), "row {index} field {fault}");
+                }
+                // Verdict is a one-variant enum, so isolate its unknown wire value.
+                let changed = String::from_utf8(bytes).unwrap().replace("\"verdict\":\"reject\"", "\"verdict\":\"accept\"");
+                assert!(Eip0045B4NegativeObservationV1::from_canonical_jcs(changed.as_bytes()).is_err());
+            }
+        }
+    }
+
+    // One producer loop supplies both direct semantic and physical dispatch tests.
+    // None denotes a positive acceptance or private adapter failure, never a rejection.
+    fn retained_fifteen_matrix(mut consume: impl FnMut(Option<usize>, &[u8])) {
+        let files = load().unwrap();
+        let positives = FAMILIES.iter().map(|(prefix, family)| positive(&files, prefix, *family).unwrap())
+            .collect::<Vec<_>>();
+        assert!(positives.iter().all(|p| p.statement == positives[1].statement));
+        for input in &positives {
+            assert_eq!(reject_ancestry_replay(&input.subject().unwrap(), &[MANIFEST]).unwrap_err().to_string(),
+                "ancestry subject was unexpectedly accepted");
+            consume(None, &input.subject().unwrap());
+        }
+        let alternate_root = std::env::var_os("EIP0045_B4_ALTERNATE_VECTOR_ROOT").expect("alternate root required");
+        let guest_path = std::env::var_os("EIP0045_B4_GUEST_FILE").expect("consumer guest required");
+        let alternate = alternate::load_authenticated(Path::new(&alternate_root), positives[1].statement,
+            Path::new(&guest_path)).unwrap();
+        let layout = compiled_negative_ancestry_witness_layout().unwrap();
+        let plan = Eip0045B4NegativePlanV1::canonical().unwrap();
+        let rows = plan.groups.iter().flat_map(|group| group.executions.iter()).collect::<Vec<_>>();
+        assert_eq!(rows.iter().enumerate().filter(|(_, row)| row.execution_surface == B4NegativeExecutionSurface::AncestryReplay)
+            .map(|(index, _)| index).collect::<Vec<_>>(), (141..=155).collect::<Vec<_>>());
+        // Exact seven-class inventory: repeated placements share the same borrowed input;
+        // distinct classes may not substitute byte-identical receipts or raw seals.
+        for (position, left) in REPRESENTATIVES.iter().enumerate() {
+            for right in REPRESENTATIVES.iter().skip(position + 1) {
+                for suffix in ["raw", "oracle"] {
+                    assert_ne!(files[&format!("witness.{left}.{suffix}")], files[&format!("witness.{right}.{suffix}")]);
+                }
+            }
+        }
+        let resolve_projection = parse_recursive_ancestry_jcs(positives[1].ancestry).unwrap();
+        let assumption_path = &resolve_projection.assumption_receipt.as_ref().unwrap().raw_seal.path;
+        assert_eq!(files["witness.141.raw"], files[&format!("resolve.aux.{assumption_path}")]);
+        assert_eq!(files["witness.143.raw"].as_slice(), positives[1].final_seal);
+        let guest = &files["alternate-guest"];
+        let mut observed = Vec::new();
+        for index in 141..=155 {
+            let family = if index == 141 { 0 } else if index == 143 || (149..=152).contains(&index) { 2 } else { 1 };
+            let base = &positives[family];
+            let subject = if let Some(selected) = layout.iter().find(|r| usize::from(r.expanded_row) == index) {
+                let representative = match index { 142 | 153 => 141, 150 => 145, 151 => 147, _ => index };
+                assert_eq!(selected.base_family, FAMILIES[family].1);
+                assert_eq!(selected.witness_id, layout.iter().find(|r|
+                    usize::from(r.expanded_row) == representative).unwrap().witness_id);
+                let raw = &files[&format!("witness.{representative}.raw")];
+                let oracle = &files[&format!("witness.{representative}.oracle")];
+                let subject = reconstruct_genuine_witness_ancestry(index, base.witness_input(guest), raw, oracle).unwrap();
+                let mut changed = raw.clone(); changed[0] ^= 1;
+                assert!(reconstruct_genuine_witness_ancestry(index, base.witness_input(guest), &changed, oracle).is_err());
+                let mut changed = oracle.clone(); changed[0] ^= 1;
+                assert!(reconstruct_genuine_witness_ancestry(index, base.witness_input(guest), raw, &changed).is_err());
+                // Another valid class is not evidence for the selected witness role.
+                let other = if representative == 141 { 145 } else { 141 };
+                assert!(reconstruct_genuine_witness_ancestry(index, base.witness_input(guest),
+                    &files[&format!("witness.{other}.raw")],
+                    &files[&format!("witness.{other}.oracle")]).is_err());
+                subject
+            } else if index == 146 {
+                reconstruct_genuine_alternate_root(index, &alternate, base.ancestry, base.statement,
+                    base.final_seal, &base.map, MANIFEST).unwrap().subject
+            } else {
+                reconstruct_genuine_reusable_ancestry(index, base.ancestry, base.statement,
+                    base.final_seal, &base.map, MANIFEST).unwrap().subject
+            };
+            consume(Some(index), &subject);
+            let decoded = decode_subject_envelope(&subject, ancestry_subject_envelope_contract()).unwrap();
+            let [ancestry, statement, seal, map]: [&[u8]; 4] = decoded.parts().try_into().unwrap();
+            assert_eq!(statement, base.statement);
+            assert!(reject_ancestry_replay(&subject, &[]).is_err());
+            let mut changed = seal.to_vec(); changed[0] ^= 1;
+            let corrupt = encode_subject_envelope(&[ancestry, statement, &changed, map], ancestry_subject_envelope_contract()).unwrap();
+            assert!(reject_ancestry_replay(&corrupt, &[MANIFEST]).is_err());
+            consume(None, &corrupt);
+            let mut bad_map = map.to_vec(); bad_map[..2].copy_from_slice(&0u16.to_le_bytes());
+            let malformed = encode_subject_envelope(&[ancestry, statement, seal, &bad_map], ancestry_subject_envelope_contract()).unwrap();
+            assert!(reject_ancestry_replay(&malformed, &[MANIFEST]).is_err());
+            consume(None, &malformed);
+            observed.push(index);
+            println!("localAncestryRow={index} typedOutcome={:?}", expected(index).unwrap());
+        }
+        assert_eq!(observed, (141..=155).collect::<Vec<_>>());
+    }
+}
+
+#[cfg(all(test, feature = "negative-materialization-set"))]
 mod genuine_resolve_ancestry {
     use super::*;
     use crate::{

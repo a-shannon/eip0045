@@ -742,7 +742,7 @@ mod tests {
     }
 
     #[test]
-    fn pending_ancestry_handler_produces_no_observation() {
+    fn malformed_ancestry_reaches_adapter_but_produces_no_observation() {
         let subject = vec![0_u8; 1];
         let manifest = include_bytes!("../../../profiles/risc0-v3-succinct/manifest.bin");
         let (input, source) = input_for(
@@ -754,7 +754,7 @@ mod tests {
         let error =
             verify_like_authenticated_root(&input, &source, &subject, &[manifest]).unwrap_err();
         assert_eq!(error.to_string(),
-            "selected negative handler remains pending and cannot produce an observation");
+            "selected negative adapter VerifierAncestryReplay failed privately; no observation was produced");
     }
 
     #[test]

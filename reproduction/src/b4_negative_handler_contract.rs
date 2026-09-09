@@ -823,7 +823,7 @@ const B4_NEGATIVE_HANDLER_CONTRACTS: &[B4NegativeHandlerContract] = &[
         H::VerifierReceiptClaimPolicy,
         RECEIPT_CLAIM_REJECTIONS,
     ),
-    B4NegativeHandlerContract::pending(
+    B4NegativeHandlerContract::frozen(
         custody(
             D::VerifierInput,
             S::AncestryReplay,
@@ -1867,12 +1867,12 @@ mod tests {
             assert_eq!(boundary.class(), "risc0-parser-invalid");
             assert!(row.admits_rejection(boundary.class(), boundary.stage()));
         }
-        assert!(require_negative_handler_contracts_frozen().is_err());
+        require_negative_handler_contracts_frozen().unwrap();
     }
 
     #[test]
     fn only_rows_with_closed_adapters_and_focused_fixtures_are_frozen() {
-        assert!(require_negative_handler_contracts_frozen().is_err());
+        require_negative_handler_contracts_frozen().unwrap();
         let frozen_selectors = [
             H::VerifierOpcodePreflight,
             H::VerifierRawStatementClaimBinding,
@@ -1881,6 +1881,7 @@ mod tests {
             H::VerifierRisc0CryptographicVerifier,
             H::VerifierTerminalPolicy,
             H::VerifierReceiptClaimPolicy,
+            H::VerifierAncestryReplay,
             H::ArtifactTerminalPolicy,
             H::ArtifactProfileManifestCodec,
             H::ArtifactInitialProfileTarget,
@@ -1894,6 +1895,7 @@ mod tests {
             H::ArtifactNegativeBindingIndex,
             H::TreeCorpusClosure,
         ];
+        assert_eq!(frozen_selectors.len(), 20);
         for row in B4_NEGATIVE_HANDLER_CONTRACTS {
             let expected_frozen = frozen_selectors.contains(&row.selector());
             assert_eq!(row.is_frozen(), expected_frozen);
@@ -1914,7 +1916,7 @@ mod tests {
     }
 
     #[test]
-    fn statement_claim_freeze_is_individual_and_campaign_gate_stays_closed() {
+    fn statement_claim_freeze_is_individual_and_full_table_is_frozen() {
         let statement = planned_negative_handler_contract(
             D::VerifierInput,
             S::RawStatementClaimBinding,
@@ -1926,29 +1928,25 @@ mod tests {
         assert_eq!(statement.custody().subject(), B4NegativeByteBounds::new(159, 16_543));
         assert_eq!(statement.custody().contexts(), &MANIFEST_AND_SEAL_CONTEXT);
 
-        // This literal list is a scope guard: freezing any unrelated row must
-        // fail even if a caller updates the total frozen count elsewhere.
+        // The complete table is frozen; exact selector and custody guards below remain binding.
         let pending = B4_NEGATIVE_HANDLER_CONTRACTS.iter()
             .filter(|row| !row.is_frozen())
             .map(|row| row.selector())
             .collect::<Vec<_>>();
-        assert_eq!(pending, [
-            H::VerifierAncestryReplay,
-        ]);
-        assert_eq!(B4_NEGATIVE_HANDLER_CONTRACTS.iter().filter(|row| row.is_frozen()).count(), 19);
+        assert!(pending.is_empty());
+        assert_eq!(B4_NEGATIVE_HANDLER_CONTRACTS.iter().filter(|row| row.is_frozen()).count(), 20);
         #[cfg(feature = "validator")]
-        for row in B4_NEGATIVE_HANDLER_CONTRACTS.iter().filter(|row| !row.is_frozen()) {
+        for row in B4_NEGATIVE_HANDLER_CONTRACTS {
             let custody = row.custody();
             assert!(frozen_negative_custody_contract(
                 custody.materialization_domain(), custody.validation_surface(),
-            ).unwrap().is_none());
+            ).unwrap().is_some());
         }
-        assert_eq!(require_negative_handler_contracts_frozen().unwrap_err().to_string(),
-            "B4 negative handler-contract table is not fully frozen; campaign precommit is forbidden");
+        require_negative_handler_contracts_frozen().unwrap();
     }
 
     #[test]
-    fn raw_shape_freeze_covers_exactly_42_rows_and_keeps_one_pending() {
+    fn raw_shape_freeze_covers_exactly_42_rows_and_preserves_exact_scope() {
         let plan = Eip0045B4NegativePlanV1::canonical().unwrap();
         let rows = plan.groups.iter().flat_map(|group| &group.executions).enumerate()
             .filter(|(_, execution)| execution.materialization_domain == D::VerifierInput
@@ -1977,17 +1975,13 @@ mod tests {
             assert_eq!((boundary.class(), boundary.stage()), expected);
             assert!(contract.admits_rejection(expected.0, expected.1));
         }
-        // Literal scope guard, independent of any updated frozen-row count.
-        assert_eq!(B4_NEGATIVE_HANDLER_CONTRACTS.iter().filter(|row| !row.is_frozen())
-            .map(|row| row.selector()).collect::<Vec<_>>(), [
-                H::VerifierAncestryReplay,
-            ]);
-        assert_eq!(require_negative_handler_contracts_frozen().unwrap_err().to_string(),
-            "B4 negative handler-contract table is not fully frozen; campaign precommit is forbidden");
+        // Completion of the table does not relax this row's exact boundary scope.
+        assert!(B4_NEGATIVE_HANDLER_CONTRACTS.iter().all(|row| row.is_frozen()));
+        require_negative_handler_contracts_frozen().unwrap();
     }
 
     #[test]
-    fn crypto_freeze_covers_exactly_four_rows_and_keeps_one_pending() {
+    fn crypto_freeze_covers_exactly_four_rows_and_preserves_exact_scope() {
         let plan = Eip0045B4NegativePlanV1::canonical().unwrap();
         let rows = plan.groups.iter().flat_map(|group| &group.executions).enumerate()
             .filter(|(_, row)| row.materialization_domain == D::VerifierInput
@@ -2007,17 +2001,13 @@ mod tests {
             assert_eq!((boundary.class(), boundary.stage()), ("risc0-proof-invalid", stage));
             assert!(contract.admits_rejection(boundary.class(), boundary.stage()));
         }
-        assert_eq!(B4_NEGATIVE_HANDLER_CONTRACTS.iter().filter(|row| !row.is_frozen())
-            .map(|row| row.selector()).collect::<Vec<_>>(), [
-                H::VerifierAncestryReplay,
-            ]);
-        assert_eq!(B4_NEGATIVE_HANDLER_CONTRACTS.iter().filter(|row| row.is_frozen()).count(), 19);
-        assert_eq!(require_negative_handler_contracts_frozen().unwrap_err().to_string(),
-            "B4 negative handler-contract table is not fully frozen; campaign precommit is forbidden");
+        assert!(B4_NEGATIVE_HANDLER_CONTRACTS.iter().all(|row| row.is_frozen()));
+        assert_eq!(B4_NEGATIVE_HANDLER_CONTRACTS.iter().filter(|row| row.is_frozen()).count(), 20);
+        require_negative_handler_contracts_frozen().unwrap();
     }
 
     #[test]
-    fn terminal_catalog_freeze_covers_exactly_three_rows_and_keeps_campaign_closed() {
+    fn terminal_catalog_freeze_covers_exactly_three_rows_and_preserves_exact_scope() {
         let plan = Eip0045B4NegativePlanV1::canonical().unwrap();
         let rows = plan.groups.iter().flat_map(|group| &group.executions).enumerate()
             .filter(|(_, row)| row.materialization_domain == D::ArtifactValidator
@@ -2038,16 +2028,12 @@ mod tests {
         #[cfg(feature = "validator")]
         assert!(frozen_negative_custody_contract(D::ArtifactValidator, S::TerminalFixtureCatalog)
             .unwrap().is_some());
-        assert_eq!(B4_NEGATIVE_HANDLER_CONTRACTS.iter().filter(|row| !row.is_frozen())
-            .map(|row| row.selector()).collect::<Vec<_>>(), [
-                    H::VerifierAncestryReplay,
-            ]);
-        assert_eq!(require_negative_handler_contracts_frozen().unwrap_err().to_string(),
-            "B4 negative handler-contract table is not fully frozen; campaign precommit is forbidden");
+        assert!(B4_NEGATIVE_HANDLER_CONTRACTS.iter().all(|row| row.is_frozen()));
+        require_negative_handler_contracts_frozen().unwrap();
     }
 
     #[test]
-    fn terminal_metadata_freeze_covers_exactly_three_rows_and_keeps_campaign_closed() {
+    fn terminal_metadata_freeze_covers_exactly_three_rows_and_preserves_exact_scope() {
         let plan = Eip0045B4NegativePlanV1::canonical().unwrap();
         let rows = plan.groups.iter().flat_map(|group| &group.executions).enumerate()
             .filter(|(_, row)| row.materialization_domain == D::ArtifactValidator
@@ -2074,17 +2060,13 @@ mod tests {
         #[cfg(feature = "validator")]
         assert!(frozen_negative_custody_contract(D::ArtifactValidator, S::TerminalMetadata)
             .unwrap().is_some());
-        assert_eq!(B4_NEGATIVE_HANDLER_CONTRACTS.iter().filter(|row| !row.is_frozen())
-            .map(|row| row.selector()).collect::<Vec<_>>(), [
-                H::VerifierAncestryReplay,
-            ]);
-        assert_eq!(B4_NEGATIVE_HANDLER_CONTRACTS.iter().filter(|row| row.is_frozen()).count(), 19);
-        assert_eq!(require_negative_handler_contracts_frozen().unwrap_err().to_string(),
-            "B4 negative handler-contract table is not fully frozen; campaign precommit is forbidden");
+        assert!(B4_NEGATIVE_HANDLER_CONTRACTS.iter().all(|row| row.is_frozen()));
+        assert_eq!(B4_NEGATIVE_HANDLER_CONTRACTS.iter().filter(|row| row.is_frozen()).count(), 20);
+        require_negative_handler_contracts_frozen().unwrap();
     }
 
     #[test]
-    fn terminal_policy_freeze_covers_exactly_eight_verifier_rows_and_keeps_campaign_closed() {
+    fn terminal_policy_freeze_covers_exactly_eight_verifier_rows_and_preserves_exact_scope() {
         let plan = Eip0045B4NegativePlanV1::canonical().unwrap();
         let rows = plan.groups.iter().flat_map(|group| &group.executions).enumerate()
             .filter(|(_, row)| row.materialization_domain == D::VerifierInput
@@ -2100,13 +2082,11 @@ mod tests {
             assert_eq!((boundary.class(),boundary.stage()), ("terminal-policy-mismatch","terminal-control-id"));
             assert!(contract.admits_rejection(boundary.class(),boundary.stage()));
         }
-        assert_eq!(B4_NEGATIVE_HANDLER_CONTRACTS.iter().filter(|row| !row.is_frozen())
-            .map(|row| row.selector()).collect::<Vec<_>>(), [H::VerifierAncestryReplay]);
-        assert_eq!(require_negative_handler_contracts_frozen().unwrap_err().to_string(),
-            "B4 negative handler-contract table is not fully frozen; campaign precommit is forbidden");
+        assert!(B4_NEGATIVE_HANDLER_CONTRACTS.iter().all(|row| row.is_frozen()));
+        require_negative_handler_contracts_frozen().unwrap();
     }
     #[test]
-    fn receipt_claim_freeze_covers_exactly_two_rows_and_keeps_campaign_closed() {
+    fn receipt_claim_freeze_covers_exactly_two_rows_and_preserves_exact_scope() {
         let plan = Eip0045B4NegativePlanV1::canonical().unwrap();
         let rows = plan.groups.iter().flat_map(|group| &group.executions).enumerate()
             .filter(|(_, row)| row.materialization_domain == D::VerifierInput
@@ -2122,10 +2102,39 @@ mod tests {
             assert_eq!((boundary.class(),boundary.stage()), ("receipt-claim-mismatch","expected-claim-binding"));
             assert!(contract.admits_rejection(boundary.class(),boundary.stage()));
         }
-        assert_eq!(B4_NEGATIVE_HANDLER_CONTRACTS.iter().filter(|row| !row.is_frozen())
-            .map(|row| row.selector()).collect::<Vec<_>>(), [H::VerifierAncestryReplay]);
-        assert_eq!(B4_NEGATIVE_HANDLER_CONTRACTS.iter().filter(|row| row.is_frozen()).count(), 19);
-        assert_eq!(require_negative_handler_contracts_frozen().unwrap_err().to_string(),
-            "B4 negative handler-contract table is not fully frozen; campaign precommit is forbidden");
+        assert!(B4_NEGATIVE_HANDLER_CONTRACTS.iter().all(|row| row.is_frozen()));
+        assert_eq!(B4_NEGATIVE_HANDLER_CONTRACTS.iter().filter(|row| row.is_frozen()).count(), 20);
+        require_negative_handler_contracts_frozen().unwrap();
+    }
+
+    #[test]
+    fn ancestry_freeze_covers_exactly_fifteen_rows_and_four_boundaries() {
+        let plan = Eip0045B4NegativePlanV1::canonical().unwrap();
+        let rows = plan.groups.iter().flat_map(|group| &group.executions).enumerate()
+            .filter(|(_, row)| row.materialization_domain == D::VerifierInput
+                && row.execution_surface == S::AncestryReplay).collect::<Vec<_>>();
+        assert_eq!(rows.iter().map(|(index, _)| *index).collect::<Vec<_>>(), (141..=155).collect::<Vec<_>>());
+        let contract = planned_negative_handler_contract(D::VerifierInput, S::AncestryReplay).unwrap().unwrap();
+        assert!(contract.is_frozen());
+        assert_eq!(contract.selector(), H::VerifierAncestryReplay);
+        assert_eq!(contract.custody().subject(), B4NegativeByteBounds::new(1, 2 * 1024 * 1024));
+        assert_eq!(contract.custody().contexts(), &MANIFEST_CONTEXT);
+        for (index, row) in rows {
+            let stage = match index {
+                141..=143 => "claim-edge",
+                144..=148 => "resolve-explicit-semantics",
+                149..=152 => "resolve-zero-root-semantics",
+                153..=155 => "resolve-assumption-inventory",
+                _ => unreachable!(),
+            };
+            let boundary = exact_negative_rejection_boundary(row).unwrap();
+            assert_eq!((boundary.class(), boundary.stage()), ("ancestry-replay-mismatch", stage));
+            assert!(contract.admits_rejection(boundary.class(), boundary.stage()));
+        }
+        assert!(!contract.admits_rejection("ancestry-replay-mismatch", "private-failure"));
+        assert!(!contract.admits_rejection("unexpected-acceptance", "claim-edge"));
+        assert_eq!(B4_NEGATIVE_HANDLER_CONTRACTS.len(), 20);
+        assert!(B4_NEGATIVE_HANDLER_CONTRACTS.iter().all(|row| row.is_frozen()));
+        require_negative_handler_contracts_frozen().unwrap();
     }
 }

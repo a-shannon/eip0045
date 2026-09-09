@@ -657,6 +657,22 @@ pub(crate) fn reconstruct_genuine_resolve_ancestry(
         matches!(execution_index, 144 | 155),
         "genuine resolve ancestry seam permits only rows 144 and 155"
     );
+    reconstruct_genuine_reusable_ancestry(execution_index, ancestry, statement,
+        final_raw_seal, auxiliary_map, manifest)
+}
+
+/// Local reusable-seal reconstruction; callers authenticate the positive seals first.
+#[cfg(test)]
+pub(crate) fn reconstruct_genuine_reusable_ancestry(
+    execution_index: usize,
+    ancestry: &[u8],
+    statement: &[u8],
+    final_raw_seal: &[u8],
+    auxiliary_map: &[u8],
+    manifest: &[u8],
+) -> Result<B4ClosedReconstructedExecutionV1> {
+    let expected = expected_row(execution_index)
+        .context("local reusable ancestry permits only rows 144, 149 and 155")?;
     ensure!(
         manifest == include_bytes!("../../profiles/risc0-v3-succinct/manifest.bin"),
         "genuine resolve ancestry manifest differs from the compiled initial profile"
@@ -666,7 +682,7 @@ pub(crate) fn reconstruct_genuine_resolve_ancestry(
     let profile_id = decoded_manifest.profile_id()?;
     let projection = parse_recursive_ancestry_jcs(ancestry)?;
     ensure!(
-        projection.family == RecursiveAncestryFamily::TerminalResolve
+        projection.family == expected.family
             && recursive_ancestry_to_jcs(&projection)? == ancestry,
         "genuine resolve ancestry differs from the exact case-9 projection"
     );
@@ -773,6 +789,27 @@ mod tests {
                 expected.materialization_identity_jcs
             );
             assert_eq!(actual.negative_input_jcs, expected.negative_input_jcs);
+        }
+    }
+
+    #[test]
+    fn local_reusable_case10_seam_matches_core_without_crypto_evidence() {
+        let top = synthetic_valid_recursive_ancestry_top_level();
+        let resolver = B4FixtureSourceResolverV1::from_authenticated(&top).unwrap();
+        let source = resolver.recursive_ancestry_source(RecursiveAncestryFamily::ResolveThenJoin).unwrap();
+        let map = source.encoded_auxiliary_map().unwrap();
+        let plan = Eip0045B4NegativePlanV1::canonical().unwrap();
+        let row = plan.groups.iter().flat_map(|g| g.executions.iter()).nth(149).unwrap();
+        let actual = super::reconstruct_genuine_reusable_ancestry(149, source.ancestry_jcs(),
+            source.statement(), source.final_raw_seal(), &map, source.profile_manifest_context()).unwrap();
+        let expected = reconstruct_ancestry_execution(149, row, &top).unwrap().unwrap();
+        assert_eq!(actual.subject, expected.subject);
+        assert_eq!(actual.derived_registry_row, expected.derived_registry_row);
+        assert_eq!(actual.base, expected.base);
+        assert_eq!(actual.contexts, expected.contexts);
+        for index in [0, 141, 146, 154, 156, usize::MAX] {
+            assert_eq!(super::reconstruct_genuine_reusable_ancestry(index, &[], &[], &[], &[], &[])
+                .err().unwrap().to_string(), "local reusable ancestry permits only rows 144, 149 and 155");
         }
     }
 

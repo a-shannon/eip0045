@@ -701,10 +701,22 @@ fn derive_expected_witness_claim(
     catalog: &Eip0045B4NegativeAncestryWitnessCatalogV1,
     sources: &impl AuthenticatedNegativeAncestrySources,
 ) -> Result<RecursiveAncestryClaim> {
+    derive_expected_witness_claim_for_programs(
+        layout, &catalog.consumer_program_id, &catalog.alternate_program_id, sources,
+    )
+}
+
+#[allow(clippy::too_many_lines, reason = "one shared closed witness-claim derivation")]
+fn derive_expected_witness_claim_for_programs(
+    layout: &B4NegativeAncestryWitnessLayoutV1,
+    expected_consumer_program: &str,
+    expected_alternate_program: &str,
+    sources: &impl AuthenticatedNegativeAncestrySources,
+) -> Result<RecursiveAncestryClaim> {
     let statement = parse_ergo_statement_v1(sources.statement())?;
     let consumer_program_id = statement.program_id();
     ensure!(
-        hex::encode(consumer_program_id) == catalog.consumer_program_id,
+        hex::encode(consumer_program_id) == expected_consumer_program,
         "negative ancestry consumer program differs from the authenticated catalogue"
     );
     let canonical = derive_empty_assumption_ok_recursive_ancestry_claim(
@@ -747,7 +759,7 @@ fn derive_expected_witness_claim(
         }
         B4NegativeAncestryWitnessIdV1::AlternateProgramLift => {
             ensure!(
-                hex::encode(sources.alternate_program_id()) == catalog.alternate_program_id,
+                hex::encode(sources.alternate_program_id()) == expected_alternate_program,
                 "negative ancestry alternate program differs from its authenticated guest ELF"
             );
             let alternate = ErgoStatementV1::new(
@@ -990,14 +1002,14 @@ fn validate_replayed_semantic_outcome(
     projection: &RecursiveAncestryProjection,
 ) -> Result<()> {
     if layout.expanded_row == 147 {
-        return validate_row_147_alternate_program_step_zero(
+        validate_row_147_alternate_program_step_zero(
             layout,
             entry,
             sources,
             raw_seal,
             source_projection,
             projection,
-        );
+        )?;
     }
 
     let expected_outcome = expected_semantic_outcome(layout)?;
@@ -1270,8 +1282,121 @@ fn expected_semantic_outcome(
     }
 }
 
+/// Borrowed local diagnostic inputs, not a materialization or campaign authority.
+#[cfg(test)]
+pub(crate) struct LocalWitnessAncestryInput<'a> {
+    pub(crate) ancestry: &'a [u8],
+    pub(crate) statement: &'a [u8],
+    pub(crate) final_raw_seal: &'a [u8],
+    pub(crate) auxiliary_map: &'a [u8],
+    pub(crate) manifest: &'a [u8],
+    pub(crate) alternate_guest: &'a [u8],
+}
+
+#[cfg(test)]
+struct LocalWitnessSources<'a> {
+    input: LocalWitnessAncestryInput<'a>,
+    plan: Vec<u8>,
+    projection: RecursiveAncestryProjection,
+    auxiliary: B4RecursiveAuxiliaryMapV1<'a>,
+    profile: [u8; DIGEST_BYTES],
+    alternate_program: [u8; DIGEST_BYTES],
+}
+
+#[cfg(test)]
+impl AuthenticatedNegativeAncestrySources for LocalWitnessSources<'_> {
+    fn negative_plan_jcs(&self) -> &[u8] { &self.plan }
+    fn profile_manifest_context(&self) -> &[u8] { self.input.manifest }
+    fn ancestry_jcs(&self) -> &[u8] { self.input.ancestry }
+    fn projection(&self) -> &RecursiveAncestryProjection { &self.projection }
+    fn statement(&self) -> &[u8] { self.input.statement }
+    fn final_raw_seal(&self) -> &[u8] { self.input.final_raw_seal }
+    fn auxiliary_seals(&self) -> &B4RecursiveAuxiliaryMapV1<'_> { &self.auxiliary }
+    fn profile_id(&self) -> [u8; DIGEST_BYTES] { self.profile }
+    fn alternate_program_id(&self) -> [u8; DIGEST_BYTES] { self.alternate_program }
+}
+
+/// Reuse the exact production mutation core, after local receipt authentication.
+/// The caller must first authenticate the unmodified positive consumer subject.
+/// Only envelope bytes escape; no catalogue, read-set, or campaign authority is minted.
+#[cfg(test)]
+pub(crate) fn reconstruct_genuine_witness_ancestry(
+    index: usize,
+    input: LocalWitnessAncestryInput<'_>,
+    raw: &[u8],
+    oracle: &[u8],
+) -> Result<Vec<u8>> {
+    let layout = compiled_negative_ancestry_witness_layout()?;
+    let selected = layout.iter().find(|row| usize::from(row.expanded_row) == index)
+        .context("local witness ancestry requires a compiled witness row")?;
+    ensure!(input.manifest == include_bytes!("../../profiles/risc0-v3-succinct/manifest.bin"),
+        "local witness manifest differs from compiled profile");
+    let manifest = StarkProfileManifestV1::decode(input.manifest)?;
+    manifest.validate_initial_profile_target()?;
+    let profile = manifest.profile_id()?;
+    let projection = parse_recursive_ancestry_jcs(input.ancestry)?;
+    ensure!(projection.family == selected.base_family
+        && recursive_ancestry_to_jcs(&projection)? == input.ancestry,
+        "local witness base family or canonical bytes differ");
+    ensure!(classify_recursive_ancestry_semantics(&projection, input.statement, profile)?
+        == RecursiveAncestrySemanticOutcome::Canonical,
+        "local witness base is not canonical positive evidence");
+    let auxiliary = crate::b4_recursive_auxiliary_map::decode_recursive_auxiliary_map(
+        input.auxiliary_map, selected.base_family)?;
+    let artifacts = auxiliary.iter().map(|(p, b)| (p.to_owned(), b)).collect::<BTreeMap<_, _>>();
+    validate_recursive_ancestry_artifacts(&projection, input.statement,
+        input.final_raw_seal, &artifacts)?;
+    let alternate_program: [u8; DIGEST_BYTES] = compute_image_id(input.alternate_guest)?.into();
+    let statement = parse_ergo_statement_v1(input.statement)?;
+    let consumer = statement.program_id();
+    ensure!(statement.encode()?.as_slice() == input.statement && statement.profile_id() == profile
+        && projection.program_id == hex::encode(consumer) && alternate_program != consumer,
+        "local witness statement, profile or alternate program differs");
+    let sources = LocalWitnessSources { input, plan: Eip0045B4NegativePlanV1::canonical()?.to_canonical_jcs()?,
+        projection, auxiliary, profile, alternate_program };
+    let (claim, terminal, control_root) =
+        crate::b4_negative_ancestry_authority::replay_local_ancestry_receipt(raw, oracle)?;
+    ensure!(terminal == expected_terminal(selected.witness_id, selected.producer_role)?
+        && control_root == hex::encode(manifest.inner_control_root()),
+        "local witness receipt terminal or root differs from compiled row");
+    let expected = derive_expected_witness_claim_for_programs(selected, &hex::encode(consumer),
+        &hex::encode(alternate_program), &sources)?;
+    ensure!(claim == expected, "local witness receipt claim differs from source-derived row");
+    // This is an untrusted data projection, never a catalogue authority.
+    let entry = B4NegativeAncestryWitnessEntryV1 {
+        expanded_row: selected.expanded_row, execution_id: selected.execution_id.clone(),
+        base_family: selected.base_family, witness_id: selected.witness_id,
+        producer_role: selected.producer_role, logical_placement: selected.logical_placement,
+        recipe: selected.recipe, logical_consumer_path: selected.logical_consumer_path.clone(),
+        first_public_rejection: selected.first_public_rejection.clone(),
+        claim_digest: hex::encode(recursive_ancestry_claim_digest(&claim)?),
+        producer_program_id: claim.pre_state_digest.clone(), claim, terminal, control_root,
+        raw_seal: B4ContractArtifactIdentityV1::from_bytes(&selected.raw_seal_path,
+            B4ContractArtifactEncodingV1::RawBytes, raw)?,
+        receipt_oracle: B4ContractArtifactIdentityV1::from_bytes(&selected.receipt_oracle_path,
+            B4ContractArtifactEncodingV1::RawBytes, oracle)?,
+    };
+    Ok(replay_witness_materialization(selected, &entry, &sources, raw)?.final_subject)
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn local_witness_seam_rejects_non_witness_rows_before_receipt_replay() {
+        for index in [0, 140, 144, 146, 149, 155, 156, usize::MAX] {
+            let input = super::LocalWitnessAncestryInput { ancestry: &[], statement: &[],
+                final_raw_seal: &[], auxiliary_map: &[], manifest: &[], alternate_guest: &[] };
+            assert_eq!(super::reconstruct_genuine_witness_ancestry(index, input, &[], &[])
+                .unwrap_err().to_string(), "local witness ancestry requires a compiled witness row");
+        }
+        for index in [141, 142, 143, 145, 147, 148, 150, 151, 152, 153, 154] {
+            let input = super::LocalWitnessAncestryInput { ancestry: &[], statement: &[],
+                final_raw_seal: &[], auxiliary_map: &[], manifest: &[], alternate_guest: &[] };
+            assert_eq!(super::reconstruct_genuine_witness_ancestry(index, input, &[], &[])
+                .unwrap_err().to_string(), "local witness manifest differs from compiled profile");
+        }
+    }
+
     use anyhow::Context as _;
 
     use crate::{
@@ -1445,7 +1570,8 @@ mod tests {
                     &projection,
                 )
                 .unwrap();
-            } else {
+            }
+            {
                 assert_eq!(
                     classify_recursive_ancestry_semantics(
                         &projection,

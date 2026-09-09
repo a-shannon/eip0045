@@ -5179,8 +5179,11 @@ pub(crate) mod test_support {
     fn build_terminal_lineage_constructor_test_support_v2_with_executor(
         executor_override: Option<&[u8]>,
     ) -> Result<TerminalLineageConstructorTestSupportV2> {
-        let sources =
+        let mut sources =
             build_positive_generation_constructor_sources_v2_with_executor(executor_override)?;
+        // This paired fixture must give both production gates the same physical
+        // input identity. The generic positive fixture retains its own path.
+        sources.positive_input_set.path = "h0/prepare-001/positive-input-set.json".to_owned();
         let positive_generation_authority =
             B4PositiveGenerationAuthorityV2::from_validated(sources.validate_preacceptance()?);
         let mut campaign = ClosureFixture::valid();
@@ -5204,6 +5207,11 @@ pub(crate) mod test_support {
             &campaign.verifier_authority,
             campaign.external(),
         )?;
+        ensure!(
+            campaign_precommit_authority.precommit().input_set
+                == *positive_generation_authority.positive_input_set_identity(),
+            "V2 terminal-lineage fixture input identities differ after production construction"
+        );
         Ok(TerminalLineageConstructorTestSupportV2 {
             campaign_precommit_authority,
             positive_generation_authority,
@@ -6283,7 +6291,94 @@ pub(crate) mod test_support {
     }
 
     #[test]
-    fn verifier_authority_fails_closed_until_all_handler_cardinalities_are_frozen() {
+    fn external_verifier_constructor_retains_exact_documents_and_rejects_isolated_drift() {
+        // Synthetic document selection exercises the real constructor, not campaign review.
+        let (plan_bytes, expectation_bytes) = canonical_plan_and_expectation();
+        let cli = B4ExternalArtifactV1 { path: "fixture/cli.txt",
+            bytes: b"synthetic verifier CLI fixture", encoding: B4ContractArtifactEncodingV1::RawBytes };
+        let plan = B4ExternalArtifactV1 { path: "fixture/plan.json", bytes: &plan_bytes,
+            encoding: B4ContractArtifactEncodingV1::Rfc8785Jcs };
+        let expectation = B4ExternalArtifactV1 { path: "fixture/expectation.json", bytes: &expectation_bytes,
+            encoding: B4ContractArtifactEncodingV1::Rfc8785Jcs };
+        let schema_paths: [String; B4_VERIFIER_SCHEMA_ROLES.len()] = std::array::from_fn(|index|
+            format!("fixture/schemas/{}.json", B4_VERIFIER_SCHEMA_ROLES[index]));
+        let schemas: [B4ExternalSchemaDocumentV1<'_>; B4_VERIFIER_SCHEMA_ROLES.len()] = std::array::from_fn(|index|
+            B4ExternalSchemaDocumentV1 { role: B4_VERIFIER_SCHEMA_ROLES[index], document: B4ExternalArtifactV1 {
+                path: &schema_paths[index], bytes: B4_VERIFIER_SCHEMA_SOURCES[index],
+                encoding: B4ContractArtifactEncodingV1::RawBytes } });
+        assert_eq!(schemas.len(), 20);
+        let authority = B4VerifierContractAuthorityV1::from_external_documents(cli, plan, expectation, schemas).unwrap();
+        assert_eq!(authority.cli_spec_source, cli.bytes);
+        assert_eq!(authority.negative_plan_jcs(), plan.bytes);
+        assert_eq!(authority.expectation_set_jcs(), expectation.bytes);
+        let expected = Eip0045B4VerifierContractV1 {
+            format: B4_VERIFIER_CONTRACT_FORMAT.into(),
+            format_version: B4_CAMPAIGN_CONTRACT_FORMAT_VERSION,
+            interface: B4_VERIFIER_INTERFACE.into(),
+            positive_subcommand: B4_POSITIVE_SUBCOMMAND.into(),
+            negative_subcommand: B4_NEGATIVE_SUBCOMMAND.into(),
+            cli_spec: B4ContractArtifactIdentityV1::from_bytes(cli.path, cli.encoding, cli.bytes).unwrap(),
+            negative_plan: B4ContractArtifactIdentityV1::from_bytes(plan.path, plan.encoding, plan.bytes).unwrap(),
+            expectation_set: B4ContractArtifactIdentityV1::from_bytes(expectation.path, expectation.encoding, expectation.bytes).unwrap(),
+            schema_identities: schemas.iter().enumerate().map(|(index, schema)| {
+                assert_eq!(authority.schema_sources[index], schema.document.bytes);
+                B4NamedContractArtifactIdentityV1 { role: schema.role.into(),
+                    artifact: B4ContractArtifactIdentityV1::from_bytes(schema.document.path,
+                        schema.document.encoding, schema.document.bytes).unwrap() }
+            }).collect(),
+        };
+        assert_eq!(authority.contract(), &expected);
+        assert_eq!(authority.to_canonical_contract_jcs().unwrap(), expected.to_canonical_jcs().unwrap());
+        let expected_paths = [cli.path, plan.path, expectation.path].into_iter()
+            .chain(schemas.iter().map(|schema| schema.document.path)).map(str::to_owned).collect::<BTreeSet<_>>();
+        assert_eq!(expected_paths.len(), 23);
+        assert_eq!(authority.artifact_paths, expected_paths);
+        authority.verify_external_replay(cli, plan, expectation, &schemas).unwrap();
+
+        let deny = |result: Result<B4VerifierContractAuthorityV1>, message: &str| {
+            let error = result.unwrap_err();
+            assert!(format!("{error:#}").contains(message), "expected {message}: {error:#}");
+        };
+        deny(B4VerifierContractAuthorityV1::from_external_documents(cli, plan,
+            B4ExternalArtifactV1 { bytes: b"{}", ..expectation }, schemas),
+            "invalid B4 negative expectation-set shape");
+        deny(B4VerifierContractAuthorityV1::from_external_documents(cli,
+            B4ExternalArtifactV1 { bytes: b"{}", ..plan }, expectation, schemas),
+            "invalid B4 negative-plan shape");
+        deny(B4VerifierContractAuthorityV1::from_external_documents(
+            B4ExternalArtifactV1 { bytes: b"", ..cli }, plan, expectation, schemas),
+            "CLI specification external byte length is outside the role-specific bound");
+        deny(B4VerifierContractAuthorityV1::from_external_documents(
+            B4ExternalArtifactV1 { encoding: B4ContractArtifactEncodingV1::Rfc8785Jcs, ..cli }, plan, expectation, schemas),
+            "CLI specification external bytes use the wrong encoding");
+        for index in 0..schemas.len() {
+            let mut changed = schemas;
+            let mut same_id_bytes = schemas[index].document.bytes.to_vec();
+            same_id_bytes.push(b' ');
+            validate_schema_source(&same_id_bytes, B4_VERIFIER_SCHEMA_IDS[index], schemas[index].role).unwrap();
+            changed[index].document.bytes = &same_id_bytes;
+            deny(B4VerifierContractAuthorityV1::from_external_documents(cli, plan, expectation, changed),
+                "schema bytes differ from the compiled checked-in authority");
+            let mut changed = schemas;
+            changed[index].role = "incorrect-role";
+            deny(B4VerifierContractAuthorityV1::from_external_documents(cli, plan, expectation, changed),
+                &format!("external schema role differs from the closed inventory at index {index}"));
+            let mut changed = schemas;
+            changed[index].document.path = cli.path;
+            deny(B4VerifierContractAuthorityV1::from_external_documents(cli, plan, expectation, changed),
+                "path conflict");
+        }
+        let mut changed = schemas;
+        changed.swap(0, 1);
+        deny(B4VerifierContractAuthorityV1::from_external_documents(cli, plan, expectation, changed),
+            "external schema role differs from the closed inventory at index 0");
+        // The successful retained authority remains unchanged after all failed constructions.
+        authority.verify_external_replay(cli, plan, expectation, &schemas).unwrap();
+        assert_eq!(authority.contract(), &expected);
+    }
+
+    #[test]
+    fn frozen_handlers_do_not_bypass_external_verifier_plan_validation() {
         let empty = B4ExternalArtifactV1 {
             path: "authority/placeholder.json",
             bytes: b"{}",
@@ -6308,7 +6403,7 @@ pub(crate) mod test_support {
             schemas,
         )
         .unwrap_err();
-        assert!(format!("{error:#}").contains("campaign precommit is forbidden"));
+        assert!(format!("{error:#}").contains("invalid B4 negative-plan shape"));
     }
 
     #[test]
