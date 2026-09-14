@@ -305,6 +305,31 @@ mod genuine_local_fifteen {
         assert_eq!(private, 33); // Three valid positives, fifteen corrupt seals, fifteen malformed maps.
     }
 
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    #[test]
+    #[ignore = "requires pinned retained inputs and a fresh local replay packet destination"]
+    fn export_retained_physical_fifteen_replay_inputs() {
+        let output = std::env::var_os("EIP0045_B4_LOCAL_REPLAY_OUTPUT")
+            .expect("explicit local replay packet destination required");
+        let mut rows = Vec::new();
+        let mut private = 0;
+        retained_fifteen_matrix(|index, subject| {
+            let (root, input, source) = physical::fixture(subject, MANIFEST);
+            let result = super::super::negative::verify_negative_root(root.path());
+            if let Some(index) = index {
+                let observation = result.unwrap();
+                physical::require_observation(index, &input, &source, observation.clone()).unwrap();
+                rows.push((index, subject.to_vec(), observation.to_canonical_jcs().unwrap()));
+            } else {
+                assert_eq!(result.unwrap_err().to_string(), physical::PRIVATE);
+                private += 1;
+            }
+        });
+        assert_eq!(private, 33);
+        crate::local_ancestry_replay_export::write_new(Path::new(&output), &rows).unwrap();
+        println!("localReplayInputs=15 privateControls=33 scope=local-replay-inputs-only");
+    }
+
     // Compiled on native hosts as well; execution is Linux-only and never skip-passes.
     #[allow(dead_code, reason = "physical fixture execution requires Linux/x86_64")]
     mod physical {

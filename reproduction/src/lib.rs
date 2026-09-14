@@ -226,3 +226,5 @@ pub mod seal;
 pub mod source_lock;
 #[cfg(test)]
 mod test_support;
+#[cfg(test)]
+mod local_ancestry_replay_export;
