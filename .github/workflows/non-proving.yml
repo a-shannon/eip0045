@@ -9,6 +9,23 @@ permissions:
   contents: read
 
 jobs:
+  jvm-archive:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Archive grammar and canonical output fixtures
+        run: |
+          python3 --version
+          timeout --signal=TERM --kill-after=2s 120s python3 -B reproduction/jvm-artifact/test_canonical_zip.py reproduction/jvm-artifact/canonical_zip.py ed0d57c5fc507b4283f317838ff524e2aa05c8364f578f317cdccfb7c87e9f66 "$RUNNER_TEMP/archive-grammar"
+      - name: Isolated archive guard mutants
+        run: |
+          timeout --signal=TERM --kill-after=2s 120s python3 -B reproduction/jvm-artifact/test_canonical_zip.py reproduction/jvm-artifact/canonical_zip.py ed0d57c5fc507b4283f317838ff524e2aa05c8364f578f317cdccfb7c87e9f66 "$RUNNER_TEMP/archive-mutants" mutants
+
   libraries:
     runs-on: ubuntu-24.04
     timeout-minutes: 30

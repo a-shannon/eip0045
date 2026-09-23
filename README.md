@@ -7,6 +7,12 @@ The ErgoScript opcode and JVM verifier are developed separately in
 
 ## September 2026 milestone
 
+The JVM archive tooling now includes a strict ZIP reader and deterministic
+copy-bytes writer, with 88 fixture cases and four isolated guard mutants.
+The [archive tooling guide](reproduction/jvm-artifact/README.md) gives the
+commands and coverage limits. This archive layer does not yet qualify a
+complete verifier JAR or close B4.
+
 The generator now exposes local checkpoint workflows for a shared assumption,
 an alternate program, a duplicate assumption, and alternate-statement
 Resolve/Join finals. Each workflow has a separate verification command.
