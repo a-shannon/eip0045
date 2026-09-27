@@ -400,6 +400,11 @@ struct CandidateProofResult {
 }
 
 fn main() -> Result<()> {
+    #[cfg(all(target_os = "linux", feature = "b4-prepare-input-set-kernel"))]
+    if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("b4-campaign")) {
+        return eip_0045_candidate_generator::run_trusted_host_b4_campaign(
+            std::env::args_os().collect());
+    }
     match Cli::parse().command {
         Command::GenerateLocalAncestryAlternateStatementResolveFixed22 { inputs, output_root } => {
             reject_runtime_overrides()?;

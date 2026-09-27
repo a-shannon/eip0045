@@ -26,7 +26,8 @@ use crate::{
         b4_paths_conflict, validate_safe_relative_path,
     },
     b4_positive_input_set::{
-        B4PositiveInputSetPublicationBindingV2, derive_b4_positive_input_set_completion_jcs_v2,
+        B4PositiveInputSetPublicationBindingV2, B4ValidatedTrustedHostInputSetCompletionV1,
+        derive_b4_positive_input_set_completion_jcs_v2,
     },
     b4_recursive_auxiliary_paths::compiled_positive_auxiliary_artifact_paths,
     canonical::{canonical_json_bytes, parse_json_strict, validate_canonical_json_source},
@@ -172,7 +173,7 @@ const RECURSIVE_ARTIFACT_LAYOUT: [(&str, &str); 8] = [
     ("receipt-oracle", "candidate-recursive-oracle.borsh"),
 ];
 /// Exact case-indexed physical auxiliary raw-seal inventory.
-pub(crate) fn positive_auxiliary_artifact_paths(
+pub fn positive_auxiliary_artifact_paths(
     case_index: usize,
 ) -> Result<&'static [&'static str]> {
     compiled_positive_auxiliary_artifact_paths(case_index)
@@ -1089,11 +1090,44 @@ pub fn construct_canonical_positive_generation_set_jcs_v2(
 ) -> Result<Vec<u8>> {
     derive_b4_positive_input_set_completion_jcs_v2(positive_input_set)
         .context("retained V2 positive input-set publication binding is stale")?;
-    let input_set = BoundDocument::parse(
+    construct_canonical_positive_generation_set_from_bound_input_v2(
         NamedCanonicalJcs {
             relative_path: positive_input_set.input_set_path(),
             bytes: positive_input_set.input_set_jcs(),
         },
+        proof_generator_artifact,
+        cases,
+    )
+}
+
+/// Construct from the separately validated trusted-host completion. The token is
+/// semantic only; its caller must retain and remeasure the physical source.
+#[cfg(feature = "positive-gate")]
+pub fn construct_canonical_positive_generation_set_jcs_trusted_host_v1(
+    completion: &B4ValidatedTrustedHostInputSetCompletionV1,
+    positive_input_set: NamedCanonicalJcs<'_>,
+    proof_generator_artifact: &[u8],
+    cases: [PositiveGenerationCaseDocuments<'_>; POSITIVE_CASE_COUNT],
+) -> Result<Vec<u8>> {
+    let identity = B4ContractArtifactIdentityV1::from_bytes(
+        positive_input_set.relative_path,
+        B4ContractArtifactEncodingV1::Rfc8785Jcs,
+        positive_input_set.bytes,
+    )?;
+    ensure!(completion.input_set_identity() == &identity,
+        "trusted-host generation input differs from the validated completion");
+    construct_canonical_positive_generation_set_from_bound_input_v2(
+        positive_input_set, proof_generator_artifact, cases,
+    )
+}
+
+fn construct_canonical_positive_generation_set_from_bound_input_v2(
+    positive_input_set: NamedCanonicalJcs<'_>,
+    proof_generator_artifact: &[u8],
+    cases: [PositiveGenerationCaseDocuments<'_>; POSITIVE_CASE_COUNT],
+) -> Result<Vec<u8>> {
+    let input_set = BoundDocument::parse(
+        positive_input_set,
         "V2 positive input set",
     )?;
     validate_json_schema(
@@ -11146,6 +11180,53 @@ pub(crate) mod test_support {
         .unwrap();
 
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn trusted_host_generation_builder_requires_the_validated_input_identity() {
+        use crate::b4_positive_input_set::{
+            derive_b4_trusted_host_input_set_completion_jcs_v1,
+            project_b4_trusted_host_input_set_paths_v1,
+            validate_b4_trusted_host_input_set_completion_jcs_v1,
+        };
+        let base = Fixture::valid();
+        let input = V2InputIdentityFixture::valid();
+        let (_, _, generation_cases) = build_generation_fixture(
+            &input.input_value, &input.input_bytes, &base.verifier_files,
+            &base.proof_generator_artifact, &base.recursive_calibrations,
+        );
+        let paths = project_b4_trusted_host_input_set_paths_v1("positive").unwrap();
+        let executor = B4ContractArtifactIdentityV1::from_bytes(
+            "preproof/executor", B4ContractArtifactEncodingV1::RawBytes, b"test-executor").unwrap();
+        let request_digest = "a".repeat(64);
+        let build_digest = "b".repeat(64);
+        let completion_bytes = derive_b4_trusted_host_input_set_completion_jcs_v1(
+            &paths, &input.input_bytes, 71, &request_digest, &build_digest, &executor).unwrap();
+        let token = validate_b4_trusted_host_input_set_completion_jcs_v1(
+            &completion_bytes, &paths, &input.input_bytes, 71,
+            &request_digest, &build_digest, &executor).unwrap();
+        let artifact_views: [Vec<GeneratedArtifactContents<'_>>; POSITIVE_CASE_COUNT] =
+            std::array::from_fn(|case| generation_cases[case].artifacts.iter().map(|artifact|
+                GeneratedArtifactContents { source_file: artifact.source_file, bytes: &artifact.bytes })
+                .collect());
+        let auxiliary_views: [Vec<GeneratedAuxiliaryArtifactContents<'_>>; POSITIVE_CASE_COUNT] =
+            std::array::from_fn(|case| generation_cases[case].auxiliary_artifacts.iter().map(|artifact|
+                GeneratedAuxiliaryArtifactContents { relative_path: artifact.source_file,
+                    bytes: &artifact.bytes }).collect());
+        let cases = || std::array::from_fn(|case| PositiveGenerationCaseDocuments {
+            proof_output_manifest_jcs: &generation_cases[case].proof_output_manifest_jcs,
+            artifacts: &artifact_views[case], auxiliary_artifacts: &auxiliary_views[case],
+        });
+        let healthy = construct_canonical_positive_generation_set_jcs_trusted_host_v1(
+            &token, NamedCanonicalJcs { relative_path: paths.input_set_path(),
+                bytes: &input.input_bytes }, &base.proof_generator_artifact, cases()).unwrap();
+        assert_eq!(healthy, construct_v2_generation_fixture(
+            &input, &base.proof_generator_artifact, &generation_cases).unwrap());
+        let error = construct_canonical_positive_generation_set_jcs_trusted_host_v1(
+            &token, NamedCanonicalJcs { relative_path: "positive/other-input-set.json",
+                bytes: &input.input_bytes }, &base.proof_generator_artifact, cases()).unwrap_err();
+        assert!(format!("{error:#}").contains(
+            "trusted-host generation input differs from the validated completion"));
     }
 
     #[test]

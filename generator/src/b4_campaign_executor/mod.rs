@@ -31,6 +31,259 @@ mod preflight;
 mod prepare_campaign_precommit;
 #[cfg(feature = "b4-prepare-input-set-kernel")]
 mod prepare_input_set;
+
+#[cfg(all(target_os = "linux", feature = "b4-prepare-input-set-kernel"))]
+mod trusted_host_cli {
+    use std::{ffi::OsString, fs::File, io::Read, os::unix::fs::MetadataExt, path::Path};
+
+    use anyhow::{Context as _, Result, bail, ensure};
+    use eip_0045_reproduction::{
+        b4_build_check::B4BuildExpectations,
+        b4_campaign_contract::{B4TrustedHostRequestV1, B4_CAMPAIGN_EXECUTOR_COMMANDS},
+    };
+    use sha2::{Digest as _, Sha256};
+
+    use super::{prepare_campaign_precommit, prepare_input_set};
+    #[cfg(feature = "b4-finalize-generation-set-handler")]
+    use super::finalize_generation_set_handler;
+
+    struct Invocation {
+        command: String,
+        request_path: String,
+        request_bytes: u64,
+        request_sha256: String,
+        source_commit: String,
+        source_tree: String,
+        build_evidence_root: String,
+        preflight_only: bool,
+    }
+
+    fn lower_hex(value: &str, digits: usize) -> bool {
+        value.len() == digits && value.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    }
+
+    fn parse(raw: &[OsString]) -> Result<Invocation> {
+        let argv = raw.iter().map(|part| part.to_str().context("trusted-host argv is not UTF-8"))
+            .collect::<Result<Vec<_>>>()?;
+        ensure!(argv.len() == 17 || argv.len() == 18, "trusted-host argv has wrong cardinality");
+        ensure!(argv[1] == "b4-campaign", "trusted-host invocation has wrong façade");
+        ensure!(B4_CAMPAIGN_EXECUTOR_COMMANDS.contains(&argv[2]),
+            "unknown B4 campaign command");
+        ensure!(matches!(argv[2], "prepare-input-set" | "prepare-campaign-precommit"
+            | "finalize-generation-set"),
+            "B4 campaign command is not implemented for trusted-host-v1");
+        let names = ["--realization", "--request", "--request-bytes", "--request-sha256",
+            "--expected-source-commit", "--expected-source-tree",
+            "--expected-build-evidence-root"];
+        for (index, name) in names.iter().enumerate() {
+            ensure!(argv[3 + index * 2] == *name, "trusted-host flags must occur exactly once in canonical order");
+        }
+        ensure!(argv[4] == "trusted-host-v1", "wrong trusted-host realization");
+        let path = Path::new(argv[6]);
+        ensure!(path.is_absolute() && path.components().all(|part| !matches!(part,
+            std::path::Component::CurDir | std::path::Component::ParentDir)),
+            "trusted-host request path must be normalized and absolute");
+        let byte_text = argv[8];
+        ensure!(!byte_text.is_empty() && byte_text.bytes().all(|byte| byte.is_ascii_digit())
+            && (byte_text == "0" || !byte_text.starts_with('0')),
+            "trusted-host request length is not canonical decimal");
+        let request_bytes = byte_text.parse::<u64>().context("invalid trusted-host request length")?;
+        ensure!((1..=65536).contains(&request_bytes), "trusted-host request exceeds its byte bound");
+        ensure!(lower_hex(argv[10], 64) && lower_hex(argv[12], 40)
+            && lower_hex(argv[14], 40) && lower_hex(argv[16], 64),
+            "trusted-host digest or source anchor has wrong syntax");
+        ensure!(argv.len() == 17 || argv[17] == "--preflight-only",
+            "unexpected trusted-host trailing argument");
+        Ok(Invocation {
+            command: argv[2].to_owned(), request_path: argv[6].to_owned(), request_bytes,
+            request_sha256: argv[10].to_owned(), source_commit: argv[12].to_owned(),
+            source_tree: argv[14].to_owned(), build_evidence_root: argv[16].to_owned(),
+            preflight_only: argv.len() == 18,
+        })
+    }
+
+    struct PinnedRequest {
+        held: File,
+        bytes: Vec<u8>,
+        device: u64,
+        inode: u64,
+    }
+
+    fn open_pinned(path: &str, expected_length: u64, expected_sha256: &str) -> Result<PinnedRequest> {
+        let descriptor = rustix::fs::openat2(
+            rustix::fs::CWD, Path::new(path),
+            rustix::fs::OFlags::RDONLY | rustix::fs::OFlags::CLOEXEC | rustix::fs::OFlags::NONBLOCK,
+            rustix::fs::Mode::empty(),
+            rustix::fs::ResolveFlags::NO_SYMLINKS | rustix::fs::ResolveFlags::NO_MAGICLINKS,
+        ).context("cannot pin trusted-host request without symlinks")?;
+        let mut held = File::from(descriptor);
+        let metadata = held.metadata().context("cannot stat pinned trusted-host request")?;
+        ensure!(metadata.is_file() && metadata.nlink() == 1 && metadata.len() == expected_length,
+            "trusted-host request is not one regular file of pinned length");
+        let mut bytes = Vec::new();
+        held.by_ref().take(65537).read_to_end(&mut bytes)
+            .context("cannot read pinned trusted-host request")?;
+        ensure!(bytes.len() as u64 == expected_length
+            && hex::encode(Sha256::digest(&bytes)) == expected_sha256,
+            "trusted-host request bytes differ from external pin");
+        Ok(PinnedRequest { held, bytes, device: metadata.dev(), inode: metadata.ino() })
+    }
+
+    fn recheck(path: &str, expected: &PinnedRequest, length: u64, sha256: &str) -> Result<()> {
+        let held_metadata = expected.held.metadata().context("cannot restat held trusted-host request")?;
+        ensure!(held_metadata.is_file() && held_metadata.nlink() == 1
+            && held_metadata.dev() == expected.device && held_metadata.ino() == expected.inode
+            && held_metadata.len() == length,
+            "held trusted-host request identity changed");
+        let current = open_pinned(path, length, sha256)?;
+        ensure!(current.device == expected.device && current.inode == expected.inode
+            && current.bytes == expected.bytes,
+            "trusted-host request path was replaced during the command");
+        Ok(())
+    }
+
+    pub(crate) fn run(raw: Vec<OsString>) -> Result<()> {
+        let invocation = parse(&raw)?;
+        let pinned = open_pinned(&invocation.request_path, invocation.request_bytes,
+            &invocation.request_sha256)?;
+        let request = B4TrustedHostRequestV1::from_canonical_jcs(&pinned.bytes)?;
+        ensure!(request.command == invocation.command, "pinned request selects a different command");
+        let expectations = B4BuildExpectations {
+            expected_source_commit: Some(&invocation.source_commit),
+            expected_source_tree: Some(&invocation.source_tree),
+            expected_evidence_root: Some(&invocation.build_evidence_root),
+        };
+        let outcome = match (request.prior_roots.len(), invocation.command.as_str()) {
+            (1, "prepare-input-set") => prepare_input_set::trusted_host::handle::<1>(
+                &request, invocation.request_bytes, &invocation.request_sha256,
+                &expectations, invocation.preflight_only),
+            (2, "prepare-input-set") => prepare_input_set::trusted_host::handle::<2>(
+                &request, invocation.request_bytes, &invocation.request_sha256,
+                &expectations, invocation.preflight_only),
+            (1, "prepare-campaign-precommit") => prepare_campaign_precommit::handle_trusted_host_precommit::<1>(
+                &request, invocation.request_bytes, &invocation.request_sha256,
+                &expectations, invocation.preflight_only),
+            (2, "prepare-campaign-precommit") => prepare_campaign_precommit::handle_trusted_host_precommit::<2>(
+                &request, invocation.request_bytes, &invocation.request_sha256,
+                &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-finalize-generation-set-handler")]
+            (1, "finalize-generation-set") => finalize_generation_set_handler::handle_trusted_host_finalize::<1>(&request, &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-finalize-generation-set-handler")]
+            (2, "finalize-generation-set") => finalize_generation_set_handler::handle_trusted_host_finalize::<2>(&request, &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-finalize-generation-set-handler")]
+            (3, "finalize-generation-set") => finalize_generation_set_handler::handle_trusted_host_finalize::<3>(&request, &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-finalize-generation-set-handler")]
+            (4, "finalize-generation-set") => finalize_generation_set_handler::handle_trusted_host_finalize::<4>(&request, &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-finalize-generation-set-handler")]
+            (5, "finalize-generation-set") => finalize_generation_set_handler::handle_trusted_host_finalize::<5>(&request, &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-finalize-generation-set-handler")]
+            (6, "finalize-generation-set") => finalize_generation_set_handler::handle_trusted_host_finalize::<6>(&request, &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-finalize-generation-set-handler")]
+            (7, "finalize-generation-set") => finalize_generation_set_handler::handle_trusted_host_finalize::<7>(&request, &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-finalize-generation-set-handler")]
+            (8, "finalize-generation-set") => finalize_generation_set_handler::handle_trusted_host_finalize::<8>(&request, &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-finalize-generation-set-handler")]
+            (9, "finalize-generation-set") => finalize_generation_set_handler::handle_trusted_host_finalize::<9>(&request, &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-finalize-generation-set-handler")]
+            (10, "finalize-generation-set") => finalize_generation_set_handler::handle_trusted_host_finalize::<10>(&request, &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-finalize-generation-set-handler")]
+            (11, "finalize-generation-set") => finalize_generation_set_handler::handle_trusted_host_finalize::<11>(&request, &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-finalize-generation-set-handler")]
+            (12, "finalize-generation-set") => finalize_generation_set_handler::handle_trusted_host_finalize::<12>(&request, &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-finalize-generation-set-handler")]
+            (13, "finalize-generation-set") => finalize_generation_set_handler::handle_trusted_host_finalize::<13>(&request, &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-finalize-generation-set-handler")]
+            (14, "finalize-generation-set") => finalize_generation_set_handler::handle_trusted_host_finalize::<14>(&request, &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-finalize-generation-set-handler")]
+            (15, "finalize-generation-set") => finalize_generation_set_handler::handle_trusted_host_finalize::<15>(&request, &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-finalize-generation-set-handler")]
+            (16, "finalize-generation-set") => finalize_generation_set_handler::handle_trusted_host_finalize::<16>(&request, &expectations, invocation.preflight_only),
+            _ => bail!("trusted-host request has unsupported root count or command"),
+        };
+        let postcheck = recheck(&invocation.request_path, &pinned,
+            invocation.request_bytes, &invocation.request_sha256);
+        match (outcome, postcheck) {
+            (Ok(()), Ok(())) => Ok(()),
+            (Err(effect), Ok(())) => Err(effect),
+            (Ok(()), Err(post)) => Err(post).context("trusted-host request changed after handler"),
+            (Err(effect), Err(post)) => Err(effect).context(format!(
+                "trusted-host request postcheck also failed: {post:#}")),
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use std::ffi::OsString;
+        use super::{open_pinned, parse};
+
+        fn valid() -> Vec<OsString> {
+            let mut argv = ["runner", "b4-campaign", "prepare-input-set", "--realization",
+                "trusted-host-v1", "--request", "/campaign/request.json",
+                "--request-bytes", "32", "--request-sha256"]
+                .into_iter().map(OsString::from).collect::<Vec<_>>();
+            argv.extend([OsString::from("a".repeat(64)), OsString::from("--expected-source-commit"),
+                OsString::from("b".repeat(40)), OsString::from("--expected-source-tree"),
+                OsString::from("c".repeat(40)), OsString::from("--expected-build-evidence-root"),
+                OsString::from("d".repeat(64))]);
+            argv
+        }
+
+        #[test]
+        fn closed_argv_has_three_real_commands_and_each_external_anchor() {
+            let base = valid();
+            assert!(parse(&base).is_ok());
+            let mut precommit = base.clone();
+            precommit[2] = "prepare-campaign-precommit".into();
+            assert!(parse(&precommit).is_ok());
+            let mut finalizer = base.clone();
+            finalizer[2] = "finalize-generation-set".into();
+            assert!(parse(&finalizer).is_ok());
+            for position in [12, 14, 16] {
+                let mut changed = base.clone();
+                changed[position] = "0".into();
+                assert!(parse(&changed).is_err(), "anchor position {position} accepted");
+            }
+            let mut unknown = base.clone();
+            unknown[2] = "generate-case".into();
+            assert!(parse(&unknown).is_err());
+        }
+
+        #[test]
+        fn closed_argv_rejects_duplicate_missing_reordered_and_unexpected_flags() {
+            let base = valid();
+            let mut duplicate = base.clone();
+            duplicate.extend(["--request".into(), "/other/request.json".into()]);
+            assert!(parse(&duplicate).is_err());
+            let mut missing = base.clone();
+            missing.remove(5);
+            assert!(parse(&missing).is_err());
+            let mut reordered = base.clone();
+            reordered.swap(5, 7);
+            assert!(parse(&reordered).is_err());
+            let mut extra = base.clone();
+            extra.push("--unknown".into());
+            assert!(parse(&extra).is_err());
+            let mut preflight = base.clone();
+            preflight.push("--preflight-only".into());
+            assert!(parse(&preflight).is_ok());
+            let mut wrong_path = base.clone();
+            wrong_path[6] = "/campaign/../request.json".into();
+            assert!(parse(&wrong_path).is_err());
+        }
+
+        #[test]
+        fn fifo_request_is_rejected_without_waiting_for_a_writer() {
+            let root = tempfile::tempdir().unwrap();
+            let fifo = root.path().join("request.fifo");
+            rustix::fs::mkfifoat(rustix::fs::CWD, &fifo,
+                rustix::fs::Mode::RUSR | rustix::fs::Mode::WUSR).unwrap();
+            assert!(open_pinned(fifo.to_str().unwrap(), 1, &"a".repeat(64)).is_err());
+        }
+    }
+}
+
+#[cfg(all(target_os = "linux", feature = "b4-prepare-input-set-kernel"))]
+pub(crate) use trusted_host_cli::run as run_trusted_host_cli;
 #[cfg(any(test, feature = "b4-negative-materialization-handler"))]
 mod prepare_negative_materialization_set;
 #[cfg(feature = "b4-terminal-evidence-export")]

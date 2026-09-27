@@ -6,6 +6,7 @@ use anyhow::{Context as _, Result, ensure};
 use eip_0045_reproduction::b4_campaign_contract::{
     B4CampaignPrecommitAuthorityV1, B4CampaignPrecommitAuthorityV2, B4ContractArtifactEncodingV1,
     B4ContractArtifactIdentityV1, Eip0045B4CampaignPrecommitV1,
+    Eip0045B4TrustedHostCampaignPrecommitV1,
 };
 
 use super::custody::CurrentExecutableObservation;
@@ -111,4 +112,26 @@ pub(super) fn require_current_executable_binding_v2(
     observed
         .require_artifact_identity(&campaign.precommit().campaign_executor.artifact)
         .context("running executor bytes differ from the V2-derived campaign-precommitted artifact")
+}
+
+/// Authenticate one retained trusted-host envelope against the complete
+/// independently rederived command output and the currently running binary.
+pub(super) fn authenticate_trusted_host_campaign_precommit_file(
+    campaign_relative_path: &str,
+    retained_bytes: &[u8],
+    independently_rederived_bytes: &[u8],
+    observed: &CurrentExecutableObservation,
+) -> Result<(B4ContractArtifactIdentityV1, Eip0045B4TrustedHostCampaignPrecommitV1)> {
+    ensure!(retained_bytes == independently_rederived_bytes,
+        "retained trusted-host precommit differs from its rederived source closure");
+    let envelope = Eip0045B4TrustedHostCampaignPrecommitV1::from_canonical_jcs(retained_bytes)
+        .context("retained trusted-host precommit is not exact canonical JCS")?;
+    observed.require_artifact_identity(&envelope.inner_precommit.campaign_executor.artifact)
+        .context("running executor differs from the trusted-host precommit")?;
+    let identity = B4ContractArtifactIdentityV1::from_bytes(
+        campaign_relative_path,
+        B4ContractArtifactEncodingV1::Rfc8785Jcs,
+        retained_bytes,
+    )?;
+    Ok((identity, envelope))
 }

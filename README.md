@@ -7,6 +7,11 @@ The ErgoScript opcode and JVM verifier are developed separately in
 
 ## September 2026 milestone
 
+The [trusted-host campaign handlers](docs/specs/b4-trusted-host-campaign-v1.md)
+connect input preparation, an authenticated precommit and generation-set
+finalization. This source slice adds a separate host-trust realization; physical
+campaign qualification and the complete eleven-command executor remain open.
+
 The JVM archive tooling now includes a strict ZIP reader and deterministic
 copy-bytes writer, with 88 fixture cases and four isolated guard mutants.
 The [archive tooling guide](reproduction/jvm-artifact/README.md) gives the
@@ -57,9 +62,8 @@ requires the exact environment checked by `methods/build.rs` and
 `cargo run` entry point. Running it requires a separately provisioned locked
 guest environment; the commands below cover only non-proving checks.
 
-The older B4 build documents describe the fuller campaign environment. Its
-Docker image definition and complete provisioning are not included in this
-source milestone.
+The B4 build documents and `Dockerfile.reproduction` describe the fuller
+campaign environment. Qualification of that complete environment remains open.
 
 Ordinary library checks can be run without generating proofs:
 

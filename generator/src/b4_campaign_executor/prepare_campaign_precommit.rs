@@ -57,6 +57,7 @@ mod execute {
     use super::{
         CAMPAIGN_PRECOMMIT_FILE, CONTRACTS_SUBTREE, ExecutorPreflightContext,
         ProjectedSingleSubtreeCampaignLayout, project_prepare_campaign_precommit_layout,
+        project_single_subtree_campaign_layout,
     };
     use crate::b4_campaign_executor::{
         authenticated_preflight::{
@@ -363,7 +364,7 @@ mod execute {
     }
 
     #[derive(Clone, Copy)]
-    enum RetainedArtifactReadLimit {
+    pub(in crate::b4_campaign_executor) enum RetainedArtifactReadLimit {
         PositiveInputSet,
         PositiveInputSetCompletion,
         ExecutorArtifact,
@@ -379,6 +380,28 @@ mod execute {
         RunnerProfile,
         SeccompDocument,
         JvmInclusionManifest,
+    }
+
+    impl RetainedArtifactReadLimit {
+        pub(in crate::b4_campaign_executor) const fn max_bytes(self) -> usize {
+            match self {
+                Self::PositiveInputSet => B4_POSITIVE_INPUT_SET_MAX_BYTES,
+                Self::PositiveInputSetCompletion => B4_POSITIVE_INPUT_SET_COMPLETION_MAX_BYTES,
+                Self::ExecutorArtifact => MAX_EXECUTOR_ARTIFACT_BYTES,
+                Self::SourceArchive => MAX_SOURCE_ARCHIVE_BYTES,
+                Self::Descriptor => MAX_DESCRIPTOR_BYTES,
+                Self::ExecutorContract => MAX_EXECUTOR_CONTRACT_BYTES,
+                Self::VerifierContract => MAX_VERIFIER_CONTRACT_BYTES,
+                Self::CliSpec => MAX_CLI_SPEC_BYTES,
+                Self::NegativePlan => MAX_NEGATIVE_PLAN_BYTES,
+                Self::ExpectationSet => MAX_EXPECTATION_SET_BYTES,
+                Self::SchemaDocument => MAX_SCHEMA_DOCUMENT_BYTES,
+                Self::ValidatorArtifact => MAX_VALIDATOR_ARTIFACT_BYTES,
+                Self::RunnerProfile => MAX_RUNNER_PROFILE_BYTES,
+                Self::SeccompDocument => MAX_SECCOMP_DOCUMENT_BYTES,
+                Self::JvmInclusionManifest => MAX_JVM_INCLUSION_MANIFEST_BYTES,
+            }
+        }
     }
 
     #[derive(Default)]
@@ -1038,6 +1061,282 @@ mod execute {
         })
     }
 
+    #[cfg(all(target_os = "linux", feature = "b4-authoritative-build-custody"))]
+    pub(in crate::b4_campaign_executor) mod trusted_host {
+        use super::*;
+        use eip_0045_reproduction::{
+            b4_campaign_contract::{B4CampaignPrecommitExternalInputsV1, B4ContractArtifactIdentityV1,
+                B4ExternalReviewedSourceV1, B4ExternalSchemaDocumentV1, B4TrustedHostRequestV1,
+                derive_b4_trusted_host_campaign_precommit_jcs_v1,
+                Eip0045B4TrustedHostCampaignPrecommitV1},
+            b4_positive_input_set::{project_b4_trusted_host_input_set_paths_v1,
+                validate_b4_trusted_host_input_set_completion_jcs_v1},
+        };
+
+        fn locator<'a>(request: &'a B4TrustedHostRequestV1, name: &str)
+            -> Result<PrepareCampaignPrecommitArtifactLocatorV1<'a>> {
+            let source = request.locator(name)?;
+            Ok(PrepareCampaignPrecommitArtifactLocatorV1::new(
+                source.root_index, &source.relative_path))
+        }
+
+        fn plan(request: &B4TrustedHostRequestV1) -> Result<PrepareCampaignPrecommitSourcePlanV1<'_>> {
+            let schemas: [PrepareCampaignPrecommitArtifactLocatorV1<'_>; B4_VERIFIER_SCHEMA_ROLES.len()] =
+                (0..B4_VERIFIER_SCHEMA_ROLES.len()).map(|i| locator(request, &format!("schema{i}")))
+                    .collect::<Result<Vec<_>>>()?.try_into()
+                    .map_err(|_| anyhow::anyhow!("trusted-host schema locator count drift"))?;
+            Ok(PrepareCampaignPrecommitSourcePlanV1 {
+                input_set: locator(request, "inputSet")?,
+                input_set_completion: locator(request, "inputSetCompletion")?,
+                build_evidence_root_index: request.build_evidence_root_index,
+                campaign_executor_artifact: locator(request, "campaignExecutorArtifact")?,
+                campaign_executor_source_archive: locator(request, "executorSourceArchive")?,
+                campaign_executor_build_descriptor: locator(request, "executorBuildDescriptor")?,
+                executor_contract: locator(request, "executorContract")?,
+                verifier_contract: locator(request, "verifierContract")?,
+                verifier_cli_spec: locator(request, "verifierCliSpec")?,
+                negative_plan: locator(request, "negativePlan")?,
+                expectation_set: locator(request, "expectationSet")?,
+                verifier_schema_documents: schemas,
+                validator_build_descriptors: [locator(request, "validatorDescriptor0")?, locator(request, "validatorDescriptor1")?],
+                validator_artifacts: [locator(request, "validatorArtifact0")?, locator(request, "validatorArtifact1")?],
+                validator_source_archives: [locator(request, "validatorSourceArchive0")?, locator(request, "validatorSourceArchive1")?],
+                runner_profiles: [locator(request, "runnerProfile0")?, locator(request, "runnerProfile1")?,
+                    locator(request, "runnerProfile2")?, locator(request, "runnerProfile3")?],
+                seccomp_documents: [locator(request, "seccomp0")?, locator(request, "seccomp1")?,
+                    locator(request, "seccomp2")?, locator(request, "seccomp3")?],
+                jvm_copy_only_inclusion_manifest: locator(request, "jvmInclusion")?,
+            })
+        }
+
+        impl RetainedCampaignPrecommitExternalClosureV1 {
+            fn trusted_common(&self) -> B4CampaignPrecommitExternalInputsV1<'_> {
+                let descriptor = &self.parsed_campaign_executor_build_descriptor;
+                B4CampaignPrecommitExternalInputsV1 {
+                    input_set: self.input_set.as_external(B4ContractArtifactEncodingV1::Rfc8785Jcs),
+                    campaign_executor_artifact: self.campaign_executor_artifact.as_external(B4ContractArtifactEncodingV1::RawBytes),
+                    campaign_executor_reviewed_source: B4ExternalReviewedSourceV1 {
+                        repository: &descriptor.reviewed_source.repository,
+                        commit: &descriptor.reviewed_source.commit,
+                        tree: &descriptor.reviewed_source.tree,
+                        archive: self.campaign_executor_source_archive.as_external(B4ContractArtifactEncodingV1::GitBundle),
+                    },
+                    campaign_executor_build_descriptor: self.campaign_executor_build_descriptor.as_external(B4ContractArtifactEncodingV1::Rfc8785Jcs),
+                    executor_contract: self.executor_contract.as_external(B4ContractArtifactEncodingV1::Rfc8785Jcs),
+                    verifier_contract: self.verifier_contract.as_external(B4ContractArtifactEncodingV1::Rfc8785Jcs),
+                    verifier_cli_spec: self.verifier_cli_spec.as_external(B4ContractArtifactEncodingV1::RawBytes),
+                    negative_plan: self.negative_plan.as_external(B4ContractArtifactEncodingV1::Rfc8785Jcs),
+                    expectation_set: self.expectation_set.as_external(B4ContractArtifactEncodingV1::Rfc8785Jcs),
+                    verifier_schema_documents: std::array::from_fn(|i| B4ExternalSchemaDocumentV1 {
+                        role: B4_VERIFIER_SCHEMA_ROLES[i],
+                        document: self.verifier_schema_documents[i].as_external(B4ContractArtifactEncodingV1::RawBytes),
+                    }),
+                    validator_build_descriptors: std::array::from_fn(|i| self.validator_build_descriptors[i]
+                        .as_external(B4ContractArtifactEncodingV1::Rfc8785Jcs)),
+                    validator_artifacts: std::array::from_fn(|i| self.validator_artifacts[i]
+                        .as_external(B4ContractArtifactEncodingV1::RawBytes)),
+                    validator_source_archives: std::array::from_fn(|i| self.validator_source_archives[i]
+                        .as_external(B4ContractArtifactEncodingV1::GitBundle)),
+                    runner_profiles: std::array::from_fn(|i| self.runner_profiles[i]
+                        .as_external(B4ContractArtifactEncodingV1::Rfc8785Jcs)),
+                    seccomp_documents: std::array::from_fn(|i| self.seccomp_documents[i]
+                        .as_external(B4ContractArtifactEncodingV1::Rfc8785Jcs)),
+                    jvm_copy_only_inclusion_manifest: self.jvm_copy_only_inclusion_manifest
+                        .as_external(B4ContractArtifactEncodingV1::Rfc8785Jcs),
+                }
+            }
+        }
+
+        fn derive(retained: &RetainedCampaignPrecommitExternalClosureV1,
+            build: &AuthoritativeB4BuildProjection, request: &B4TrustedHostRequestV1,
+            request_bytes: u64, request_sha256: &str) -> Result<Vec<u8>> {
+            let descriptor = &retained.parsed_campaign_executor_build_descriptor;
+            let executor = B4ContractArtifactIdentityV1::from_bytes(
+                &retained.campaign_executor_artifact.campaign_relative_path,
+                B4ContractArtifactEncodingV1::RawBytes, &retained.campaign_executor_artifact.bytes)?;
+            ensure!(executor == descriptor.artifact, "trusted-host executor differs from its retained descriptor");
+            let phase = retained.input_set.campaign_relative_path
+                .strip_suffix("/positive-input-set.json").context("trusted-host input-set filename drift")?;
+            let paths = project_b4_trusted_host_input_set_paths_v1(phase)?;
+            ensure!(paths.input_set_path() == retained.input_set.campaign_relative_path
+                && paths.completion_path() == retained.input_set_completion.campaign_relative_path,
+                "trusted-host input and completion paths differ from their closed projection");
+            let completion = validate_b4_trusted_host_input_set_completion_jcs_v1(
+                &retained.input_set_completion.bytes, &paths, &retained.input_set.bytes,
+                request.input_set_request_byte_length.context("missing input-set request length")?,
+                request.input_set_request_sha256.as_deref().context("missing input-set request digest")?,
+                build.evidence_root_sha256(), &executor)?;
+            let positive = validate_and_bind_positive_precommit_v2(build,
+                retained.positive_precommit_documents())?;
+            let verifier = B4VerifierContractAuthorityV1::from_external_documents(
+                retained.verifier_cli_spec.as_external(B4ContractArtifactEncodingV1::RawBytes),
+                retained.negative_plan.as_external(B4ContractArtifactEncodingV1::Rfc8785Jcs),
+                retained.expectation_set.as_external(B4ContractArtifactEncodingV1::Rfc8785Jcs),
+                std::array::from_fn(|i| B4ExternalSchemaDocumentV1 {
+                    role: B4_VERIFIER_SCHEMA_ROLES[i],
+                    document: retained.verifier_schema_documents[i].as_external(B4ContractArtifactEncodingV1::RawBytes),
+                }))?;
+            derive_b4_trusted_host_campaign_precommit_jcs_v1(positive, &verifier,
+                retained.trusted_common(), completion,
+                retained.input_set_completion.as_external(B4ContractArtifactEncodingV1::Rfc8785Jcs),
+                request_bytes, request_sha256)
+        }
+
+        fn map_previous_precommit_roots<const ROOTS: usize>(
+            previous: &B4TrustedHostRequestV1,
+            current_roots: [&Path; ROOTS],
+        ) -> Result<B4TrustedHostRequestV1> {
+            let mut mapped = previous.clone();
+            for source in mapped.sources.values_mut() {
+                let previous_root = previous.prior_roots.get(source.root_index)
+                    .context("prior precommit source root index is invalid")?;
+                source.root_index = current_roots.iter()
+                    .position(|root| root.to_str() == Some(previous_root.as_str()))
+                    .context("prior precommit source root is not retained by finalize-generation-set")?;
+            }
+            let previous_build_root = previous.prior_roots.get(previous.build_evidence_root_index)
+                .context("prior precommit build root index is invalid")?;
+            mapped.build_evidence_root_index = current_roots.iter()
+                .position(|root| root.to_str() == Some(previous_build_root.as_str()))
+                .context("prior precommit build root is not retained by finalize-generation-set")?;
+            mapped.prior_roots = current_roots.iter().map(|root| root.to_str()
+                .context("finalize-generation-set root is not UTF-8").map(str::to_owned))
+                .collect::<Result<Vec<_>>>()?;
+            Ok(mapped)
+        }
+
+        /// Reconstruct the prior command from immutable roots selected by the
+        /// next command. No root is padded, merged, or replaced by a parent.
+        pub(in crate::b4_campaign_executor) fn replay_for_finalizer<const ROOTS: usize, F>(
+            previous: &B4TrustedHostRequestV1,
+            campaign_root: &Path,
+            current_roots: [&Path; ROOTS],
+            build: &AuthoritativeB4BuildProjection,
+            request_bytes: u64,
+            request_sha256: &str,
+            read: F,
+        ) -> Result<Vec<u8>>
+        where
+            F: for<'path> FnMut(usize, &'path str, RetainedArtifactReadLimit, u64) -> Result<Vec<u8>>,
+        {
+            ensure!(previous.command == "prepare-campaign-precommit"
+                && previous.campaign_root == campaign_root.to_str().context("campaign root is not UTF-8")?,
+                "prior trusted-host request is not the selected precommit command");
+            let mapped = map_previous_precommit_roots(previous, current_roots)?;
+            let plan = plan(&mapped)?;
+            let retained = retain_external_closure(campaign_root, current_roots, read, &plan)?;
+            derive(&retained, build, previous, request_bytes, request_sha256)
+        }
+
+        #[cfg(test)]
+        mod finalizer_replay_tests {
+            use super::*;
+            use eip_0045_reproduction::b4_campaign_contract::B4TrustedHostArtifactLocatorV1;
+            use std::collections::BTreeMap;
+
+            #[test]
+            fn remaps_source_and_build_roots_without_padding_or_aliasing() {
+                let mut sources = BTreeMap::new();
+                sources.insert("inputSet".to_owned(), B4TrustedHostArtifactLocatorV1 {
+                    root_index: 0, relative_path: "positive-input-set.json".to_owned(),
+                });
+                let previous = B4TrustedHostRequestV1 {
+                    format: "Eip0045B4TrustedHostRequestV1".to_owned(), format_version: 1,
+                    realization: "trusted-host-v1".to_owned(),
+                    command: "prepare-campaign-precommit".to_owned(),
+                    campaign_root: "/campaign".to_owned(),
+                    prior_roots: vec!["/campaign/input".to_owned(), "/campaign/build".to_owned()],
+                    outer_final_root: "/campaign/precommit".to_owned(),
+                    configured_executor_artifact: "/campaign/executor".to_owned(),
+                    build_evidence_root_index: 1, input_set_path: None, guest_elf_path: None,
+                    proof_generator_path: None, input_set_request_byte_length: Some(1),
+                    input_set_request_sha256: Some("a".repeat(64)), sources,
+                };
+                let mapped = map_previous_precommit_roots(&previous,
+                    [Path::new("/campaign/build"), Path::new("/campaign/input")]).unwrap();
+                assert_eq!(mapped.build_evidence_root_index, 0);
+                assert_eq!(mapped.sources["inputSet"].root_index, 1);
+                assert_eq!(mapped.prior_roots.len(), 2);
+                assert_eq!(previous.build_evidence_root_index, 1);
+                assert!(map_previous_precommit_roots(&previous,
+                    [Path::new("/campaign/input")]).is_err());
+            }
+        }
+
+        /// Affine live TH precommit; construction stays inside one retained execute session.
+        struct TrustedHostPrecommit<'a, const ROOTS: usize> {
+            execute: &'a mut ExecutorExecuteContext<ROOTS, ProjectedSingleSubtreeCampaignLayout<ROOTS>>,
+            envelope: Vec<u8>,
+            request_sha256: &'a str,
+            completion_path: String,
+            final_path: String,
+        }
+
+        impl<const ROOTS: usize> TrustedHostPrecommit<'_, ROOTS> {
+            fn publish(self) -> Result<()> {
+                let Self { execute, envelope, request_sha256, completion_path, final_path } = self;
+                execute.with_mutation(|mutation| {
+                    let mut transaction = mutation.begin_create_only_directory()?;
+                    transaction.create_directory("trusted-host")?;
+                    transaction.create_file("trusted-host/campaign-precommit.json", &envelope,
+                        eip_0045_reproduction::b4_campaign_contract::MAX_CAMPAIGN_PRECOMMIT_BYTES + 4096)?;
+                    transaction.commit_with_postcommit_validation(|committed| {
+                        let reopened = committed.read_file("trusted-host/campaign-precommit.json",
+                            eip_0045_reproduction::b4_campaign_contract::MAX_CAMPAIGN_PRECOMMIT_BYTES + 4096)?;
+                        ensure!(reopened == envelope, "trusted-host precommit changed on reopen");
+                        let parsed = Eip0045B4TrustedHostCampaignPrecommitV1::from_canonical_jcs(&reopened)?;
+                        ensure!(parsed.request_sha256 == request_sha256
+                            && parsed.completion.path == completion_path,
+                            "trusted-host precommit lost request or completion binding");
+                        B4ContractArtifactIdentityV1::from_bytes(&final_path,
+                            B4ContractArtifactEncodingV1::Rfc8785Jcs, &reopened)?;
+                        Ok(())
+                    })
+                })
+            }
+        }
+
+        pub(in crate::b4_campaign_executor) fn handle<const ROOTS: usize>(request: &B4TrustedHostRequestV1,
+            request_bytes: u64, request_sha256: &str, expectations: &B4BuildExpectations<'_>,
+            preflight_only: bool) -> Result<()> {
+            ensure!(request.command == "prepare-campaign-precommit" && request.prior_roots.len() == ROOTS,
+                "trusted-host precommit command or root count drift");
+            let campaign = Path::new(&request.campaign_root);
+            let prior: [&Path; ROOTS] = std::array::from_fn(|i| Path::new(&request.prior_roots[i]));
+            let final_root = Path::new(&request.outer_final_root);
+            let plan = plan(request)?;
+            let layout = project_single_subtree_campaign_layout(campaign, prior, final_root, "trusted-host")?;
+            let preflight = ExecutorPreflightContext::capture(
+                Path::new(&request.configured_executor_artifact), layout)?;
+            let first = retain_external_closure(campaign, prior,
+                |index, path, limit, remaining| read_retained_artifact!(preflight, index, path, limit, remaining),
+                &plan)?;
+            preflight.executable().require_artifact_identity(
+                &first.parsed_campaign_executor_build_descriptor.artifact)?;
+            let build = preflight.authenticate_authoritative_b4_build_projection(
+                request.build_evidence_root_index, expectations)?;
+            let expected = derive(&first, &build, request, request_bytes, request_sha256)?;
+            if preflight_only { return preflight.finish_preflight(); }
+            preflight.execute(|execute| {
+                let retained = retain_external_closure(campaign, prior,
+                    |index, path, limit, remaining| read_retained_artifact!(execute, index, path, limit, remaining),
+                    &plan)?;
+                execute.executable().require_artifact_identity(
+                    &retained.parsed_campaign_executor_build_descriptor.artifact)?;
+                let rebound = execute.authenticate_authoritative_b4_build_projection(
+                    request.build_evidence_root_index, expectations)?;
+                ensure!(rebound == build, "trusted-host build changed between preflight and execute");
+                let envelope = derive(&retained, &rebound, request, request_bytes, request_sha256)?;
+                ensure!(envelope == expected, "trusted-host precommit changed between preflight and execute");
+                let completion_path = retained.input_set_completion.campaign_relative_path.clone();
+                let final_path = derive_campaign_relative_artifact_path(campaign, final_root,
+                    "trusted-host/campaign-precommit.json")?;
+                TrustedHostPrecommit { execute, envelope, request_sha256,
+                    completion_path, final_path }.publish()
+            })
+        }
+    }
+
     #[cfg(test)]
     mod transition_tests {
         use std::path::Path;
@@ -1399,6 +1698,13 @@ pub(crate) use execute::{
     PreparedCampaignPrecommitHandlerResultV1, execute_prepare_campaign_precommit_handler,
     preflight_prepare_campaign_precommit_handler,
 };
+
+#[cfg(all(target_os = "linux", feature = "b4-authoritative-build-custody"))]
+pub(super) use execute::trusted_host::handle as handle_trusted_host_precommit;
+#[cfg(all(target_os = "linux", feature = "b4-authoritative-build-custody"))]
+pub(in crate::b4_campaign_executor) use execute::trusted_host::replay_for_finalizer as replay_trusted_host_precommit_for_finalizer;
+#[cfg(all(target_os = "linux", feature = "b4-authoritative-build-custody"))]
+pub(in crate::b4_campaign_executor) use execute::RetainedArtifactReadLimit as PrecommitReadLimit;
 
 #[cfg(test)]
 mod source_shape_tests {

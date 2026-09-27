@@ -7,10 +7,7 @@
 //! deliberately non-serializable so a candidate document cannot replace the
 //! external authority used to verify it.
 
-use std::collections::BTreeSet;
-
-#[cfg(feature = "positive-gate")]
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{ensure, Context, Result};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -205,6 +202,127 @@ pub enum B4ContractArtifactEncodingV1 {
     Rfc8785Jcs,
     /// Exact Git bundle bytes selected as a reviewed source archive.
     GitBundle,
+}
+
+#[cfg(test)]
+mod trusted_host_request_tests {
+    use super::{B4TrustedHostArtifactLocatorV1, B4TrustedHostRequestV1,
+        CanonicalContract, TRUSTED_HOST_INPUT_SOURCES};
+    use std::collections::BTreeMap;
+
+    fn request() -> B4TrustedHostRequestV1 {
+        let sources = TRUSTED_HOST_INPUT_SOURCES.iter().enumerate().map(|(index, name)| {
+            (name.to_string(), B4TrustedHostArtifactLocatorV1 {
+                root_index: 0, relative_path: format!("sources/{index}.json"),
+            })
+        }).collect::<BTreeMap<_, _>>();
+        B4TrustedHostRequestV1 {
+            format: "Eip0045B4TrustedHostRequestV1".to_owned(), format_version: 1,
+            realization: "trusted-host-v1".to_owned(), command: "prepare-input-set".to_owned(),
+            campaign_root: "/campaign".to_owned(),
+            prior_roots: vec!["/campaign/retained-1".to_owned()],
+            outer_final_root: "/campaign/output".to_owned(),
+            configured_executor_artifact: "/campaign/retained-1/bin/executor".to_owned(),
+            build_evidence_root_index: 0,
+            input_set_path: Some("phases/prepare-001/trusted-host/positive-input-set.json".to_owned()),
+            guest_elf_path: Some("sources/guest.elf".to_owned()),
+            proof_generator_path: Some("sources/generator".to_owned()),
+            input_set_request_byte_length: None, input_set_request_sha256: None, sources,
+        }
+    }
+
+    #[test]
+    fn trusted_host_request_accepts_one_or_two_roots_and_rejects_zero_or_three() {
+        let mut selected = request();
+        assert!(selected.validate_contract().is_ok());
+        selected.prior_roots.push("/campaign/retained-2".to_owned());
+        assert!(selected.validate_contract().is_ok());
+        selected.prior_roots.push("/campaign/retained-3".to_owned());
+        assert!(selected.validate_contract().is_err());
+        selected.prior_roots.clear();
+        assert!(selected.validate_contract().is_err());
+    }
+
+    #[test]
+    fn trusted_host_request_rejects_extra_locators_and_embedded_anchors() {
+        let mut selected = request();
+        selected.sources.insert("extra".to_owned(), B4TrustedHostArtifactLocatorV1 {
+            root_index: 0, relative_path: "sources/extra".to_owned(),
+        });
+        assert!(selected.validate_contract().is_err());
+        selected = request();
+        let mut value = serde_json::to_value(&selected).unwrap();
+        value["expectedSourceCommit"] = serde_json::json!("a".repeat(40));
+        let bytes = crate::canonical::canonical_json_bytes(&value).unwrap();
+        assert!(B4TrustedHostRequestV1::from_canonical_jcs(&bytes).is_err());
+        selected.input_set_request_sha256 = Some("a".repeat(64));
+        assert!(selected.validate_contract().is_err());
+    }
+
+    fn finalizer_request() -> B4TrustedHostRequestV1 {
+        let mut selected = request();
+        selected.command = "finalize-generation-set".to_owned();
+        selected.input_set_path = None;
+        selected.guest_elf_path = None;
+        selected.proof_generator_path = None;
+        let mut names = vec!["campaignPrecommit".to_owned(), "precommitRequest".to_owned(),
+            "inputSet".to_owned(), "inputSetCompletion".to_owned(), "proofGenerator".to_owned()];
+        for i in 0..4 { names.push(format!("runnerProfile{i}")); }
+        for i in 0..2 { names.push(format!("validatorDescriptor{i}")); }
+        for case in 0..11 {
+            names.push(format!("case{case}Manifest"));
+            let primary_count = if case < 8 { 7 } else { 8 };
+            for primary in 0..primary_count {
+                names.push(format!("case{case}Primary{primary}"));
+            }
+            if case >= 8 {
+                for auxiliary in 0..[2, 2, 4][case - 8] {
+                    names.push(format!("case{case}Aux{auxiliary}"));
+                }
+            }
+        }
+        selected.sources = names.into_iter().enumerate().map(|(index, name)|
+            (name, B4TrustedHostArtifactLocatorV1 {
+                root_index: 0, relative_path: format!("sources/{index}.bin"),
+            })).collect();
+        selected
+    }
+
+    #[test]
+    fn trusted_host_finalizer_admits_one_and_sixteen_roots_but_not_zero_or_seventeen() {
+        let mut selected = finalizer_request();
+        assert_eq!(selected.sources.len(), 110);
+        assert!(selected.validate_contract().is_ok());
+        let wire = crate::canonical::canonical_json_bytes(&serde_json::to_value(&selected).unwrap()).unwrap();
+        assert!(B4TrustedHostRequestV1::from_canonical_jcs(&wire).is_ok());
+        selected.prior_roots = (0..16).map(|i| format!("/campaign/retained-{i}")).collect();
+        selected.build_evidence_root_index = 15;
+        assert!(selected.validate_contract().is_ok());
+        let wire = crate::canonical::canonical_json_bytes(&serde_json::to_value(&selected).unwrap()).unwrap();
+        assert!(B4TrustedHostRequestV1::from_canonical_jcs(&wire).is_ok());
+        selected.prior_roots.push("/campaign/retained-16".to_owned());
+        assert!(selected.validate_contract().is_err());
+        selected.prior_roots.clear();
+        assert!(selected.validate_contract().is_err());
+    }
+
+    #[test]
+    fn trusted_host_finalizer_rejects_missing_extra_and_out_of_range_locator_roles() {
+        let mut selected = finalizer_request();
+        selected.sources.remove("case10Aux3");
+        assert!(selected.validate_contract().is_err());
+        selected = finalizer_request();
+        selected.sources.insert("case11Manifest".to_owned(),
+            B4TrustedHostArtifactLocatorV1 { root_index: 0,
+                relative_path: "sources/extra.bin".to_owned() });
+        assert!(selected.validate_contract().is_err());
+        selected = finalizer_request();
+        selected.sources.get_mut("case10Aux3").unwrap().root_index = 1;
+        assert!(selected.validate_contract().is_err());
+        selected = finalizer_request();
+        selected.command = "prepare-input-set".to_owned();
+        assert!(selected.validate_contract().is_err());
+    }
 }
 
 /// Pathful physical identity used by all three campaign contracts.
@@ -2335,6 +2453,35 @@ pub struct B4CampaignPrecommitExternalInputsV2<'a> {
     pub jvm_copy_only_inclusion_manifest: B4ExternalArtifactV1<'a>,
 }
 
+impl<'a> B4CampaignPrecommitExternalInputsV2<'a> {
+    fn common(&self) -> B4CampaignPrecommitExternalInputsV1<'a> {
+        B4CampaignPrecommitExternalInputsV1 {
+            input_set: self.input_set,
+            campaign_executor_artifact: self.campaign_executor_artifact,
+            campaign_executor_reviewed_source: self.campaign_executor_reviewed_source,
+            campaign_executor_build_descriptor: self.campaign_executor_build_descriptor,
+            executor_contract: self.executor_contract,
+            verifier_contract: self.verifier_contract,
+            verifier_cli_spec: self.verifier_cli_spec,
+            negative_plan: self.negative_plan,
+            expectation_set: self.expectation_set,
+            verifier_schema_documents: self.verifier_schema_documents,
+            validator_build_descriptors: self.validator_build_descriptors,
+            validator_artifacts: self.validator_artifacts,
+            validator_source_archives: self.validator_source_archives,
+            runner_profiles: self.runner_profiles,
+            seccomp_documents: self.seccomp_documents,
+            jvm_copy_only_inclusion_manifest: self.jvm_copy_only_inclusion_manifest,
+        }
+    }
+}
+
+struct CheckedCampaignPrecommitCore {
+    expected: Eip0045B4CampaignPrecommitV1,
+    verifier_authority: B4VerifierContractAuthorityV1,
+    artifact_paths: BTreeSet<String>,
+}
+
 impl B4CampaignPrecommitAuthorityV1 {
     /// Rebuild the complete precommit from an opaque positive-gate projection
     /// and exact independently held physical bytes.
@@ -2592,6 +2739,28 @@ impl B4CampaignPrecommitAuthorityV2 {
         verifier_authority: &B4VerifierContractAuthorityV1,
         external: B4CampaignPrecommitExternalInputsV2<'_>,
     ) -> Result<Self> {
+        ensure!(
+            external.positive_input_set_completion.input_set_identity()
+                == &positive_precommit.input_set,
+            "validated V2 positive input-set completion belongs to a different input set"
+        );
+        let checked = Self::checked_common_core(
+            positive_precommit,
+            verifier_authority,
+            external.common(),
+            external.positive_input_set_completion.completion_path(),
+        )?;
+        Ok(Self { expected: checked.expected, verifier_authority: checked.verifier_authority,
+            artifact_paths: checked.artifact_paths })
+    }
+
+    /// Shared pure remeasurement. Entry is gated separately by the H0 or TH completion type.
+    fn checked_common_core(
+        positive_precommit: B4PositivePrecommitAuthorityV2,
+        verifier_authority: &B4VerifierContractAuthorityV1,
+        external: B4CampaignPrecommitExternalInputsV1<'_>,
+        completion_path: &str,
+    ) -> Result<CheckedCampaignPrecommitCore> {
         let external_input_set = external.input_set.identity(
             B4ContractArtifactEncodingV1::Rfc8785Jcs,
             MAX_INPUT_SET_BYTES,
@@ -2600,11 +2769,6 @@ impl B4CampaignPrecommitAuthorityV2 {
         ensure!(
             external_input_set == positive_precommit.input_set,
             "V2 positive input-set bytes differ from the positive-precommit authority"
-        );
-        ensure!(
-            external.positive_input_set_completion.input_set_identity()
-                == &positive_precommit.input_set,
-            "validated V2 positive input-set completion belongs to a different input set"
         );
         verifier_authority.verify_external_replay(
             external.verifier_cli_spec,
@@ -2750,7 +2914,7 @@ impl B4CampaignPrecommitAuthorityV2 {
                         .map(String::as_str),
                 )
                 .chain(std::iter::once(
-                    external.positive_input_set_completion.completion_path(),
+                    completion_path,
                 ))
                 .chain([
                     campaign_executor.artifact.path.as_str(),
@@ -2779,7 +2943,7 @@ impl B4CampaignPrecommitAuthorityV2 {
                 .collect(),
         };
         expected.validate()?;
-        Ok(Self {
+        Ok(CheckedCampaignPrecommitCore {
             expected,
             verifier_authority: verifier_authority.clone(),
             artifact_paths,
@@ -2831,8 +2995,353 @@ impl B4CampaignPrecommitAuthorityV2 {
     }
 }
 
+/// Persistent trusted-host envelope. The historical V1 document remains an inner value;
+/// the outer discriminator binds the separately validated completion on disk.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Eip0045B4TrustedHostCampaignPrecommitV1 {
+    pub format: String,
+    pub format_version: u8,
+    pub realization: String,
+    pub completion: B4ContractArtifactIdentityV1,
+    pub request_byte_length: u64,
+    pub request_sha256: String,
+    pub build_evidence_root_sha256: String,
+    pub inner_precommit: Eip0045B4CampaignPrecommitV1,
+}
+
+impl Eip0045B4TrustedHostCampaignPrecommitV1 {
+    pub fn from_canonical_jcs(source: &[u8]) -> Result<Self> {
+        #[cfg(feature = "positive-gate")]
+        validate_trusted_host_precommit_schema(source)?;
+        parse_contract(source, MAX_CAMPAIGN_PRECOMMIT_BYTES + 4096,
+            "trusted-host campaign-precommit envelope")
+    }
+
+    pub fn to_canonical_jcs(&self) -> Result<Vec<u8>> {
+        let bytes = serialize_contract(self, MAX_CAMPAIGN_PRECOMMIT_BYTES + 4096,
+            "trusted-host campaign-precommit envelope")?;
+        #[cfg(feature = "positive-gate")]
+        validate_trusted_host_precommit_schema(&bytes)?;
+        Ok(bytes)
+    }
+}
+
+impl CanonicalContract for Eip0045B4TrustedHostCampaignPrecommitV1 {
+    fn validate_contract(&self) -> Result<()> {
+        ensure!(self.format == "Eip0045B4TrustedHostCampaignPrecommitV1"
+            && self.format_version == 1 && self.realization == "trusted-host-v1",
+            "wrong trusted-host campaign-precommit discriminator");
+        self.completion.validate_for(B4ContractArtifactEncodingV1::Rfc8785Jcs, 4096,
+            "trusted-host input-set completion")?;
+        ensure!(self.completion.path.ends_with("/trusted-host-input-set-completion.json"),
+            "trusted-host envelope references another completion kind");
+        ensure!((1..=65536).contains(&self.request_byte_length), "trusted-host request length is invalid");
+        validate_digest(&self.request_sha256, "trusted-host request SHA-256")?;
+        validate_digest(&self.build_evidence_root_sha256, "trusted-host build evidence root")?;
+        self.inner_precommit.validate()?;
+        ensure!(!b4_paths_conflict(&self.inner_precommit.input_set.path, &self.completion.path),
+            "trusted-host completion aliases its input set");
+        Ok(())
+    }
+}
+
+/// Bind the exact retained completion bytes to the already validated semantic token.
+#[cfg(feature = "positive-gate")]
+fn bind_trusted_host_completion_source(
+    completion: &crate::b4_positive_input_set::B4ValidatedTrustedHostInputSetCompletionV1,
+    completion_source: B4ExternalArtifactV1<'_>,
+) -> Result<B4ContractArtifactIdentityV1> {
+    ensure!(completion_source.path == completion.completion_path(),
+        "trusted-host completion path differs from the retained source");
+    let identity = completion_source.identity(B4ContractArtifactEncodingV1::Rfc8785Jcs,
+        4096, "trusted-host completion")?;
+    ensure!(&identity == completion.completion_identity(),
+        "trusted-host precommit completion bytes differ from the validated completion token");
+    Ok(identity)
+}
+
+#[cfg(all(test, feature = "positive-gate"))]
+mod trusted_host_completion_binding_tests {
+    use super::*;
+    use crate::b4_positive_input_set::{
+        derive_b4_trusted_host_input_set_completion_jcs_v1,
+        project_b4_trusted_host_input_set_paths_v1,
+        validate_b4_trusted_host_input_set_completion_jcs_v1,
+    };
+
+    fn source<'a>(path: &'a str, bytes: &'a [u8]) -> B4ExternalArtifactV1<'a> {
+        B4ExternalArtifactV1 {
+            path, bytes, encoding: B4ContractArtifactEncodingV1::Rfc8785Jcs,
+        }
+    }
+
+    #[test]
+    fn validated_completion_rejects_other_bytes_at_the_same_path() {
+        let paths = project_b4_trusted_host_input_set_paths_v1(
+            "phases/prepare-001/trusted-host").unwrap();
+        let input = crate::canonical::canonical_json_bytes(&serde_json::json!({
+            "format": "Eip0045B4PositiveInputSetV2", "formatVersion": 2
+        })).unwrap();
+        let executor = B4ContractArtifactIdentityV1::from_bytes("sources/executor",
+            B4ContractArtifactEncodingV1::RawBytes, b"executor-v1").unwrap();
+        let request_digest = "a".repeat(64);
+        let build_digest = "b".repeat(64);
+        let bytes_a = derive_b4_trusted_host_input_set_completion_jcs_v1(
+            &paths, &input, 71, &request_digest, &build_digest, &executor).unwrap();
+        let token = validate_b4_trusted_host_input_set_completion_jcs_v1(
+            &bytes_a, &paths, &input, 71, &request_digest, &build_digest, &executor).unwrap();
+        assert_eq!(bind_trusted_host_completion_source(&token,
+            source(paths.completion_path(), &bytes_a)).unwrap(),
+            token.completion_identity().clone());
+        let mut value: Value = serde_json::from_slice(&bytes_a).unwrap();
+        value["requestSha256"] = serde_json::json!("c".repeat(64));
+        let bytes_b = crate::canonical::canonical_json_bytes(&value).unwrap();
+        assert!(bind_trusted_host_completion_source(&token,
+            source(paths.completion_path(), &bytes_b)).is_err());
+        assert!(bind_trusted_host_completion_source(&token,
+            source(paths.completion_path(), b"{}")).is_err());
+    }
+}
+
+/// Pure semantic constructor. Only the descriptor-rooted generator handler can turn
+/// these bytes into a retained trusted-host precommit session and publication.
+#[cfg(feature = "positive-gate")]
+pub fn derive_b4_trusted_host_campaign_precommit_jcs_v1(
+    positive_precommit: B4PositivePrecommitAuthorityV2,
+    verifier_authority: &B4VerifierContractAuthorityV1,
+    external: B4CampaignPrecommitExternalInputsV1<'_>,
+    completion: crate::b4_positive_input_set::B4ValidatedTrustedHostInputSetCompletionV1,
+    completion_source: B4ExternalArtifactV1<'_>,
+    precommit_request_byte_length: u64,
+    precommit_request_sha256: &str,
+) -> Result<Vec<u8>> {
+    ensure!(completion.input_set_identity() == &positive_precommit.input_set,
+        "trusted-host completion binds another input set");
+    let completion_identity = bind_trusted_host_completion_source(&completion, completion_source)?;
+    let checked = B4CampaignPrecommitAuthorityV2::checked_common_core(
+        positive_precommit, verifier_authority, external, completion.completion_path())?;
+    ensure!(&checked.expected.campaign_executor.artifact == completion.executor_artifact(),
+        "trusted-host completion binds another running executor");
+    let envelope = Eip0045B4TrustedHostCampaignPrecommitV1 {
+        format: "Eip0045B4TrustedHostCampaignPrecommitV1".to_owned(),
+        format_version: 1,
+        realization: "trusted-host-v1".to_owned(),
+        completion: completion_identity,
+        request_byte_length: precommit_request_byte_length,
+        request_sha256: precommit_request_sha256.to_owned(),
+        build_evidence_root_sha256: completion.build_evidence_root_sha256().to_owned(),
+        inner_precommit: checked.expected,
+    };
+    envelope.to_canonical_jcs()
+}
+
 trait CanonicalContract: Serialize + DeserializeOwned {
     fn validate_contract(&self) -> Result<()>;
+}
+
+/// One locator selected by a pinned trusted-host request. It is never an authority.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct B4TrustedHostArtifactLocatorV1 {
+    pub root_index: usize,
+    pub relative_path: String,
+}
+
+/// Closed, externally pinned locator request for trusted-host campaign commands.
+/// The three authoritative build anchors are intentionally absent from this wire.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct B4TrustedHostRequestV1 {
+    pub format: String,
+    pub format_version: u8,
+    pub realization: String,
+    pub command: String,
+    pub campaign_root: String,
+    pub prior_roots: Vec<String>,
+    pub outer_final_root: String,
+    pub configured_executor_artifact: String,
+    pub build_evidence_root_index: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_set_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub guest_elf_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub proof_generator_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_set_request_byte_length: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_set_request_sha256: Option<String>,
+    pub sources: BTreeMap<String, B4TrustedHostArtifactLocatorV1>,
+}
+
+const TRUSTED_HOST_INPUT_SOURCES: [&str; 22] = [
+    "profileManifest", "profileAlgorithm", "profileConstants", "referenceStatementBundle",
+    "sourceLock", "verifierContract", "runnerProfile0", "runnerProfile1", "runnerProfile2",
+    "runnerProfile3", "seccomp0", "seccomp1", "seccomp2", "seccomp3",
+    "validatorDescriptor0", "validatorDescriptor1", "jvmInclusion", "calibration0",
+    "calibration1", "calibration2", "executorArtifact", "executorBuildDescriptor",
+];
+
+impl B4TrustedHostRequestV1 {
+    pub fn from_canonical_jcs(source: &[u8]) -> Result<Self> {
+        #[cfg(feature = "positive-gate")]
+        validate_trusted_host_request_schema(source)?;
+        parse_contract(source, 65536, "trusted-host locator request")
+    }
+
+    pub fn locator(&self, name: &str) -> Result<&B4TrustedHostArtifactLocatorV1> {
+        self.sources.get(name).with_context(|| format!("trusted-host request omits {name}"))
+    }
+
+    fn validate_absolute_source_path(path: &str, label: &str) -> Result<()> {
+        ensure!(path.starts_with('/') && !path.contains('\\') && !path.contains('\0'),
+            "trusted-host {label} must be an absolute Linux path");
+        ensure!(path.split('/').skip(1).all(|part| !part.is_empty() && part != "." && part != ".."),
+            "trusted-host {label} is not normalized");
+        Ok(())
+    }
+}
+
+impl CanonicalContract for B4TrustedHostRequestV1 {
+    fn validate_contract(&self) -> Result<()> {
+        ensure!(self.format == "Eip0045B4TrustedHostRequestV1" && self.format_version == 1
+            && self.realization == "trusted-host-v1", "wrong trusted-host request discriminator");
+        ensure!(matches!(self.command.as_str(), "prepare-input-set" | "prepare-campaign-precommit"
+            | "finalize-generation-set"), "trusted-host request command is not implemented");
+        Self::validate_absolute_source_path(&self.campaign_root, "campaign root")?;
+        Self::validate_absolute_source_path(&self.outer_final_root, "final root")?;
+        Self::validate_absolute_source_path(&self.configured_executor_artifact, "executor artifact")?;
+        let root_limit = if self.command == "finalize-generation-set" { 16 } else { 2 };
+        ensure!((1..=root_limit).contains(&self.prior_roots.len())
+            && self.build_evidence_root_index < self.prior_roots.len(),
+            "trusted-host root count or build-root index is invalid");
+        for root in &self.prior_roots { Self::validate_absolute_source_path(root, "prior root")?; }
+        if self.command == "prepare-input-set" {
+            ensure!(self.input_set_request_byte_length.is_none() && self.input_set_request_sha256.is_none(),
+                "input-set request carries a prior-request pin");
+            for path in [&self.input_set_path, &self.guest_elf_path, &self.proof_generator_path] {
+                validate_safe_relative_path(path.as_deref().context("trusted-host input path is absent")?)?;
+            }
+            ensure!(self.sources.len() == TRUSTED_HOST_INPUT_SOURCES.len()
+                && TRUSTED_HOST_INPUT_SOURCES.iter().all(|key| self.sources.contains_key(*key)),
+                "trusted-host input-set locator inventory is not closed");
+        } else if self.command == "prepare-campaign-precommit" {
+            ensure!(self.input_set_path.is_none() && self.guest_elf_path.is_none()
+                && self.proof_generator_path.is_none(), "precommit request carries input-set constructor paths");
+            ensure!(self.input_set_request_byte_length.is_some_and(|bytes| (1..=65536).contains(&bytes)),
+                "precommit request omits bounded input-set request length");
+            validate_digest(self.input_set_request_sha256.as_deref()
+                .context("precommit request omits input-set request digest")?,
+                "input-set request digest")?;
+            let mut required = vec!["inputSet", "inputSetCompletion", "campaignExecutorArtifact",
+                "executorSourceArchive", "executorBuildDescriptor", "executorContract",
+                "verifierContract", "verifierCliSpec", "negativePlan", "expectationSet",
+                "jvmInclusion"];
+            for i in 0..20 { required.push(match i {
+                0 => "schema0", 1 => "schema1", 2 => "schema2", 3 => "schema3", 4 => "schema4",
+                5 => "schema5", 6 => "schema6", 7 => "schema7", 8 => "schema8", 9 => "schema9",
+                10 => "schema10", 11 => "schema11", 12 => "schema12", 13 => "schema13",
+                14 => "schema14", 15 => "schema15", 16 => "schema16", 17 => "schema17",
+                18 => "schema18", _ => "schema19" }); }
+            for name in ["validatorDescriptor0", "validatorDescriptor1", "validatorArtifact0",
+                "validatorArtifact1", "validatorSourceArchive0", "validatorSourceArchive1",
+                "runnerProfile0", "runnerProfile1", "runnerProfile2", "runnerProfile3",
+                "seccomp0", "seccomp1", "seccomp2", "seccomp3"] { required.push(name); }
+            ensure!(self.sources.len() == required.len() && required.iter().all(|key| self.sources.contains_key(*key)),
+                "trusted-host precommit locator inventory is not closed");
+        } else {
+            ensure!(self.input_set_path.is_none() && self.guest_elf_path.is_none()
+                && self.proof_generator_path.is_none()
+                && self.input_set_request_byte_length.is_none()
+                && self.input_set_request_sha256.is_none(),
+                "finalize-generation-set carries another command's constructor fields");
+            let nested = self.sources.keys().filter(|key| key.starts_with("nestedInput")).count();
+            ensure!(nested <= 4096, "trusted-host nested-input locator count exceeds the handler bound");
+            let mut required = BTreeSet::from([
+                "campaignPrecommit".to_owned(), "precommitRequest".to_owned(),
+                "inputSet".to_owned(), "inputSetCompletion".to_owned(),
+                "proofGenerator".to_owned(),
+            ]);
+            for i in 0..4 { required.insert(format!("runnerProfile{i}")); }
+            for i in 0..2 { required.insert(format!("validatorDescriptor{i}")); }
+            for i in 0..nested { required.insert(format!("nestedInput{i}")); }
+            for case in 0..11 {
+                required.insert(format!("case{case}Manifest"));
+                let primary_count = if case < 8 { 7 } else { 8 };
+                for primary in 0..primary_count {
+                    required.insert(format!("case{case}Primary{primary}"));
+                }
+                if case >= 8 {
+                    for auxiliary in 0..[2, 2, 4][case - 8] {
+                        required.insert(format!("case{case}Aux{auxiliary}"));
+                    }
+                }
+            }
+            ensure!(self.sources.keys().cloned().collect::<BTreeSet<_>>() == required,
+                "trusted-host finalize-generation-set locator inventory is not closed");
+        }
+        for locator in self.sources.values() {
+            ensure!(locator.root_index < self.prior_roots.len(), "trusted-host locator root index is invalid");
+            validate_safe_relative_path(&locator.relative_path)?;
+        }
+        Ok(())
+    }
+}
+
+#[cfg(feature = "positive-gate")]
+struct NoExternalTrustedHostSchemaRetrieval;
+
+#[cfg(feature = "positive-gate")]
+impl jsonschema::Retrieve for NoExternalTrustedHostSchemaRetrieval {
+    fn retrieve(&self, uri: &jsonschema::Uri<String>)
+        -> std::result::Result<Value, Box<dyn std::error::Error + Send + Sync>> {
+        Err(std::io::Error::new(std::io::ErrorKind::NotFound,
+            format!("external trusted-host schema is unavailable: {uri}")).into())
+    }
+}
+
+/// Validate one new TH schema with only the byte-pinned historical V1 precommit resource.
+#[cfg(feature = "positive-gate")]
+fn validate_trusted_host_schema(source: &[u8], schema_source: &str, label: &str) -> Result<()> {
+    const INNER: &str = include_str!("../finalizer-schema/b4-campaign-precommit-v1.schema.json");
+    ensure!(sha256_hex(INNER.as_bytes()) == "f0666ef780064be94bc96c9c3d71ae2d98d4541239bccd208eb78c5f24eba136",
+        "historical V1 precommit schema pin changed");
+    let inner: Value = serde_json::from_str(INNER)?;
+    let schema: Value = serde_json::from_str(schema_source)?;
+    let value: Value = serde_json::from_slice(source)?;
+    let registry = jsonschema::Registry::new()
+        .add("urn:ergo:eip-0045:b4-campaign-precommit-v1", inner)
+        .map_err(|error| anyhow::anyhow!("invalid local V1 schema URI: {error}"))?
+        .prepare().map_err(|error| anyhow::anyhow!("cannot prepare local V1 schema: {error}"))?;
+    let validator = jsonschema::draft202012::options()
+        .with_registry(&registry)
+        .with_retriever(NoExternalTrustedHostSchemaRetrieval)
+        .build(&schema)
+        .map_err(|error| anyhow::anyhow!("cannot compile {label} schema: {error}"))?;
+    ensure!(validator.is_valid(&value), "{label} differs from its locally bound schema");
+    Ok(())
+}
+
+#[cfg(feature = "positive-gate")]
+fn validate_trusted_host_request_schema(source: &[u8]) -> Result<()> {
+    validate_trusted_host_schema(source,
+        include_str!("../finalizer-schema/b4-trusted-host-request-v1.schema.json"),
+        "trusted-host request")
+}
+
+#[cfg(feature = "positive-gate")]
+pub(crate) fn validate_trusted_host_completion_schema(source: &[u8]) -> Result<()> {
+    validate_trusted_host_schema(source,
+        include_str!("../finalizer-schema/b4-trusted-host-input-set-completion-v1.schema.json"),
+        "trusted-host input-set completion")
+}
+
+#[cfg(feature = "positive-gate")]
+fn validate_trusted_host_precommit_schema(source: &[u8]) -> Result<()> {
+    validate_trusted_host_schema(source,
+        include_str!("../finalizer-schema/b4-trusted-host-campaign-precommit-v1.schema.json"),
+        "trusted-host campaign-precommit")
 }
 
 fn parse_contract<T>(source: &[u8], maximum_bytes: usize, label: &'static str) -> Result<T>
@@ -3628,6 +4137,27 @@ pub(crate) mod test_support {
                 .map(ToString::to_string)
                 .collect(),
         }
+    }
+
+    #[test]
+    fn trusted_host_precommit_schema_uses_exact_historical_inner_contract() {
+        let inner = precommit(&verifier_contract());
+        let completion = B4ContractArtifactIdentityV1::from_bytes(
+            "phases/prepare-001/trusted-host/trusted-host-input-set-completion.json",
+            B4ContractArtifactEncodingV1::Rfc8785Jcs, b"{}").unwrap();
+        let envelope = Eip0045B4TrustedHostCampaignPrecommitV1 {
+            format: "Eip0045B4TrustedHostCampaignPrecommitV1".to_owned(),
+            format_version: 1, realization: "trusted-host-v1".to_owned(),
+            completion, request_byte_length: 71, request_sha256: "a".repeat(64),
+            build_evidence_root_sha256: "b".repeat(64), inner_precommit: inner,
+        };
+        let healthy = envelope.to_canonical_jcs().unwrap();
+        assert_eq!(Eip0045B4TrustedHostCampaignPrecommitV1::from_canonical_jcs(&healthy)
+            .unwrap(), envelope);
+        let mut invalid: Value = serde_json::from_slice(&healthy).unwrap();
+        invalid["innerPrecommit"] = serde_json::json!({});
+        let bad = crate::canonical::canonical_json_bytes(&invalid).unwrap();
+        assert!(validate_trusted_host_precommit_schema(&bad).is_err());
     }
 
     fn verifier_authority(contract: &Eip0045B4VerifierContractV1) -> B4VerifierContractAuthorityV1 {
@@ -6974,6 +7504,67 @@ pub(crate) mod test_support {
         assert_eq!(parsed.format, B4_CAMPAIGN_PRECOMMIT_FORMAT);
         assert_eq!(parsed.format_version, B4_CAMPAIGN_CONTRACT_FORMAT_VERSION);
         authority.verify_candidate_jcs(&wire).unwrap();
+    }
+
+    fn trusted_host_public_precommit_with_completion_source(substitute: bool) -> Result<Vec<u8>> {
+        use crate::b4_positive_input_set::{
+            derive_b4_trusted_host_input_set_completion_jcs_v1,
+            project_b4_trusted_host_input_set_paths_v1,
+            validate_b4_trusted_host_input_set_completion_jcs_v1,
+        };
+
+        let fixture = ClosureFixture::valid();
+        let paths = project_b4_trusted_host_input_set_paths_v1("h0/prepare-001")?;
+        assert_eq!(paths.input_set_path(), fixture.positive_gate.input_set.path);
+        let executor = B4ContractArtifactIdentityV1::from_bytes(
+            "reproduction/preproof/campaign-executor",
+            B4ContractArtifactEncodingV1::RawBytes,
+            &fixture.executor_artifact,
+        )?;
+        let request_sha = "a".repeat(64);
+        let build_sha = "b".repeat(64);
+        let completion_a = derive_b4_trusted_host_input_set_completion_jcs_v1(
+            &paths, &fixture.input_set, 71, &request_sha, &build_sha, &executor,
+        )?;
+        let token = validate_b4_trusted_host_input_set_completion_jcs_v1(
+            &completion_a, &paths, &fixture.input_set, 71, &request_sha, &build_sha, &executor,
+        )?;
+        let mut changed: Value = serde_json::from_slice(&completion_a)?;
+        changed["requestSha256"] = Value::String("c".repeat(64));
+        let completion_b = canonical_json_bytes(&changed)?;
+        assert_eq!(completion_a.len(), completion_b.len());
+        assert_ne!(completion_a, completion_b);
+        let selected = if substitute { &completion_b } else { &completion_a };
+
+        derive_b4_trusted_host_campaign_precommit_jcs_v1(
+            fixture.positive_precommit_v2(),
+            &fixture.verifier_authority,
+            fixture.external(),
+            token,
+            B4ExternalArtifactV1 {
+                path: paths.completion_path(),
+                bytes: selected,
+                encoding: B4ContractArtifactEncodingV1::Rfc8785Jcs,
+            },
+            73,
+            &"d".repeat(64),
+        )
+    }
+
+    #[test]
+    fn trusted_host_public_precommit_accepts_the_validated_completion_source() {
+        let bytes = trusted_host_public_precommit_with_completion_source(false).unwrap();
+        let envelope = Eip0045B4TrustedHostCampaignPrecommitV1::from_canonical_jcs(&bytes).unwrap();
+        assert_eq!(envelope.completion.path,
+            "h0/prepare-001/trusted-host-input-set-completion.json");
+    }
+
+    #[test]
+    fn trusted_host_public_precommit_rejects_other_completion_bytes_at_the_same_path() {
+        let error = trusted_host_public_precommit_with_completion_source(true).unwrap_err();
+        assert!(format!("{error:#}").contains(
+            "trusted-host precommit completion bytes differ from the validated completion token"
+        ));
     }
 
     #[test]

@@ -4,6 +4,11 @@
 pub mod alternate_root_candidate;
 #[cfg(feature = "b4-campaign-executor")]
 pub(crate) mod b4_campaign_executor;
+/// Execute one externally pinned trusted-host pre-proof campaign command.
+#[cfg(all(target_os = "linux", feature = "b4-prepare-input-set-kernel"))]
+pub fn run_trusted_host_b4_campaign(raw_argv: Vec<std::ffi::OsString>) -> anyhow::Result<()> {
+    b4_campaign_executor::run_trusted_host_cli(raw_argv)
+}
 /// Fixed owned evidence and compiled fan-out for B4 negative ancestry.
 pub mod b4_negative_ancestry_witness_set;
 #[allow(dead_code, missing_docs)]

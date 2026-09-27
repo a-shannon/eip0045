@@ -808,12 +808,194 @@ pub fn validate_b4_positive_input_set_completion_jcs_v2(
     })
 }
 
+/// Closed paths of the separately adopted trusted-host input-set realization.
+#[derive(Debug)]
+pub struct B4TrustedHostInputSetPathsV1 {
+    input_set_path: String,
+    completion_path: String,
+}
+
+impl B4TrustedHostInputSetPathsV1 {
+    #[must_use]
+    pub fn input_set_path(&self) -> &str { &self.input_set_path }
+    #[must_use]
+    pub fn completion_path(&self) -> &str { &self.completion_path }
+}
+
+/// Project two direct files under the trusted-host subtree of a final phase root.
+pub fn project_b4_trusted_host_input_set_paths_v1(phase_root: &str) -> Result<B4TrustedHostInputSetPathsV1> {
+    validate_safe_relative_path(phase_root)?;
+    let input_set_path = format!("{phase_root}/positive-input-set.json");
+    let completion_path = format!("{phase_root}/trusted-host-input-set-completion.json");
+    validate_safe_relative_path(&input_set_path)?;
+    validate_safe_relative_path(&completion_path)?;
+    ensure!(!b4_paths_conflict(&input_set_path, &completion_path), "trusted-host input-set paths conflict");
+    Ok(B4TrustedHostInputSetPathsV1 { input_set_path, completion_path })
+}
+
+#[cfg(feature = "positive-gate")]
+const TRUSTED_HOST_COMPLETION_FORMAT_V1: &str = "Eip0045B4TrustedHostInputSetCompletionV1";
+
+#[cfg(feature = "positive-gate")]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct TrustedHostCompletionDocumentV1 {
+    format: String,
+    format_version: u8,
+    realization: String,
+    input_set: B4ContractArtifactIdentityV1,
+    request_byte_length: u64,
+    request_sha256: String,
+    build_evidence_root_sha256: String,
+    executor_artifact: B4ContractArtifactIdentityV1,
+}
+
+/// A validated TH completion is an affine semantic witness, never an H0 receipt.
+#[derive(Debug)]
+pub struct B4ValidatedTrustedHostInputSetCompletionV1 {
+    input_set: B4ContractArtifactIdentityV1,
+    completion_path: String,
+    completion_identity: B4ContractArtifactIdentityV1,
+    request_byte_length: u64,
+    request_sha256: String,
+    build_evidence_root_sha256: String,
+    executor_artifact: B4ContractArtifactIdentityV1,
+}
+
+impl B4ValidatedTrustedHostInputSetCompletionV1 {
+    #[must_use]
+    pub fn completion_path(&self) -> &str { &self.completion_path }
+    #[must_use]
+    pub fn request_sha256(&self) -> &str { &self.request_sha256 }
+    #[must_use]
+    pub fn request_byte_length(&self) -> u64 { self.request_byte_length }
+    #[must_use]
+    pub fn build_evidence_root_sha256(&self) -> &str { &self.build_evidence_root_sha256 }
+    #[must_use]
+    pub fn executor_artifact(&self) -> &B4ContractArtifactIdentityV1 { &self.executor_artifact }
+    pub(crate) fn input_set_identity(&self) -> &B4ContractArtifactIdentityV1 { &self.input_set }
+    pub(crate) fn completion_identity(&self) -> &B4ContractArtifactIdentityV1 { &self.completion_identity }
+}
+
+#[cfg(feature = "positive-gate")]
+fn trusted_host_completion_document_v1(
+    paths: &B4TrustedHostInputSetPathsV1,
+    input_set_jcs: &[u8],
+    request_byte_length: u64,
+    request_sha256: &str,
+    build_evidence_root_sha256: &str,
+    executor_artifact: &B4ContractArtifactIdentityV1,
+) -> Result<TrustedHostCompletionDocumentV1> {
+    ensure!((1..=MAX_INPUT_SET_BYTES as usize).contains(&input_set_jcs.len()), "trusted-host input set exceeds its bound");
+    let value = validate_canonical_json_source(input_set_jcs)?;
+    ensure!(value.get("format").and_then(serde_json::Value::as_str) == Some(INPUT_SET_FORMAT_V2)
+        && value.get("formatVersion").and_then(serde_json::Value::as_u64) == Some(2),
+        "trusted-host input set is not the V2 source");
+    let input_set = B4ContractArtifactIdentityV1::from_bytes(
+        paths.input_set_path(), B4ContractArtifactEncodingV1::Rfc8785Jcs, input_set_jcs)?;
+    ensure!(request_byte_length > 0 && request_byte_length <= 65536, "trusted-host request byte length is outside its bound");
+    for (label, digest) in [("request", request_sha256), ("build evidence root", build_evidence_root_sha256)] {
+        ensure!(digest.len() == 64 && digest.as_bytes().iter().all(|c| c.is_ascii_digit() || matches!(*c, b'a'..=b'f')),
+            "trusted-host {label} SHA-256 is not lowercase hex");
+    }
+    executor_artifact.validate()?;
+    Ok(TrustedHostCompletionDocumentV1 {
+        format: TRUSTED_HOST_COMPLETION_FORMAT_V1.to_owned(),
+        format_version: 1,
+        realization: "trusted-host-v1".to_owned(),
+        input_set,
+        request_byte_length,
+        request_sha256: request_sha256.to_owned(),
+        build_evidence_root_sha256: build_evidence_root_sha256.to_owned(),
+        executor_artifact: executor_artifact.clone(),
+    })
+}
+
+/// Derive a separately discriminated completion from exact V2 input and caller-held bindings.
+#[cfg(feature = "positive-gate")]
+pub fn derive_b4_trusted_host_input_set_completion_jcs_v1(
+    paths: &B4TrustedHostInputSetPathsV1,
+    input_set_jcs: &[u8],
+    request_byte_length: u64,
+    request_sha256: &str,
+    build_evidence_root_sha256: &str,
+    executor_artifact: &B4ContractArtifactIdentityV1,
+) -> Result<Vec<u8>> {
+    let document = trusted_host_completion_document_v1(paths, input_set_jcs, request_byte_length,
+        request_sha256, build_evidence_root_sha256, executor_artifact)?;
+    let bytes = canonical_json_bytes(&serde_json::to_value(document)?)?;
+    ensure!(bytes.len() <= MAX_COMPLETION_BYTES, "trusted-host completion exceeds its bound");
+    crate::b4_campaign_contract::validate_trusted_host_completion_schema(&bytes)?;
+    Ok(bytes)
+}
+
+/// Parse and independently rederive TH completion; this pure token grants no file custody.
+#[cfg(feature = "positive-gate")]
+pub fn validate_b4_trusted_host_input_set_completion_jcs_v1(
+    source: &[u8],
+    paths: &B4TrustedHostInputSetPathsV1,
+    input_set_jcs: &[u8],
+    request_byte_length: u64,
+    request_sha256: &str,
+    build_evidence_root_sha256: &str,
+    executor_artifact: &B4ContractArtifactIdentityV1,
+) -> Result<B4ValidatedTrustedHostInputSetCompletionV1> {
+    ensure!((1..=MAX_COMPLETION_BYTES).contains(&source.len()), "trusted-host completion exceeds its bound");
+    crate::b4_campaign_contract::validate_trusted_host_completion_schema(source)?;
+    let value = validate_canonical_json_source(source)?;
+    let parsed: TrustedHostCompletionDocumentV1 = serde_json::from_value(value)?;
+    let expected = trusted_host_completion_document_v1(paths, input_set_jcs, request_byte_length,
+        request_sha256, build_evidence_root_sha256, executor_artifact)?;
+    ensure!(parsed == expected && source == canonical_json_bytes(&serde_json::to_value(&expected)?)?,
+        "trusted-host completion differs from its retained bindings");
+    Ok(B4ValidatedTrustedHostInputSetCompletionV1 {
+        input_set: expected.input_set,
+        completion_path: paths.completion_path().to_owned(),
+        completion_identity: B4ContractArtifactIdentityV1::from_bytes(paths.completion_path(),
+            B4ContractArtifactEncodingV1::Rfc8785Jcs, source)?,
+        request_byte_length,
+        request_sha256: request_sha256.to_owned(),
+        build_evidence_root_sha256: build_evidence_root_sha256.to_owned(),
+        executor_artifact: executor_artifact.clone(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::canonical::canonical_json_bytes;
     use serde_json::json;
     use sha2::Digest as _;
+
+    #[cfg(feature = "positive-gate")]
+    #[test]
+    fn trusted_host_completion_rebinds_request_build_executable_and_physical_input() {
+        let paths = project_b4_trusted_host_input_set_paths_v1("phases/prepare-001/trusted-host").unwrap();
+        let input = positive_input_set_v2_source();
+        let executor = B4ContractArtifactIdentityV1::from_bytes(
+            "sources/executor", B4ContractArtifactEncodingV1::RawBytes, b"executor-v1").unwrap();
+        let request = "a".repeat(64);
+        let build = "b".repeat(64);
+        let completion = derive_b4_trusted_host_input_set_completion_jcs_v1(
+            &paths, &input, 71, &request, &build, &executor).unwrap();
+        let accepted = validate_b4_trusted_host_input_set_completion_jcs_v1(
+            &completion, &paths, &input, 71, &request, &build, &executor).unwrap();
+        assert_eq!(accepted.completion_path(), paths.completion_path());
+        assert!(validate_b4_trusted_host_input_set_completion_jcs_v1(
+            &completion, &paths, &input, 72, &request, &build, &executor).is_err());
+        assert!(validate_b4_trusted_host_input_set_completion_jcs_v1(
+            &completion, &paths, &input, 71, &"c".repeat(64), &build, &executor).is_err());
+        assert!(validate_b4_trusted_host_input_set_completion_jcs_v1(
+            &completion, &paths, &input, 71, &request, &"c".repeat(64), &executor).is_err());
+        let another_executable = B4ContractArtifactIdentityV1::from_bytes(
+            "sources/executor", B4ContractArtifactEncodingV1::RawBytes, b"executor-v2").unwrap();
+        assert!(validate_b4_trusted_host_input_set_completion_jcs_v1(
+            &completion, &paths, &input, 71, &request, &build, &another_executable).is_err());
+        let other_input = canonical_json_bytes(&json!({"format":"Eip0045B4PositiveInputSetV2",
+            "formatVersion":2,"different":true})).unwrap();
+        assert!(validate_b4_trusted_host_input_set_completion_jcs_v1(
+            &completion, &paths, &other_input, 71, &request, &build, &executor).is_err());
+    }
 
     fn input_identity(bytes: &[u8]) -> B4ContractArtifactIdentityV1 {
         B4ContractArtifactIdentityV1::from_bytes(

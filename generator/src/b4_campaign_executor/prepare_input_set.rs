@@ -444,6 +444,196 @@ fn consume_authenticated_prepare_input_set_source_v2<const ROOTS: usize>(
     .commit_and_reopen()
 }
 
+#[cfg(all(target_os = "linux", feature = "b4-authoritative-build-custody"))]
+pub(super) mod trusted_host {
+    use std::{collections::BTreeMap, path::Path};
+    use anyhow::{Context as _, Result, ensure};
+    use eip_0045_reproduction::{
+        b4_build_check::{AuthoritativeB4BuildProjection, B4BuildExpectations},
+        b4_campaign_contract::{B4ContractArtifactEncodingV1, B4ContractArtifactIdentityV1,
+            B4TrustedHostRequestV1, Eip0045B4CampaignExecutorBuildDescriptorV1},
+        b4_positive_gate::{NamedCanonicalJcs, NamedInputBytesV2, PositiveInputSetAssemblyInputsV2,
+            assemble_positive_input_set_jcs_v2},
+        b4_positive_input_set::{B4TrustedHostInputSetPathsV1,
+            derive_b4_trusted_host_input_set_completion_jcs_v1,
+            project_b4_trusted_host_input_set_paths_v1,
+            validate_b4_trusted_host_input_set_completion_jcs_v1},
+    };
+    use super::super::{
+        authenticated_preflight::derive_campaign_relative_artifact_path,
+        create_only::CreateOnlyDirectoryTransaction,
+        custody::MAX_BUFFERED_IMMUTABLE_FILE_BYTES,
+        preflight::project_single_subtree_campaign_layout,
+        typestate::ExecutorPreflightContext,
+    };
+
+    struct RetainedInputSetSources {
+        files: BTreeMap<String, (String, Vec<u8>)>,
+    }
+
+    impl RetainedInputSetSources {
+        fn named(&self, key: &str) -> Result<NamedCanonicalJcs<'_>> {
+            let (relative_path, bytes) = self.files.get(key).context("trusted-host retained source is absent")?;
+            Ok(NamedCanonicalJcs { relative_path, bytes })
+        }
+        fn raw(&self, key: &str) -> Result<NamedInputBytesV2<'_>> {
+            let (relative_path, bytes) = self.files.get(key).context("trusted-host retained source is absent")?;
+            Ok(NamedInputBytesV2 { relative_path, bytes })
+        }
+        fn executor_identity(&self) -> Result<B4ContractArtifactIdentityV1> {
+            let (path, bytes) = self.files.get("executorArtifact").context("missing trusted-host executor")?;
+            B4ContractArtifactIdentityV1::from_bytes(path, B4ContractArtifactEncodingV1::RawBytes, bytes)
+        }
+        fn descriptor(&self) -> Result<Eip0045B4CampaignExecutorBuildDescriptorV1> {
+            Eip0045B4CampaignExecutorBuildDescriptorV1::from_canonical_jcs(
+                &self.files.get("executorBuildDescriptor").context("missing trusted-host build descriptor")?.1)
+        }
+        fn assemble(&self, request: &B4TrustedHostRequestV1, build: &AuthoritativeB4BuildProjection)
+            -> Result<Vec<u8>> {
+            assemble_positive_input_set_jcs_v2(build, PositiveInputSetAssemblyInputsV2 {
+                input_set_path: request.input_set_path.as_deref().context("missing input-set path")?,
+                profile_manifest: self.raw("profileManifest")?,
+                profile_algorithm: self.raw("profileAlgorithm")?,
+                profile_constants: self.raw("profileConstants")?,
+                guest_elf_path: request.guest_elf_path.as_deref().context("missing guest path")?,
+                reference_statement_bundle_manifest: self.named("referenceStatementBundle")?,
+                source_lock: self.named("sourceLock")?,
+                proof_generator_path: request.proof_generator_path.as_deref().context("missing generator path")?,
+                verifier_contract: self.named("verifierContract")?,
+                runner_profiles: [self.named("runnerProfile0")?, self.named("runnerProfile1")?,
+                    self.named("runnerProfile2")?, self.named("runnerProfile3")?],
+                seccomp_documents: [self.named("seccomp0")?, self.named("seccomp1")?,
+                    self.named("seccomp2")?, self.named("seccomp3")?],
+                validator_descriptors: [self.named("validatorDescriptor0")?,
+                    self.named("validatorDescriptor1")?],
+                jvm_copy_only_inclusion_manifest: self.named("jvmInclusion")?,
+                recursive_calibrations: [self.named("calibration0")?, self.named("calibration1")?,
+                    self.named("calibration2")?],
+            })
+        }
+    }
+
+    fn retain<const ROOTS: usize>(
+        request: &B4TrustedHostRequestV1,
+        mut read: impl FnMut(usize, &str, usize) -> Result<Vec<u8>>,
+    ) -> Result<RetainedInputSetSources> {
+        let mut files = BTreeMap::new();
+        for (name, locator) in &request.sources {
+            let root = Path::new(&request.prior_roots[locator.root_index]);
+            let campaign_relative = derive_campaign_relative_artifact_path(
+                Path::new(&request.campaign_root), root, &locator.relative_path)?;
+            let max = if name == "executorArtifact" { MAX_BUFFERED_IMMUTABLE_FILE_BYTES }
+                else { 1024 * 1024 };
+            let bytes = read(locator.root_index, &locator.relative_path, max)?;
+            files.insert(name.clone(), (campaign_relative, bytes));
+        }
+        Ok(RetainedInputSetSources { files })
+    }
+
+    struct NeedInput<'a> {
+        transaction: CreateOnlyDirectoryTransaction<'a>,
+        input: Vec<u8>,
+        completion: Vec<u8>,
+    }
+    struct NeedCompletion<'a> {
+        transaction: CreateOnlyDirectoryTransaction<'a>,
+        input: Vec<u8>,
+        completion: Vec<u8>,
+    }
+    struct ReadyToCommit<'a> {
+        transaction: CreateOnlyDirectoryTransaction<'a>,
+        input: Vec<u8>,
+        completion: Vec<u8>,
+    }
+    impl<'a> NeedInput<'a> {
+        fn write(mut self) -> Result<NeedCompletion<'a>> {
+            self.transaction.create_directory("trusted-host")?;
+            self.transaction.create_file("trusted-host/positive-input-set.json", &self.input, 1024 * 1024)?;
+            Ok(NeedCompletion { transaction: self.transaction, input: self.input,
+                completion: self.completion })
+        }
+    }
+    impl<'a> NeedCompletion<'a> {
+        fn write(mut self) -> Result<ReadyToCommit<'a>> {
+            self.transaction.create_file("trusted-host/trusted-host-input-set-completion.json",
+                &self.completion, 4096)?;
+            Ok(ReadyToCommit { transaction: self.transaction, input: self.input,
+                completion: self.completion })
+        }
+    }
+    impl ReadyToCommit<'_> {
+        fn commit(self, paths: &B4TrustedHostInputSetPathsV1, request_bytes: u64,
+            request_sha256: &str, build_root: &str, executor: &B4ContractArtifactIdentityV1) -> Result<()> {
+            self.transaction.commit_with_postcommit_validation(|committed| {
+                let input = committed.read_file("trusted-host/positive-input-set.json", 1024 * 1024)?;
+                let completion = committed.read_file("trusted-host/trusted-host-input-set-completion.json", 4096)?;
+                ensure!(input == self.input && completion == self.completion,
+                    "trusted-host publication changed during commit");
+                validate_b4_trusted_host_input_set_completion_jcs_v1(&completion, paths, &input,
+                    request_bytes, request_sha256, build_root, executor)?;
+                Ok(())
+            })
+        }
+    }
+
+    pub(in crate::b4_campaign_executor) fn handle<const ROOTS: usize>(request: &B4TrustedHostRequestV1,
+        request_bytes: u64, request_sha256: &str, expectations: &B4BuildExpectations<'_>,
+        preflight_only: bool) -> Result<()> {
+        ensure!(request.prior_roots.len() == ROOTS && request.command == "prepare-input-set",
+            "trusted-host input-set request has wrong roots or command");
+        let campaign = Path::new(&request.campaign_root);
+        let prior: [&Path; ROOTS] = std::array::from_fn(|index| Path::new(&request.prior_roots[index]));
+        let final_root = Path::new(&request.outer_final_root);
+        let layout = project_single_subtree_campaign_layout(campaign, prior, final_root, "trusted-host")?;
+        let input_path = derive_campaign_relative_artifact_path(campaign, final_root,
+            "trusted-host/positive-input-set.json")?;
+        let phase_root = input_path.strip_suffix("/positive-input-set.json")
+            .context("trusted-host input-set path has wrong leaf")?;
+        let paths = project_b4_trusted_host_input_set_paths_v1(phase_root)?;
+        ensure!(request.input_set_path.as_deref() == Some(paths.input_set_path()),
+            "trusted-host input-set path differs from retained final root");
+        let preflight = ExecutorPreflightContext::capture(
+            Path::new(&request.configured_executor_artifact), layout)?;
+        let first = retain::<ROOTS>(request, |index, path, max| {
+            if max == MAX_BUFFERED_IMMUTABLE_FILE_BYTES {
+                preflight.read_immutable_file::<MAX_BUFFERED_IMMUTABLE_FILE_BYTES>(index, path)
+            } else { preflight.read_immutable_file::<{1024 * 1024}>(index, path) }
+        })?;
+        let descriptor = first.descriptor()?;
+        ensure!(first.executor_identity()? == descriptor.artifact,
+            "retained executor file differs from its descriptor");
+        preflight.executable().require_artifact_identity(&descriptor.artifact)?;
+        let build = preflight.authenticate_authoritative_b4_build_projection(
+            request.build_evidence_root_index, expectations)?;
+        let expected_input = first.assemble(request, &build)?;
+        let expected_completion = derive_b4_trusted_host_input_set_completion_jcs_v1(&paths,
+            &expected_input, request_bytes, request_sha256, build.evidence_root_sha256(), &descriptor.artifact)?;
+        if preflight_only { return preflight.finish_preflight(); }
+        preflight.execute(|execute| {
+            let retained = retain::<ROOTS>(request, |index, path, max| {
+                if max == MAX_BUFFERED_IMMUTABLE_FILE_BYTES {
+                    execute.read_immutable_file::<MAX_BUFFERED_IMMUTABLE_FILE_BYTES>(index, path)
+                } else { execute.read_immutable_file::<{1024 * 1024}>(index, path) }
+            })?;
+            ensure!(retained.files == first.files, "trusted-host retained files changed between preflight and execute");
+            execute.executable().require_artifact_identity(&descriptor.artifact)?;
+            let rebound = execute.authenticate_authoritative_b4_build_projection(
+                request.build_evidence_root_index, expectations)?;
+            ensure!(rebound == build, "trusted-host authoritative build changed across session");
+            let input = retained.assemble(request, &rebound)?;
+            ensure!(input == expected_input, "trusted-host input set changed across session");
+            let completion = derive_b4_trusted_host_input_set_completion_jcs_v1(&paths, &input,
+                request_bytes, request_sha256, rebound.evidence_root_sha256(), &descriptor.artifact)?;
+            ensure!(completion == expected_completion, "trusted-host completion changed across session");
+            execute.with_mutation(|mutation| {
+                NeedInput { transaction: mutation.begin_create_only_directory()?, input, completion }
+                    .write()?.write()?.commit(&paths, request_bytes, request_sha256,
+                        rebound.evidence_root_sha256(), &descriptor.artifact)
+            })
+        })
+    }
+}
+
 #[cfg(all(test, target_os = "linux"))]
 mod tests {
     use std::{fs, path::PathBuf};

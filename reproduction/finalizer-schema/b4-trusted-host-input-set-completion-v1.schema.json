@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ergo:eip-0045:b4-trusted-host-input-set-completion-v1",
+  "title": "Eip0045B4TrustedHostInputSetCompletionV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "formatVersion", "realization", "inputSet", "requestByteLength", "requestSha256", "buildEvidenceRootSha256", "executorArtifact"],
+  "properties": {
+    "format": {"const": "Eip0045B4TrustedHostInputSetCompletionV1"},
+    "formatVersion": {"const": 1},
+    "realization": {"const": "trusted-host-v1"},
+    "inputSet": {"$ref": "#/$defs/jcsIdentity"},
+    "requestByteLength": {"type": "integer", "minimum": 1, "maximum": 65536},
+    "requestSha256": {"$ref": "#/$defs/digest"},
+    "buildEvidenceRootSha256": {"$ref": "#/$defs/digest"},
+    "executorArtifact": {"$ref": "#/$defs/rawIdentity"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "jcsIdentity": {"$ref": "#/$defs/identity", "properties": {"encoding": {"const": "rfc8785-jcs"}}},
+    "rawIdentity": {"$ref": "#/$defs/identity", "properties": {"encoding": {"const": "raw-bytes"}}},
+    "identity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "byteLength", "sha256", "encoding"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 240},
+        "byteLength": {"type": "integer", "minimum": 1},
+        "sha256": {"$ref": "#/$defs/digest"},
+        "encoding": {"type": "string"}
+      }
+    }
+  }
+}

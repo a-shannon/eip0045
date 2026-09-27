@@ -54,6 +54,8 @@ jobs:
           cargo +1.89.0 test --manifest-path reproduction/Cargo.toml --no-default-features --features positive-gate --doc B4PositivePrecommitAuthorityV2 --locked
       - name: Non-proving generator library tests
         run: cargo +1.89.0 test --manifest-path generator/Cargo.toml --no-default-features --lib --locked
+      - name: Trusted-host request and completion binding tests
+        run: cargo +1.89.0 test --manifest-path reproduction/Cargo.toml --no-default-features --features positive-gate --lib trusted_host --locked
 
   windows-build-runner:
     runs-on: windows-2022
