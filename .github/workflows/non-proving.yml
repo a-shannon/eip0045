@@ -46,6 +46,12 @@ jobs:
         run: cargo +1.89.0 test --manifest-path methods/Cargo.toml --no-default-features --locked
       - name: Reproduction library and profile tests
         run: cargo +1.89.0 test --manifest-path reproduction/Cargo.toml --no-default-features --features profile --lib --tests --locked
+      - name: Positive input-set assembly and authority tests
+        run: |
+          cargo +1.89.0 test --manifest-path reproduction/Cargo.toml --no-default-features --features positive-gate --lib v2_input_set_assembler_ --locked
+          cargo +1.89.0 test --manifest-path reproduction/Cargo.toml --no-default-features --features positive-gate --lib v2_positive_precommit_gate_ --locked
+          cargo +1.89.0 test --manifest-path reproduction/Cargo.toml --no-default-features --features positive-gate --lib v2_precommit_authorities_have_no_v1_conversion_or_constructible_surface --locked
+          cargo +1.89.0 test --manifest-path reproduction/Cargo.toml --no-default-features --features positive-gate --doc B4PositivePrecommitAuthorityV2 --locked
       - name: Non-proving generator library tests
         run: cargo +1.89.0 test --manifest-path generator/Cargo.toml --no-default-features --lib --locked
 

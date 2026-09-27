@@ -396,6 +396,52 @@ pub struct NamedCanonicalJcs<'a> {
     pub bytes: &'a [u8],
 }
 
+/// Exact caller-held bytes and their safe relative path, without custody authority.
+#[derive(Clone, Copy, Debug)]
+pub struct NamedInputBytesV2<'a> {
+    /// Safe path selected by the caller for these exact bytes.
+    pub relative_path: &'a str,
+    /// Exact bytes already held by the caller.
+    pub bytes: &'a [u8],
+}
+
+/// Ordinary pre-proof sources for the canonical V2 positive input set.
+///
+/// The caller retains responsibility for physical custody of these bytes. Guest,
+/// generator, and statement identities are taken from the authoritative build,
+/// never from a caller-provided digest or length.
+#[derive(Clone, Copy, Debug)]
+pub struct PositiveInputSetAssemblyInputsV2<'a> {
+    /// Safe relative path of the input-set document being assembled.
+    pub input_set_path: &'a str,
+    /// Exact raw profile manifest bytes and path.
+    pub profile_manifest: NamedInputBytesV2<'a>,
+    /// Exact raw profile algorithm bytes and path.
+    pub profile_algorithm: NamedInputBytesV2<'a>,
+    /// Exact raw profile constants bytes and path.
+    pub profile_constants: NamedInputBytesV2<'a>,
+    /// Path paired with the guest identity from the authoritative build.
+    pub guest_elf_path: &'a str,
+    /// Exact canonical reference-statement bundle manifest.
+    pub reference_statement_bundle_manifest: NamedCanonicalJcs<'a>,
+    /// Exact canonical B4 source lock.
+    pub source_lock: NamedCanonicalJcs<'a>,
+    /// Path paired with the generator identity from the authoritative build.
+    pub proof_generator_path: &'a str,
+    /// Retained V1 verifier contract.
+    pub verifier_contract: NamedCanonicalJcs<'a>,
+    /// Four V2 runner profiles in closed role order.
+    pub runner_profiles: [NamedCanonicalJcs<'a>; 4],
+    /// Four retained V1 seccomp documents in the same role order.
+    pub seccomp_documents: [NamedCanonicalJcs<'a>; 4],
+    /// Rust and JVM V2 validator descriptors, in that order.
+    pub validator_descriptors: [NamedCanonicalJcs<'a>; 2],
+    /// Retained V1 JVM COPY-ONLY inclusion manifest.
+    pub jvm_copy_only_inclusion_manifest: NamedCanonicalJcs<'a>,
+    /// Three canonical recursive calibrations in closed case order.
+    pub recursive_calibrations: [NamedCanonicalJcs<'a>; 3],
+}
+
 /// The pre-proof documents needed to establish positive-gate authority.
 #[derive(Clone, Copy, Debug)]
 pub struct PositiveProvenanceDocuments<'a> {
@@ -728,6 +774,245 @@ fn construct_canonical_positive_input_set_jcs_v1(
         validate_canonical_json_source(&source)? == input_set,
         "constructed positive input set does not reparse byte-exactly"
     );
+    Ok(source)
+}
+
+fn assembly_identity_value(
+    source: NamedInputBytesV2<'_>,
+    encoding: B4ContractArtifactEncodingV1,
+    label: &str,
+) -> Result<Value> {
+    ensure!(
+        source.bytes.len() <= MAX_PROVENANCE_JCS_BYTES,
+        "V2 input-set {label} exceeds the 1 MiB source bound"
+    );
+    if encoding == B4ContractArtifactEncodingV1::Rfc8785Jcs {
+        validate_canonical_json_source(source.bytes)
+            .with_context(|| format!("V2 input-set {label} is not exact canonical JCS"))?;
+    }
+    let identity =
+        B4ContractArtifactIdentityV1::from_bytes(source.relative_path, encoding, source.bytes)?;
+    serde_json::to_value(identity)
+        .with_context(|| format!("cannot serialize V2 input-set {label} identity"))
+}
+
+/// Assemble and semantically validate the exact pre-proof V2 input-set bytes.
+///
+/// This is a pure byte constructor. It grants no filesystem, H0, publication,
+/// execution, or proof authority. The full V2 precommit consumer must accept
+/// the constructed bytes and the exact mixed V2/V1 document family before they
+/// are returned.
+///
+/// # Errors
+///
+/// Rejects malformed, aliased, stale, or noncanonical sources and every
+/// cross-document failure rejected by the V2 precommit consumer.
+#[allow(clippy::too_many_lines)]
+pub fn assemble_positive_input_set_jcs_v2(
+    build: &AuthoritativeB4BuildProjection,
+    inputs: PositiveInputSetAssemblyInputsV2<'_>,
+) -> Result<Vec<u8>> {
+    validate_safe_relative_path(inputs.input_set_path)?;
+    let profile_manifest = assembly_identity_value(
+        inputs.profile_manifest,
+        B4ContractArtifactEncodingV1::RawBytes,
+        "profile manifest",
+    )?;
+    let profile_algorithm = assembly_identity_value(
+        inputs.profile_algorithm,
+        B4ContractArtifactEncodingV1::RawBytes,
+        "profile algorithm",
+    )?;
+    let profile_constants = assembly_identity_value(
+        inputs.profile_constants,
+        B4ContractArtifactEncodingV1::RawBytes,
+        "profile constants",
+    )?;
+    let source_lock = assembly_identity_value(
+        NamedInputBytesV2 {
+            relative_path: inputs.source_lock.relative_path,
+            bytes: inputs.source_lock.bytes,
+        },
+        B4ContractArtifactEncodingV1::Rfc8785Jcs,
+        "source lock",
+    )?;
+    ensure!(
+        string_field(&source_lock, "sha256")? == build.source_lock_sha256(),
+        "V2 input-set source lock differs from authoritative B4 validation"
+    );
+    let statement_bundle = assembly_identity_value(
+        NamedInputBytesV2 {
+            relative_path: inputs.reference_statement_bundle_manifest.relative_path,
+            bytes: inputs.reference_statement_bundle_manifest.bytes,
+        },
+        B4ContractArtifactEncodingV1::Rfc8785Jcs,
+        "reference statement bundle manifest",
+    )?;
+    let guest_elf = constructor_identity_value(
+        &authoritative_raw_identity(
+            inputs.guest_elf_path,
+            build.guest_elf_byte_length(),
+            build.guest_elf_sha256(),
+            "guest ELF",
+        )?,
+        B4ContractArtifactEncodingV1::RawBytes,
+        "guest ELF",
+    )?;
+    let proof_generator = constructor_identity_value(
+        &authoritative_raw_identity(
+            inputs.proof_generator_path,
+            build.generator_artifact_byte_length(),
+            build.generator_artifact_sha256(),
+            "proof generator",
+        )?,
+        B4ContractArtifactEncodingV1::RawBytes,
+        "proof generator",
+    )?;
+    let generator_commitment = binary_commitment(&proof_generator)?;
+    let verifier_contract = BoundDocument::parse(inputs.verifier_contract, "V2 verifier contract")?;
+    let runner_profiles: [BoundDocument; 4] = inputs
+        .runner_profiles
+        .into_iter()
+        .enumerate()
+        .map(|(index, source)| BoundDocument::parse(source, &format!("V2 runner profile {index}")))
+        .collect::<Result<Vec<_>>>()?
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("V2 runner-profile cardinality drift"))?;
+    let validator_descriptors: [BoundDocument; 2] = inputs
+        .validator_descriptors
+        .into_iter()
+        .enumerate()
+        .map(|(index, source)| {
+            BoundDocument::parse(source, &format!("V2 validator descriptor {index}"))
+        })
+        .collect::<Result<Vec<_>>>()?
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("V2 validator-descriptor cardinality drift"))?;
+    let runners: Vec<Value> = PositiveRunnerRole::all()
+        .into_iter()
+        .enumerate()
+        .map(|(index, role)| {
+            json!({
+                "runnerProfileIndex": index,
+                "purpose": role.purpose(),
+                "artifact": runner_profiles[index]
+                    .identity_with_path(V2PositiveDocumentKind::RunnerProfile.format())
+            })
+        })
+        .collect();
+    let validators: Vec<Value> = [
+        PositiveImplementation::RustReference,
+        PositiveImplementation::IndependentJvm,
+    ]
+    .into_iter()
+    .enumerate()
+    .map(|(index, implementation)| {
+        json!({
+            "implementationIndex": index,
+            "implementation": implementation.implementation(),
+            "language": implementation.language(),
+            "buildDescriptor": validator_descriptors[index]
+                .identity_with_path(V2PositiveDocumentKind::ValidatorDescriptor.format())
+        })
+    })
+    .collect();
+    let recursive_calibrations: Vec<Value> = inputs
+        .recursive_calibrations
+        .into_iter()
+        .enumerate()
+        .map(|(index, source)| {
+            Ok(json!({
+                "caseId": POSITIVE_CASE_SPECS[index + 8].case_id,
+                "artifact": assembly_identity_value(
+                    NamedInputBytesV2 {
+                        relative_path: source.relative_path,
+                        bytes: source.bytes,
+                    },
+                    B4ContractArtifactEncodingV1::Rfc8785Jcs,
+                    "recursive calibration",
+                )?
+            }))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let positive_cases: Vec<Value> = POSITIVE_CASE_SPECS
+        .iter()
+        .copied()
+        .enumerate()
+        .map(|(index, spec)| canonical_positive_case_plan(index, spec))
+        .collect();
+    let input_set = json!({
+        "format": V2PositiveDocumentKind::InputSet.format(),
+        "formatVersion": 2,
+        "profile": {
+            "profileId": B4_POSITIVE_PROFILE_ID_HEX,
+            "manifest": profile_manifest,
+            "algorithm": profile_algorithm,
+            "constants": profile_constants
+        },
+        "guest": {"elf": guest_elf, "imageId": build.image_id_hex()},
+        "referenceStatement": {
+            "bundleManifest": statement_bundle,
+            "contractId": build.contract_id_hex(),
+            "statementByteLength": build.statement_byte_length(),
+            "statementSha256": build.statement_sha256(),
+            "chainDomainId": build.chain_domain_id_hex(),
+            "applicationPayloadByteLength": build.application_payload_byte_length(),
+            "applicationPayloadSha256": build.application_payload_sha256()
+        },
+        "sourceLock": source_lock,
+        "proofGenerator": {
+            "artifact": proof_generator,
+            "qualifyingBuild": {
+                "policy": "eip0045-b4-qualifying-build-binding-v1",
+                "validationMode": "authoritative-external-anchors",
+                "filesystemBinding": "unix-file-identity-bound",
+                "evidenceRootSha256": build.evidence_root_sha256(),
+                "sourceCommit": build.source_commit(),
+                "sourceTree": build.source_tree(),
+                "sourceLockSha256": build.source_lock_sha256(),
+                "generatorCargoClosureSha256": build.generator_cargo_closure_sha256(),
+                "proofGenerationTestsSha256": build.proof_generation_tests_sha256(),
+                "generatorArtifact": generator_commitment
+            },
+            "executionPolicy": {
+                "policy": "eip0045-b4-proof-generation-executor-v1",
+                "caseOrder": "input-set-order",
+                "generatorProcessReuse": false,
+                "replayProcessReuse": false,
+                "network": "disabled",
+                "environmentInheritance": "none",
+                "inputSetMount": "read-only-preexisting",
+                "caseOutput": "fresh-empty-create-only",
+                "replayExportMount": "read-only-physical-export",
+                "failurePublication": "none"
+            }
+        },
+        "verifierCliContract": verifier_contract
+            .identity_with_path("Eip0045B4VerifierContractV1"),
+        "validators": validators,
+        "runnerProfiles": runners,
+        "recursiveCalibrations": recursive_calibrations,
+        "positiveCases": positive_cases
+    });
+    let source = canonical_json_bytes(&input_set)?;
+    ensure!(
+        source.len() <= MAX_PROVENANCE_JCS_BYTES,
+        "constructed V2 positive input set exceeds the 1 MiB canonical-document bound"
+    );
+    let _ = validate_and_bind_positive_precommit_v2(
+        build,
+        B4PositivePrecommitDocumentsV2 {
+            input_set: NamedCanonicalJcs {
+                relative_path: inputs.input_set_path,
+                bytes: &source,
+            },
+            verifier_contract: inputs.verifier_contract,
+            runner_profiles: inputs.runner_profiles,
+            seccomp_documents: inputs.seccomp_documents,
+            validator_descriptors: inputs.validator_descriptors,
+            jvm_copy_only_inclusion_manifest: inputs.jvm_copy_only_inclusion_manifest,
+        },
+    )?;
     Ok(source)
 }
 
@@ -15348,6 +15633,264 @@ pub(crate) mod test_support {
         let error =
             construct_canonical_positive_input_set_jcs_v1(noncanonical_contract).unwrap_err();
         assert!(format!("{error:#}").contains("canonical"));
+    }
+
+    fn positive_input_set_assembly_inputs_v2<'a>(
+        materialized: &'a MaterializedFixture,
+        v2: &'a V2InputIdentityFixture,
+    ) -> PositiveInputSetAssemblyInputsV2<'a> {
+        let input = &v2.input_value;
+        PositiveInputSetAssemblyInputsV2 {
+            input_set_path: INPUT_SET_PATH,
+            profile_manifest: NamedInputBytesV2 {
+                relative_path: string_field(&input["profile"]["manifest"], "path").unwrap(),
+                bytes: &materialized.verifier_files.profile_manifest,
+            },
+            profile_algorithm: NamedInputBytesV2 {
+                relative_path: string_field(&input["profile"]["algorithm"], "path").unwrap(),
+                bytes: &materialized.verifier_files.profile_algorithm,
+            },
+            profile_constants: NamedInputBytesV2 {
+                relative_path: string_field(&input["profile"]["constants"], "path").unwrap(),
+                bytes: &materialized.verifier_files.profile_constants,
+            },
+            guest_elf_path: string_field(&input["guest"]["elf"], "path").unwrap(),
+            reference_statement_bundle_manifest: NamedCanonicalJcs {
+                relative_path: string_field(&input["referenceStatement"]["bundleManifest"], "path")
+                    .unwrap(),
+                bytes: &materialized.reference_statement_bundle_manifest,
+            },
+            source_lock: NamedCanonicalJcs {
+                relative_path: string_field(&input["sourceLock"], "path").unwrap(),
+                bytes: &materialized.source_lock,
+            },
+            proof_generator_path: string_field(&input["proofGenerator"]["artifact"], "path")
+                .unwrap(),
+            verifier_contract: NamedCanonicalJcs {
+                relative_path: VERIFIER_CONTRACT_PATH,
+                bytes: &materialized.verifier_contract_bytes,
+            },
+            runner_profiles: std::array::from_fn(|index| NamedCanonicalJcs {
+                relative_path: RUNNER_PATHS[index],
+                bytes: &v2.runner_bytes[index],
+            }),
+            seccomp_documents: std::array::from_fn(|index| NamedCanonicalJcs {
+                relative_path: SECCOMP_PATHS[index],
+                bytes: &materialized.seccomp_bytes[index],
+            }),
+            validator_descriptors: std::array::from_fn(|index| NamedCanonicalJcs {
+                relative_path: DESCRIPTOR_PATHS[index],
+                bytes: &v2.descriptor_bytes[index],
+            }),
+            jvm_copy_only_inclusion_manifest: NamedCanonicalJcs {
+                relative_path: JVM_COPY_ONLY_INCLUSION_MANIFEST_PATH,
+                bytes: &materialized.jvm_copy_only_inclusion_manifest_bytes,
+            },
+            recursive_calibrations: std::array::from_fn(|index| NamedCanonicalJcs {
+                relative_path: string_field(
+                    &input["recursiveCalibrations"][index]["artifact"],
+                    "path",
+                )
+                .unwrap(),
+                bytes: &materialized.recursive_calibrations[index],
+            }),
+        }
+    }
+
+    #[test]
+    fn v2_input_set_assembler_matches_closed_fixture_and_is_deterministic() {
+        let materialized = Fixture::valid().materialize();
+        let v2 = V2InputIdentityFixture::from_materialized(&materialized);
+        let inputs = positive_input_set_assembly_inputs_v2(&materialized, &v2);
+        let first = assemble_positive_input_set_jcs_v2(&v2.authoritative_build, inputs).unwrap();
+        let second = assemble_positive_input_set_jcs_v2(&v2.authoritative_build, inputs).unwrap();
+        assert_eq!(first, v2.input_bytes);
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn v2_input_set_assembler_rejects_detached_and_noncanonical_sources() {
+        let materialized = Fixture::valid().materialize();
+        let v2 = V2InputIdentityFixture::from_materialized(&materialized);
+        let mut detached = positive_input_set_assembly_inputs_v2(&materialized, &v2);
+        detached.source_lock.bytes = b"{}";
+        assert!(
+            format!(
+                "{:#}",
+                assemble_positive_input_set_jcs_v2(&v2.authoritative_build, detached).unwrap_err()
+            )
+            .contains("source lock differs from authoritative B4 validation")
+        );
+        let mut noncanonical = positive_input_set_assembly_inputs_v2(&materialized, &v2);
+        let mut padded_source_lock = materialized.source_lock.clone();
+        padded_source_lock.push(b'\n');
+        noncanonical.source_lock.bytes = &padded_source_lock;
+        assert!(
+            format!(
+                "{:#}",
+                assemble_positive_input_set_jcs_v2(&v2.authoritative_build, noncanonical)
+                    .unwrap_err()
+            )
+            .contains("not exact canonical JCS")
+        );
+        let mut wrong_profile = positive_input_set_assembly_inputs_v2(&materialized, &v2);
+        wrong_profile.profile_manifest.bytes = b"wrong-profile";
+        assert!(
+            assemble_positive_input_set_jcs_v2(&v2.authoritative_build, wrong_profile).is_err()
+        );
+    }
+
+    #[test]
+    fn v2_input_set_assembler_rejects_aliases_and_role_permutation() {
+        let materialized = Fixture::valid().materialize();
+        let v2 = V2InputIdentityFixture::from_materialized(&materialized);
+        let mut alias = positive_input_set_assembly_inputs_v2(&materialized, &v2);
+        alias.runner_profiles[0].relative_path = INPUT_SET_PATH;
+        assert!(assemble_positive_input_set_jcs_v2(&v2.authoritative_build, alias).is_err());
+        let mut permuted = positive_input_set_assembly_inputs_v2(&materialized, &v2);
+        permuted.runner_profiles.swap(0, 1);
+        assert!(assemble_positive_input_set_jcs_v2(&v2.authoritative_build, permuted).is_err());
+    }
+
+    #[test]
+    fn v2_input_set_assembler_reaches_precommit_for_rebound_seccomp_and_jvm() {
+        let mut bad_seccomp = Fixture::valid();
+        bad_seccomp.seccomp_values[0]["linuxSeccomp"]["syscalls"][0]["names"] =
+            json!(["write", "read"]);
+        bad_seccomp.runner_values[0]["seccomp"]["allowedSyscalls"] = json!(["write", "read"]);
+        let materialized = bad_seccomp.materialize();
+        let v2 = V2InputIdentityFixture::from_materialized(&materialized);
+        let error = assemble_positive_input_set_jcs_v2(
+            &v2.authoritative_build,
+            positive_input_set_assembly_inputs_v2(&materialized, &v2),
+        )
+        .unwrap_err();
+        assert!(
+            format!("{error:#}").contains("seccomp syscalls are not strictly increasing"),
+            "unexpected rejection: {error:#}"
+        );
+
+        let mut bad_jvm = Fixture::valid();
+        bad_jvm.runner_values[3]["javaRuntime"]["options"][0] = json!("--unsafe");
+        let materialized = bad_jvm.materialize();
+        let v2 = V2InputIdentityFixture::from_materialized(&materialized);
+        let error = assemble_positive_input_set_jcs_v2(
+            &v2.authoritative_build,
+            positive_input_set_assembly_inputs_v2(&materialized, &v2),
+        )
+        .unwrap_err();
+        assert!(
+            format!("{error:#}")
+                .contains("V2 jvm-validator runner profile fails Draft 2020-12 schema")
+                && format!("{error:#}").contains("\"-Xms64m\" was expected"),
+            "unexpected rejection: {error:#}"
+        );
+    }
+
+    #[test]
+    fn v2_input_set_assembler_reaches_rebound_copy_only_application_count() {
+        let mut stale_copy_only = Fixture::valid();
+        stale_copy_only.jvm_copy_only_inclusion_manifest_value["inputs"][0]["regularEntryCount"] =
+            json!(3);
+        refresh_jvm_copy_only_inclusion_manifest_binding(&mut stale_copy_only);
+        let materialized = stale_copy_only.materialize();
+        let v2 = V2InputIdentityFixture::from_materialized(&materialized);
+        let error = assemble_positive_input_set_jcs_v2(
+            &v2.authoritative_build,
+            positive_input_set_assembly_inputs_v2(&materialized, &v2),
+        )
+        .unwrap_err();
+        assert!(
+            format!("{error:#}")
+                .contains("JVM COPY-ONLY application input regular-entry count is stale"),
+            "unexpected rejection: {error:#}"
+        );
+    }
+
+    #[test]
+    fn v2_input_set_assembler_enforces_raw_and_jcs_source_bounds() {
+        let raw_at_bound = vec![b'x'; MAX_PROVENANCE_JCS_BYTES];
+        let raw_over_bound = vec![b'x'; MAX_PROVENANCE_JCS_BYTES + 1];
+        let mut jcs_at_bound = vec![b'a'; MAX_PROVENANCE_JCS_BYTES - 2];
+        jcs_at_bound.insert(0, b'"');
+        jcs_at_bound.push(b'"');
+        let mut jcs_over_bound = vec![b'a'; MAX_PROVENANCE_JCS_BYTES - 1];
+        jcs_over_bound.insert(0, b'"');
+        jcs_over_bound.push(b'"');
+
+        for (encoding, at_bound, over_bound, path) in [
+            (
+                B4ContractArtifactEncodingV1::RawBytes,
+                raw_at_bound.as_slice(),
+                raw_over_bound.as_slice(),
+                "profiles/risc0-v3-succinct/manifest.bin",
+            ),
+            (
+                B4ContractArtifactEncodingV1::Rfc8785Jcs,
+                jcs_at_bound.as_slice(),
+                jcs_over_bound.as_slice(),
+                "preproof/source-lock.json",
+            ),
+        ] {
+            assert!(
+                assembly_identity_value(
+                    NamedInputBytesV2 {
+                        relative_path: path,
+                        bytes: at_bound,
+                    },
+                    encoding,
+                    "boundary",
+                )
+                .is_ok(),
+                "the exact source bound must remain admissible"
+            );
+            let error = assembly_identity_value(
+                NamedInputBytesV2 {
+                    relative_path: path,
+                    bytes: over_bound,
+                },
+                encoding,
+                "boundary",
+            )
+            .unwrap_err();
+            assert!(error.to_string().contains("exceeds the 1 MiB source bound"));
+        }
+
+        let materialized = Fixture::valid().materialize();
+        let v2 = V2InputIdentityFixture::from_materialized(&materialized);
+        let mut raw_at = positive_input_set_assembly_inputs_v2(&materialized, &v2);
+        raw_at.profile_manifest.bytes = &raw_at_bound;
+        let error =
+            assemble_positive_input_set_jcs_v2(&v2.authoritative_build, raw_at).unwrap_err();
+        assert!(
+            !format!("{error:#}").contains("exceeds the 1 MiB source bound"),
+            "the exact raw bound was rejected by the size guard: {error:#}"
+        );
+        let mut raw_over = positive_input_set_assembly_inputs_v2(&materialized, &v2);
+        raw_over.profile_manifest.bytes = &raw_over_bound;
+        let error =
+            assemble_positive_input_set_jcs_v2(&v2.authoritative_build, raw_over).unwrap_err();
+        assert!(
+            format!("{error:#}")
+                .contains("V2 input-set profile manifest exceeds the 1 MiB source bound")
+        );
+
+        let mut jcs_at = positive_input_set_assembly_inputs_v2(&materialized, &v2);
+        jcs_at.source_lock.bytes = &jcs_at_bound;
+        let error =
+            assemble_positive_input_set_jcs_v2(&v2.authoritative_build, jcs_at).unwrap_err();
+        assert!(
+            format!("{error:#}").contains("source lock differs from authoritative B4 validation"),
+            "the exact JCS bound did not reach the authority check: {error:#}"
+        );
+        let mut jcs_over = positive_input_set_assembly_inputs_v2(&materialized, &v2);
+        jcs_over.source_lock.bytes = &jcs_over_bound;
+        let error =
+            assemble_positive_input_set_jcs_v2(&v2.authoritative_build, jcs_over).unwrap_err();
+        assert!(
+            format!("{error:#}")
+                .contains("V2 input-set source lock exceeds the 1 MiB source bound")
+        );
     }
 
     #[test]
