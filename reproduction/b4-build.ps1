@@ -13,7 +13,9 @@ param(
     [string]$SecondRepoRoot,
 
     [Parameter(Mandatory)]
-    [string]$RuntimeImage
+    [string]$RuntimeImage,
+
+    [switch]$KeepTransientDirectories
 )
 
 $ErrorActionPreference = 'Stop'
@@ -273,7 +275,7 @@ function Get-TreeManifestLines([string]$EvidenceRoot) {
 function Write-EvidenceManifest([string]$EvidenceRoot) {
     Write-LfUtf8 (Join-Path $EvidenceRoot 'evidence-manifest.txt') (Get-TreeManifestLines $EvidenceRoot)
 }
-function Remove-OwnedTransientRoot([string]$Path, [string]$Parent, [string]$OutputName, [string]$Kind) {
+function Remove-OwnedTransientRoot([string]$Path, [string]$Parent, [string]$OutputName, [string]$Kind, [switch]$Keep) {
     $full = [System.IO.Path]::GetFullPath($Path)
     $actualParent = [System.IO.Directory]::GetParent($full).FullName
     if ($Kind -ne 'work' -and $Kind -ne 'staging') { Fail "unknown transient directory kind: $Kind" }
@@ -286,7 +288,11 @@ function Remove-OwnedTransientRoot([string]$Path, [string]$Parent, [string]$Outp
         $item = Get-Item -Force -LiteralPath $full
         if (Test-PathAlias $item) { Fail "refusing to clean aliased transient directory: $full" }
         Assert-NoDescendantPathAlias $full "$Kind transient directory"
-        Remove-Item -LiteralPath $full -Recurse -Force
+        if ($Keep) {
+            Write-Output "B4 build: $Kind transient directory retained at $full"
+        } else {
+            Remove-Item -LiteralPath $full -Recurse -Force
+        }
     }
 }
 function Invoke-B4BuildRun(
@@ -501,7 +507,17 @@ try {
             Write-Warning $_.Exception.Message
         }
     }
-    if ($null -ne $stagingRoot -and (Test-Path -LiteralPath $stagingRoot) -and $null -ne $workRoot -and (Test-Path -LiteralPath $workRoot)) {
+    if ($KeepTransientDirectories) {
+        if ($null -ne $stagingRoot -and (Test-Path -LiteralPath $stagingRoot)) {
+            try {
+                Remove-OwnedTransientRoot $stagingRoot $output.Parent $output.Name 'staging' -Keep
+                $diagnostics = $stagingRoot
+            } catch { Write-Warning $_.Exception.Message }
+        }
+        if ($null -ne $workRoot -and (Test-Path -LiteralPath $workRoot)) {
+            try { Remove-OwnedTransientRoot $workRoot $output.Parent $output.Name 'work' -Keep } catch { Write-Warning $_.Exception.Message }
+        }
+    } elseif ($null -ne $stagingRoot -and (Test-Path -LiteralPath $stagingRoot) -and $null -ne $workRoot -and (Test-Path -LiteralPath $workRoot)) {
         if (Test-B4ContainerBindSourcesMustRemain) {
             $diagnostics = $stagingRoot
         } else {
@@ -536,6 +552,6 @@ try {
         try { Remove-Item -LiteralPath $lockPath -Force } catch { Write-Warning $_.Exception.Message }
     }
     if ($published -and $null -ne $workRoot -and (Test-Path -LiteralPath $workRoot)) {
-        try { Remove-OwnedTransientRoot $workRoot $output.Parent $output.Name 'work' } catch { Write-Warning $_.Exception.Message }
+        try { Remove-OwnedTransientRoot $workRoot $output.Parent $output.Name 'work' -Keep:$KeepTransientDirectories } catch { Write-Warning $_.Exception.Message }
     }
 }

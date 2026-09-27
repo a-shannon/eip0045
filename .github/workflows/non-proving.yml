@@ -48,3 +48,15 @@ jobs:
         run: cargo +1.89.0 test --manifest-path reproduction/Cargo.toml --no-default-features --features profile --lib --tests --locked
       - name: Non-proving generator library tests
         run: cargo +1.89.0 test --manifest-path generator/Cargo.toml --no-default-features --lib --locked
+
+  windows-build-runner:
+    runs-on: windows-2022
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Preserve producer work directories
+        shell: powershell
+        run: |
+          & ./reproduction/b4-build/test-keep-transient.ps1 -ResultRoot (Join-Path $env:RUNNER_TEMP 'b4-keep-transient')

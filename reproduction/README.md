@@ -233,6 +233,13 @@ component rather than B4 completion evidence.
 
 ## B4 build-archive validation
 
+The Windows B4 producer (`reproduction/b4-build.ps1`) accepts
+`-KeepTransientDirectories` when its temporary build files need to be inspected.
+On success it retains the work directory; the completed staging directory is
+published as the final archive. On failure it retains any work and staging
+directories at their original paths. The ownership and path-alias checks still
+apply. Without the switch, the producer keeps its existing cleanup behavior.
+
 `b4-build-check` validates the archive properties that can be recomputed from
 the final bytes: closed paths and hashes, equality of the two run trees,
 within-run before/after/final snapshots, canonical candidate source locks,
