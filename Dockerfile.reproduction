@@ -1,0 +1,35 @@
+# check=skip=FromPlatformFlagConstDisallowed
+# Build this image with `--provenance=false`; the B4 runners require the exact
+# single-platform manifest rather than a builder-specific attestation index.
+# BuildKit uses this source epoch for image configuration and layer timestamps.
+# It is the committer timestamp of the pinned RISC Zero source commit.
+ARG SOURCE_DATE_EPOCH=1770077976
+
+FROM --platform=linux/amd64 rust@sha256:294917190b5a3fed18d3303213943f40ec9b644b3cd6e5cdc8cd029334a770b3 AS host-rust
+
+FROM --platform=linux/amd64 risczero/risc0-guest-builder@sha256:3e12f71bacd27527a61dea96fa0e53e468c99aa261d3a1019b593f6dbd943eb3
+
+LABEL org.opencontainers.image.title="EIP-0045 pinned RISC Zero reproduction environment"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+
+# The guest-builder base carries the exact RISC Zero guest toolchain (Rust
+# 1.88.0), while the pinned upstream host workspace requires Rust 1.89.0.
+# Copying the complete rustup and Cargo trees preserves both roles without a
+# network install or an unpinned package-manager transaction.
+COPY --from=host-rust /usr/local/cargo /opt/eip0045-host-rust/cargo
+COPY --from=host-rust /usr/local/rustup /opt/eip0045-host-rust/rustup
+
+ENV RUSTUP_HOME=/opt/eip0045-host-rust/rustup
+ENV RISC0_HOME=/root/.risc0
+ENV HOST_RUST_TOOLCHAIN=/opt/eip0045-host-rust/rustup/toolchains/1.89.0-x86_64-unknown-linux-gnu
+# Put the immutable toolchain binaries ahead of rustup's proxy symlinks. This
+# prevents rustup from consulting a channel server merely because the mounted
+# source tree contains rust-toolchain.toml.
+ENV PATH=${HOST_RUST_TOOLCHAIN}/bin:/root/.risc0/bin:/root/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+WORKDIR /workspace
+
+# The upstream guest-builder image launches every argument as a shell script.
+# Reset that inherited entrypoint so reproduction commands use normal argv
+# semantics and cannot be reinterpreted as script filenames.
+ENTRYPOINT []
