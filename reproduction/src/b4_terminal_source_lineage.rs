@@ -12,7 +12,8 @@ use crate::{
     b4::{B4PositiveArtifactRole, canonical_positive_case_artifact_path},
     b4_campaign_contract::{
         B4CampaignPrecommitAuthorityV1, B4ContractArtifactEncodingV1, B4ContractArtifactIdentityV1,
-        B4PositiveGenerationAuthorityV2,
+        B4PositiveGenerationAuthorityV2, B4TrustedHostCampaignPrecommitAuthorityV1,
+        Eip0045B4CampaignPrecommitV1,
     },
     b4_materialization_set::{
         compiled_positive_case_id, compiled_positive_generation_recipe,
@@ -678,7 +679,11 @@ impl B4TerminalSourceLineageAuthorityV1 {
     reason = "opaque V2 lineage measurements are retained without public readers"
 )]
 pub struct B4TerminalSourceLineageAuthorityV2 {
+    campaign_realization: B4TerminalCampaignRealization,
     campaign_precommit: B4TerminalPathlessIdentityV1,
+    campaign_request_identity: Option<B4ContractArtifactIdentityV1>,
+    campaign_envelope_identity: Option<B4ContractArtifactIdentityV1>,
+    campaign_artifact_paths: BTreeSet<String>,
     positive_input_set: B4TerminalPathlessIdentityV1,
     positive_generation_set: B4TerminalPathlessIdentityV1,
     profile_manifest: B4TerminalPathlessIdentityV1,
@@ -696,6 +701,59 @@ pub struct B4TerminalSourceLineageAuthorityV2 {
     case9_terminal_resolve_recursive_oracle: Vec<u8>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum B4TerminalCampaignRealization {
+    H0,
+    TrustedHost,
+}
+
+#[derive(Clone, Copy)]
+enum B4TerminalCampaignAuthority<'a> {
+    H0(&'a B4CampaignPrecommitAuthorityV1),
+    TrustedHost(&'a B4TrustedHostCampaignPrecommitAuthorityV1),
+}
+
+impl<'a> B4TerminalCampaignAuthority<'a> {
+    fn realization(self) -> B4TerminalCampaignRealization {
+        match self {
+            Self::H0(_) => B4TerminalCampaignRealization::H0,
+            Self::TrustedHost(_) => B4TerminalCampaignRealization::TrustedHost,
+        }
+    }
+
+    fn precommit(self) -> &'a Eip0045B4CampaignPrecommitV1 {
+        match self {
+            Self::H0(authority) => authority.precommit(),
+            Self::TrustedHost(authority) => authority.inner_precommit(),
+        }
+    }
+
+    fn to_canonical_precommit_jcs(self) -> Result<Vec<u8>> {
+        match self {
+            Self::H0(authority) => authority.to_canonical_precommit_jcs(),
+            Self::TrustedHost(authority) => authority.to_canonical_precommit_jcs(),
+        }
+    }
+
+    fn artifact_paths(self) -> &'a BTreeSet<String> {
+        match self {
+            Self::H0(authority) => authority.artifact_paths(),
+            Self::TrustedHost(authority) => authority.artifact_paths(),
+        }
+    }
+
+    fn trusted_host_identities(
+        self,
+    ) -> Option<(&'a B4ContractArtifactIdentityV1, &'a B4ContractArtifactIdentityV1)> {
+        match self {
+            Self::H0(_) => None,
+            Self::TrustedHost(authority) => {
+                Some((authority.request_identity(), authority.envelope_identity()))
+            }
+        }
+    }
+}
+
 impl B4TerminalSourceLineageAuthorityV2 {
     /// Authenticate one V2 terminal-source lineage against the shared campaign
     /// precommit and the affine V2 positive-generation authority.
@@ -710,6 +768,26 @@ impl B4TerminalSourceLineageAuthorityV2 {
     )]
     pub fn from_external_closure(
         campaign: &B4CampaignPrecommitAuthorityV1,
+        positive: &B4PositiveGenerationAuthorityV2,
+        source: B4TerminalSourceExternalClosureV2<'_>,
+    ) -> Result<Self> {
+        Self::from_external_closure_for(
+            B4TerminalCampaignAuthority::H0(campaign), positive, source)
+    }
+
+    /// Authenticate a terminal-source lineage against the distinct trusted-host
+    /// precommit envelope and the affine V2 positive-generation authority.
+    pub fn from_external_closure_trusted_host(
+        campaign: &B4TrustedHostCampaignPrecommitAuthorityV1,
+        positive: &B4PositiveGenerationAuthorityV2,
+        source: B4TerminalSourceExternalClosureV2<'_>,
+    ) -> Result<Self> {
+        Self::from_external_closure_for(
+            B4TerminalCampaignAuthority::TrustedHost(campaign), positive, source)
+    }
+
+    fn from_external_closure_for(
+        campaign: B4TerminalCampaignAuthority<'_>,
         positive: &B4PositiveGenerationAuthorityV2,
         source: B4TerminalSourceExternalClosureV2<'_>,
     ) -> Result<Self> {
@@ -919,11 +997,16 @@ impl B4TerminalSourceLineageAuthorityV2 {
         let case0_lift15_receipt_oracle = case0.receipt_oracle().to_vec();
         let case8_terminal_join_recursive_oracle = case8.receipt_oracle().to_vec();
         let case9_terminal_resolve_recursive_oracle = case9.receipt_oracle().to_vec();
+        let trusted_host_identities = campaign.trusted_host_identities();
         Ok(Self {
+            campaign_realization: campaign.realization(),
             campaign_precommit: pathless_bytes(
                 B4ContractArtifactEncodingV1::Rfc8785Jcs,
                 &campaign_precommit_jcs,
             )?,
+            campaign_request_identity: trusted_host_identities.map(|(request, _)| request.clone()),
+            campaign_envelope_identity: trusted_host_identities.map(|(_, envelope)| envelope.clone()),
+            campaign_artifact_paths: campaign.artifact_paths().clone(),
             positive_input_set: pathless_identity(positive.input_set()),
             positive_generation_set: pathless_identity(positive.generation_set()),
             profile_manifest: pathless_identity(&parsed.profile_manifest),
@@ -956,6 +1039,31 @@ impl B4TerminalSourceLineageAuthorityV2 {
         campaign: &B4CampaignPrecommitAuthorityV1,
         positive: &B4PositiveGenerationAuthorityV2,
     ) -> Result<()> {
+        self.verify_authority_bindings_for(
+            B4TerminalCampaignAuthority::H0(campaign), positive)
+    }
+
+    /// Recheck this lineage against the same trusted-host authority kind and
+    /// exact full envelope that constructed it.
+    pub fn verify_authority_bindings_trusted_host(
+        &self,
+        campaign: &B4TrustedHostCampaignPrecommitAuthorityV1,
+        positive: &B4PositiveGenerationAuthorityV2,
+    ) -> Result<()> {
+        self.verify_authority_bindings_for(
+            B4TerminalCampaignAuthority::TrustedHost(campaign), positive)
+    }
+
+    fn verify_authority_bindings_for(
+        &self,
+        campaign: B4TerminalCampaignAuthority<'_>,
+        positive: &B4PositiveGenerationAuthorityV2,
+    ) -> Result<()> {
+        require_boundary(
+            self.campaign_realization == campaign.realization(),
+            LineageFailureBoundary::RetainedCampaignAuthority,
+            "supplied campaign realization differs from the retained V2 lineage",
+        )?;
         let canonical_precommit = campaign
             .to_canonical_precommit_jcs()
             .context(LineageFailureBoundary::RetainedCampaignAuthority.label())?;
@@ -966,6 +1074,20 @@ impl B4TerminalSourceLineageAuthorityV2 {
             )? == self.campaign_precommit,
             LineageFailureBoundary::RetainedCampaignAuthority,
             "supplied campaign precommit differs from the retained V2 lineage",
+        )?;
+        let supplied_trusted_host = campaign.trusted_host_identities();
+        require_boundary(
+            supplied_trusted_host.map(|(request, _)| request)
+                == self.campaign_request_identity.as_ref()
+                && supplied_trusted_host.map(|(_, envelope)| envelope)
+                    == self.campaign_envelope_identity.as_ref(),
+            LineageFailureBoundary::RetainedCampaignAuthority,
+            "supplied trusted-host request or envelope identity differs from the retained V2 lineage",
+        )?;
+        require_boundary(
+            campaign.artifact_paths() == &self.campaign_artifact_paths,
+            LineageFailureBoundary::RetainedAuthorityProvenance,
+            "supplied campaign provenance differs from the retained V2 lineage",
         )?;
         require_boundary(
             pathless_identity(positive.input_set()) == self.positive_input_set

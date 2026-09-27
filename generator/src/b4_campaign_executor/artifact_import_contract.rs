@@ -14,6 +14,21 @@ pub(super) enum Amd64ElfPolicyV1 {
     Runtime,
 }
 
+/// Preparatory successor only. No positive profile or physical rootfs consumer
+/// selects this policy until a separately reviewed gate and receipt join lands.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum StartupDependencyPolicyV2 {
+    GlibcRelocation,
+}
+
+impl StartupDependencyPolicyV2 {
+    pub(super) const fn policy_id(self) -> &'static str {
+        match self {
+            Self::GlibcRelocation => "eip0045-b4-elf64-amd64-startup-dependency-closure-v2",
+        }
+    }
+}
+
 /// Closed JAR policy selected before physical import.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum JvmJarPolicyV1 {
@@ -722,8 +737,21 @@ mod tests {
         Amd64ElfImportLimitsV1, Amd64ElfPolicyV1, ArtifactContentLimitsV1, ArtifactImportLimitsV1,
         B4ImmutableArtifactRoleV1, JvmJarImportLimitsV1, JvmJarPolicyV1, OciArtifactImportLimitsV1,
         OciLayerStreamLimitsV1, OciPostChangesetRootfsLimitsV1, Risc0GuestElfImportLimitsV1,
-        RuntimeAmd64ElfImportLimitsV1, startup_dependency_closure_limits_v1,
+        RuntimeAmd64ElfImportLimitsV1, StartupDependencyPolicyV2,
+        startup_dependency_closure_limits_v1,
     };
+
+    #[test]
+    fn preparatory_startup_dependency_successor_has_distinct_policy_id() {
+        assert_eq!(
+            StartupDependencyPolicyV2::GlibcRelocation.policy_id(),
+            "eip0045-b4-elf64-amd64-startup-dependency-closure-v2"
+        );
+        assert_ne!(
+            StartupDependencyPolicyV2::GlibcRelocation.policy_id(),
+            "eip0045-b4-elf64-amd64-startup-dependency-closure-v1"
+        );
+    }
 
     const fn expected_limits(
         minimum_encoded_bytes: u64,

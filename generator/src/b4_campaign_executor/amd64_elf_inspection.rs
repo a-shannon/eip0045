@@ -23,7 +23,7 @@ use sha2::{Digest as _, Sha256};
 
 use super::artifact_import_contract::{
     Amd64ElfImportLimitsV1, Amd64ElfPolicyV1, B4ImmutableArtifactRoleV1,
-    RuntimeAmd64ElfImportLimitsV1, startup_dependency_closure_limits_v1,
+    RuntimeAmd64ElfImportLimitsV1, StartupDependencyPolicyV2, startup_dependency_closure_limits_v1,
 };
 
 const ELF64_HEADER_BYTES: usize = 64;
@@ -33,6 +33,12 @@ const ELF64_DYNAMIC_ENTRY_BYTES: usize = 16;
 const ELF_SHN_LORESERVE: u16 = 0xff00;
 const ELF_DT_AUXILIARY: i64 = 0x7fff_fffd;
 const ELF_DT_FILTER: i64 = 0x7fff_ffff;
+const ELF_DT_RELRSZ: i64 = 0x23;
+const ELF_DT_RELR: i64 = 0x24;
+const ELF_DT_RELRENT: i64 = 0x25;
+const ELF_DT_X86_64_PLT: i64 = 0x7000_0000;
+const ELF_DT_X86_64_PLTSZ: i64 = 0x7000_0001;
+const ELF_DT_X86_64_PLTENT: i64 = 0x7000_0003;
 
 /// Closed ELF type carried by the machine-readable structural projection.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -154,6 +160,19 @@ pub(in crate::b4_campaign_executor) enum Amd64ElfAcceptedDynamicTagV1 {
     VersionDefinitionCount,
     VersionNeed,
     VersionNeedCount,
+}
+
+/// Preparatory diagnostic tag projection. V1's closed enum and its consumers
+/// remain unchanged; this type cannot be substituted for a V1 receipt.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::b4_campaign_executor) enum Amd64ElfAcceptedDynamicTagV2 {
+    V1(Amd64ElfAcceptedDynamicTagV1),
+    RelrSize,
+    Relr,
+    RelrEntrySize,
+    X86_64Plt,
+    X86_64PltSize,
+    X86_64PltEntrySize,
 }
 
 /// One exact accepted `Elf64_Dyn` record. The containing slice preserves every
@@ -384,6 +403,80 @@ impl StartupDependencyAmd64ElfDsoInspectionV1<'_> {
         &self,
     ) -> &Amd64ElfStartupDynamicInspectionV1<'_> {
         &self.dynamic
+    }
+}
+
+/// Diagnostic projection only: no physical importer or positive gate consumes it.
+#[derive(Debug)]
+pub(in crate::b4_campaign_executor) struct StartupDependencyAmd64ElfDsoInspectionV2<'bytes> {
+    policy: StartupDependencyPolicyV2,
+    byte_length: u64,
+    sha256: [u8; 32],
+    common: Amd64ElfCommonInspectionV1,
+    interpreter_path: Option<&'bytes str>,
+    dynamic: Amd64ElfStartupDynamicInspectionV2<'bytes>,
+}
+
+impl StartupDependencyAmd64ElfDsoInspectionV2<'_> {
+    pub(in crate::b4_campaign_executor) const fn policy(&self) -> StartupDependencyPolicyV2 {
+        self.policy
+    }
+
+    pub(in crate::b4_campaign_executor) const fn byte_length(&self) -> u64 {
+        self.byte_length
+    }
+
+    pub(in crate::b4_campaign_executor) const fn sha256(&self) -> [u8; 32] {
+        self.sha256
+    }
+
+    pub(in crate::b4_campaign_executor) const fn common(&self) -> &Amd64ElfCommonInspectionV1 {
+        &self.common
+    }
+
+    pub(in crate::b4_campaign_executor) const fn interpreter_path(&self) -> Option<&str> {
+        self.interpreter_path
+    }
+
+    pub(in crate::b4_campaign_executor) const fn dynamic(
+        &self,
+    ) -> &Amd64ElfStartupDynamicInspectionV2<'_> {
+        &self.dynamic
+    }
+}
+
+#[derive(Debug)]
+pub(in crate::b4_campaign_executor) struct Amd64ElfStartupDynamicInspectionV2<'bytes> {
+    accepted_records: Vec<Amd64ElfDynamicRecordV1>,
+    accepted_tags: Vec<Amd64ElfAcceptedDynamicTagV2>,
+    needed_libraries: Vec<Amd64ElfNeededLibraryV1<'bytes>>,
+    soname: &'bytes str,
+    runpath: Option<Amd64ElfValidatedRunpathV1<'bytes>>,
+}
+
+impl Amd64ElfStartupDynamicInspectionV2<'_> {
+    pub(in crate::b4_campaign_executor) fn accepted_records(&self) -> &[Amd64ElfDynamicRecordV1] {
+        &self.accepted_records
+    }
+
+    pub(in crate::b4_campaign_executor) fn accepted_tags(&self) -> &[Amd64ElfAcceptedDynamicTagV2] {
+        &self.accepted_tags
+    }
+
+    pub(in crate::b4_campaign_executor) fn needed_libraries(
+        &self,
+    ) -> &[Amd64ElfNeededLibraryV1<'_>] {
+        &self.needed_libraries
+    }
+
+    pub(in crate::b4_campaign_executor) const fn soname(&self) -> &str {
+        self.soname
+    }
+
+    pub(in crate::b4_campaign_executor) const fn runpath(
+        &self,
+    ) -> Option<&Amd64ElfValidatedRunpathV1<'_>> {
+        self.runpath.as_ref()
     }
 }
 
@@ -1276,6 +1369,232 @@ fn inspect_startup_dependency_amd64_dso(
     })
 }
 
+/// Preparatory V2 diagnosis of exact borrowed DSO bytes. This function grants
+/// no rootfs custody, closure receipt, or positive-profile authority.
+fn inspect_startup_dependency_amd64_dso_v2<'bytes>(
+    bytes: &'bytes [u8],
+    expected_interpreter: &str,
+    policy: StartupDependencyPolicyV2,
+) -> Result<StartupDependencyAmd64ElfDsoInspectionV2<'bytes>> {
+    ensure!(
+        policy == StartupDependencyPolicyV2::GlibcRelocation,
+        "unsupported startup dependency V2 policy"
+    );
+    validate_interpreter_path(expected_interpreter)?;
+    let role_limits = B4ImmutableArtifactRoleV1::Amd64Elf(Amd64ElfPolicyV1::Runtime).limits();
+    let byte_length = u64::try_from(bytes.len()).context("startup DSO length does not fit u64")?;
+    role_limits.validate_encoded_length(byte_length, "startup DSO")?;
+    let work_limits = role_limits.require_amd64_elf("startup DSO")?;
+    let header = parse_closed_elf64_header(bytes)?;
+    ensure!(header.e_type == abi::ET_DYN, "startup DSO is not ET_DYN");
+    let analysis = inspect_common_structure(bytes, &header, work_limits)?;
+    ensure!(
+        analysis.dynamic.is_some(),
+        "startup DSO must contain exactly one PT_DYNAMIC"
+    );
+    ensure!(
+        header.e_entry == 0 || analysis.common.entry_point_in_executable_load,
+        "startup DSO nonzero entry point is not in an executable PT_LOAD"
+    );
+    let dynamic = inspect_startup_dynamic_linkage_v2(
+        bytes,
+        &analysis,
+        work_limits.require_runtime_linkage("startup DSO")?,
+    )?;
+    let interpreter_path = analysis
+        .interpreter
+        .map(|interpreter| -> Result<&str> {
+            let payload = checked_file_range(
+                bytes,
+                interpreter.p_offset,
+                interpreter.p_filesz,
+                "startup DSO interpreter payload",
+            )?;
+            ensure!(
+                (2..=241).contains(&payload.len())
+                    && payload.last() == Some(&0)
+                    && !payload[..payload.len() - 1].contains(&0),
+                "startup DSO interpreter path is not one exact NUL-terminated payload"
+            );
+            let path = std::str::from_utf8(&payload[..payload.len() - 1])
+                .context("startup DSO interpreter path is not ASCII")?;
+            validate_interpreter_path(path)?;
+            Ok(path)
+        })
+        .transpose()?;
+    if let Some(path) = interpreter_path {
+        ensure!(
+            dynamic.soname == "libc.so.6" && path == expected_interpreter,
+            "startup DSO PT_INTERP is permitted only for libc.so.6 with the launcher interpreter path"
+        );
+    }
+    Ok(StartupDependencyAmd64ElfDsoInspectionV2 {
+        policy,
+        byte_length,
+        sha256: Sha256::digest(bytes).into(),
+        common: analysis.common,
+        interpreter_path,
+        dynamic,
+    })
+}
+
+fn inspect_startup_dynamic_linkage_v2<'bytes>(
+    bytes: &'bytes [u8],
+    analysis: &CommonElfAnalysis,
+    limits: RuntimeAmd64ElfImportLimitsV1,
+) -> Result<Amd64ElfStartupDynamicInspectionV2<'bytes>> {
+    let dynamic = analysis.dynamic.context("startup DSO lacks PT_DYNAMIC")?;
+    let dynamic_bytes = checked_file_range(
+        bytes,
+        dynamic.p_offset,
+        dynamic.p_filesz,
+        "startup DSO dynamic array",
+    )?;
+    ensure!(
+        !dynamic_bytes.is_empty() && dynamic_bytes.len() % ELF64_DYNAMIC_ENTRY_BYTES == 0,
+        "startup DSO dynamic array is not composed of complete 16-byte entries"
+    );
+    let (parsed, accepted_tags) =
+        parse_startup_dynamic_records_v2(dynamic_bytes, bytes, analysis, limits)?;
+    let string_table = resolve_startup_dynamic_string_table(bytes, analysis, &parsed)?;
+    let needed_libraries = resolve_needed_libraries(parsed.needed_offsets, string_table)?;
+    let (_, soname_offset) = parsed
+        .soname_offset
+        .context("startup DSO does not contain exactly one DT_SONAME")?;
+    let soname = dynamic_string_at(
+        string_table.expect("DT_SONAME fixed one dynamic string table"),
+        soname_offset,
+        "DT_SONAME",
+    )?;
+    validate_dynamic_basename(soname, "startup ELF DT_SONAME")?;
+    let runpath = parsed
+        .runpath_offset
+        .map(|(_, offset)| {
+            let runpath = dynamic_string_at(
+                string_table.expect("DT_RUNPATH fixed one dynamic string table"),
+                offset,
+                "DT_RUNPATH",
+            )?;
+            validate_runpath(runpath, startup_dependency_closure_limits_v1())
+        })
+        .transpose()?;
+    Ok(Amd64ElfStartupDynamicInspectionV2 {
+        accepted_records: parsed.accepted_records,
+        accepted_tags,
+        needed_libraries,
+        soname,
+        runpath,
+    })
+}
+
+fn parse_startup_dynamic_records_v2(
+    dynamic_bytes: &[u8],
+    bytes: &[u8],
+    analysis: &CommonElfAnalysis,
+    limits: RuntimeAmd64ElfImportLimitsV1,
+) -> Result<(
+    ParsedStartupDynamicRecordsV1,
+    Vec<Amd64ElfAcceptedDynamicTagV2>,
+)> {
+    let maximum_entries = usize::try_from(limits.maximum_dynamic_entries())?;
+    let entry_count = (dynamic_bytes.len() / ELF64_DYNAMIC_ENTRY_BYTES).min(maximum_entries);
+    let mut sanitized = Vec::new();
+    sanitized
+        .try_reserve_exact(entry_count * ELF64_DYNAMIC_ENTRY_BYTES)
+        .context("cannot retain bounded V2 dynamic array")?;
+    let mut raw_records = Vec::new();
+    raw_records
+        .try_reserve_exact(entry_count)
+        .context("cannot retain bounded V2 raw records")?;
+    let mut accepted_tags = Vec::new();
+    accepted_tags
+        .try_reserve_exact(entry_count)
+        .context("cannot retain bounded V2 typed tags")?;
+    let mut relr = [None; 3];
+    let mut x86_plt = [None; 3];
+    let mut found_null = false;
+    for index in 0..entry_count {
+        let offset = index * ELF64_DYNAMIC_ENTRY_BYTES;
+        let tag = i64::from_le_bytes(dynamic_bytes[offset..offset + 8].try_into()?);
+        let value = u64::from_le_bytes(dynamic_bytes[offset + 8..offset + 16].try_into()?);
+        let (accepted_tag, triplet_slot) = match tag {
+            ELF_DT_RELR => (Amd64ElfAcceptedDynamicTagV2::Relr, Some(&mut relr[0])),
+            ELF_DT_RELRSZ => (Amd64ElfAcceptedDynamicTagV2::RelrSize, Some(&mut relr[1])),
+            ELF_DT_RELRENT => (
+                Amd64ElfAcceptedDynamicTagV2::RelrEntrySize,
+                Some(&mut relr[2]),
+            ),
+            ELF_DT_X86_64_PLT => (
+                Amd64ElfAcceptedDynamicTagV2::X86_64Plt,
+                Some(&mut x86_plt[0]),
+            ),
+            ELF_DT_X86_64_PLTSZ => (
+                Amd64ElfAcceptedDynamicTagV2::X86_64PltSize,
+                Some(&mut x86_plt[1]),
+            ),
+            ELF_DT_X86_64_PLTENT => (
+                Amd64ElfAcceptedDynamicTagV2::X86_64PltEntrySize,
+                Some(&mut x86_plt[2]),
+            ),
+            _ => (
+                Amd64ElfAcceptedDynamicTagV2::V1(classify_startup_dynamic_tag(tag)?),
+                None,
+            ),
+        };
+        sanitized.extend_from_slice(&dynamic_bytes[offset..offset + ELF64_DYNAMIC_ENTRY_BYTES]);
+        if let Some(slot) = triplet_slot {
+            ensure!(
+                slot.replace(value).is_none(),
+                "startup DSO repeats a V2 relocation tag {tag:#x}"
+            );
+            sanitized[offset..offset + 8].copy_from_slice(&abi::DT_DEBUG.to_le_bytes());
+        }
+        raw_records.push(Amd64ElfDynamicRecordV1 {
+            d_tag: tag,
+            d_un: value,
+        });
+        accepted_tags.push(accepted_tag);
+        if tag == abi::DT_NULL {
+            found_null = true;
+            break;
+        }
+    }
+    ensure!(
+        found_null,
+        "startup DSO dynamic array has no bounded DT_NULL"
+    );
+    validate_v2_relocation_triplet(bytes, analysis, relr, 8, "DT_RELR")?;
+    validate_v2_relocation_triplet(bytes, analysis, x86_plt, 16, "DT_X86_64_PLT")?;
+    let mut parsed = parse_startup_dynamic_records(&sanitized, limits)?;
+    ensure!(
+        parsed.accepted_records.len() == raw_records.len(),
+        "V2 dynamic record projection changed cardinality"
+    );
+    parsed.accepted_records = raw_records;
+    Ok((parsed, accepted_tags))
+}
+
+fn validate_v2_relocation_triplet(
+    bytes: &[u8],
+    analysis: &CommonElfAnalysis,
+    triplet: [Option<u64>; 3],
+    required_entry_size: u64,
+    label: &str,
+) -> Result<()> {
+    match triplet {
+        [None, None, None] => Ok(()),
+        [Some(address), Some(size), Some(entry_size)] => {
+            ensure!(
+                size != 0 && entry_size == required_entry_size && size % entry_size == 0,
+                "startup DSO {label} triplet has invalid size or entry size"
+            );
+            map_virtual_file_range(bytes, &analysis.program_headers, address, size, label)?;
+            Ok(())
+        }
+        _ => anyhow::bail!("startup DSO {label} triplet is incomplete"),
+    }
+}
+
 fn validate_interpreter_path(path: &str) -> Result<()> {
     ensure!(
         (2..=240).contains(&path.len()) && path.starts_with('/'),
@@ -1434,6 +1753,18 @@ pub(in crate::b4_campaign_executor) fn with_inspected_startup_dependency_amd64_d
     effect(&inspected)
 }
 
+/// Lend the preparatory V2 diagnostic projection without granting custody or
+/// selecting a positive-profile policy.
+pub(in crate::b4_campaign_executor) fn with_inspected_startup_dependency_amd64_dso_v2(
+    bytes: &[u8],
+    expected_interpreter: &str,
+    policy: StartupDependencyPolicyV2,
+    effect: impl FnOnce(&StartupDependencyAmd64ElfDsoInspectionV2<'_>) -> Result<()>,
+) -> Result<()> {
+    let inspected = inspect_startup_dependency_amd64_dso_v2(bytes, expected_interpreter, policy)?;
+    effect(&inspected)
+}
+
 #[cfg(test)]
 pub(in crate::b4_campaign_executor) fn with_test_inspected_runtime_amd64_elf(
     bytes: &[u8],
@@ -1458,9 +1789,13 @@ pub(in crate::b4_campaign_executor) mod tests {
     use sha2::{Digest as _, Sha256};
 
     use super::{
-        Amd64ElfAcceptedDynamicTagV1, Amd64ElfRunpathComponentV1, Amd64ElfTypeV1, ELF_DT_AUXILIARY,
-        ELF_DT_FILTER, inspect_runtime_amd64_elf, inspect_startup_dependency_amd64_dso,
+        Amd64ElfAcceptedDynamicTagV1, Amd64ElfAcceptedDynamicTagV2, Amd64ElfRunpathComponentV1,
+        Amd64ElfTypeV1, ELF_DT_AUXILIARY, ELF_DT_FILTER, ELF_DT_RELR, ELF_DT_RELRENT,
+        ELF_DT_RELRSZ, ELF_DT_X86_64_PLT, ELF_DT_X86_64_PLTENT, ELF_DT_X86_64_PLTSZ,
+        inspect_runtime_amd64_elf, inspect_startup_dependency_amd64_dso,
+        inspect_startup_dependency_amd64_dso_v2,
     };
+    use crate::b4_campaign_executor::artifact_import_contract::StartupDependencyPolicyV2;
 
     const ELF_HEADER_BYTES: usize = 64;
     const PROGRAM_HEADER_BYTES: usize = 56;
@@ -2246,6 +2581,194 @@ pub(in crate::b4_campaign_executor) mod tests {
         write_dynamic_tag_at(&mut missing_soname, 1, 2, abi::DT_DEBUG);
         let error = inspect_startup_dependency_amd64_dso(&missing_soname).unwrap_err();
         assert!(format!("{error:#}").contains("exactly one DT_SONAME"));
+    }
+
+    const V2_INTERPRETER: &str = "/lib64/ld-linux-x86-64.so.2";
+    const V2_TAGS: [i64; 6] = [
+        ELF_DT_RELR,
+        ELF_DT_RELRSZ,
+        ELF_DT_RELRENT,
+        ELF_DT_X86_64_PLT,
+        ELF_DT_X86_64_PLTSZ,
+        ELF_DT_X86_64_PLTENT,
+    ];
+
+    fn v2_relocation_dso(extra_needed: usize) -> Vec<u8> {
+        let names = vec!["libplaceholder.so.1"; 6 + extra_needed];
+        let mut bytes = startup_dso_bytes("libm.so.6", &names, None);
+        let mapped_address =
+            LOAD_VIRTUAL_ADDRESS + u64::try_from(dynamic_array_offset(&bytes, 1)).unwrap();
+        for (index, (tag, value)) in V2_TAGS
+            .into_iter()
+            .zip([mapped_address, 8, 8, mapped_address, 16, 16])
+            .enumerate()
+        {
+            write_dynamic_tag_at(&mut bytes, 1, 3 + index, tag);
+            write_dynamic_value_at(&mut bytes, 1, 3 + index, value);
+        }
+        bytes
+    }
+
+    #[test]
+    fn v2_diagnostic_retains_six_typed_tags_and_v1_still_rejects_them() {
+        let bytes = v2_relocation_dso(0);
+        let v1_error = inspect_startup_dependency_amd64_dso(&bytes).unwrap_err();
+        assert!(format!("{v1_error:#}").contains("unlisted dynamic tag"));
+        let inspected = inspect_startup_dependency_amd64_dso_v2(
+            &bytes,
+            V2_INTERPRETER,
+            StartupDependencyPolicyV2::GlibcRelocation,
+        )
+        .unwrap();
+        assert_eq!(
+            inspected.policy().policy_id(),
+            "eip0045-b4-elf64-amd64-startup-dependency-closure-v2"
+        );
+        assert_eq!(inspected.byte_length(), u64::try_from(bytes.len()).unwrap());
+        let expected_sha256: [u8; 32] = Sha256::digest(&bytes).into();
+        assert_eq!(inspected.sha256(), expected_sha256);
+        assert_eq!(inspected.interpreter_path(), None);
+        assert_eq!(inspected.dynamic().soname(), "libm.so.6");
+        assert_eq!(inspected.dynamic().needed_libraries().len(), 0);
+        assert_eq!(
+            inspected.dynamic().accepted_records().len(),
+            inspected.dynamic().accepted_tags().len()
+        );
+        assert_eq!(
+            &inspected.dynamic().accepted_tags()[3..9],
+            &[
+                Amd64ElfAcceptedDynamicTagV2::Relr,
+                Amd64ElfAcceptedDynamicTagV2::RelrSize,
+                Amd64ElfAcceptedDynamicTagV2::RelrEntrySize,
+                Amd64ElfAcceptedDynamicTagV2::X86_64Plt,
+                Amd64ElfAcceptedDynamicTagV2::X86_64PltSize,
+                Amd64ElfAcceptedDynamicTagV2::X86_64PltEntrySize,
+            ]
+        );
+        let mapped_address =
+            LOAD_VIRTUAL_ADDRESS + u64::try_from(dynamic_array_offset(&bytes, 1)).unwrap();
+        for ((record, tag), value) in inspected.dynamic().accepted_records()[3..9]
+            .iter()
+            .zip(V2_TAGS)
+            .zip([mapped_address, 8, 8, mapped_address, 16, 16])
+        {
+            assert_eq!(record.d_tag(), tag);
+            assert_eq!(record.d_un(), value);
+        }
+    }
+
+    #[test]
+    fn v2_diagnostic_rejects_each_incomplete_or_repeated_relocation_tag() {
+        for omitted in 0..6 {
+            let mut bytes = v2_relocation_dso(0);
+            write_dynamic_tag_at(&mut bytes, 1, 3 + omitted, abi::DT_DEBUG);
+            let error = inspect_startup_dependency_amd64_dso_v2(
+                &bytes,
+                V2_INTERPRETER,
+                StartupDependencyPolicyV2::GlibcRelocation,
+            )
+            .unwrap_err();
+            assert!(
+                format!("{error:#}").contains("triplet is incomplete"),
+                "{omitted}: {error:#}"
+            );
+        }
+        for repeated in 0..6 {
+            let mut bytes = v2_relocation_dso(1);
+            write_dynamic_tag_at(&mut bytes, 1, 9, V2_TAGS[repeated]);
+            let error = inspect_startup_dependency_amd64_dso_v2(
+                &bytes,
+                V2_INTERPRETER,
+                StartupDependencyPolicyV2::GlibcRelocation,
+            )
+            .unwrap_err();
+            assert!(
+                format!("{error:#}").contains("repeats a V2 relocation tag"),
+                "{repeated}: {error:#}"
+            );
+        }
+    }
+
+    #[test]
+    fn v2_diagnostic_rejects_malformed_relocation_ranges_and_unlisted_tags() {
+        for (index, value, expected) in [
+            (4, 0, "invalid size"),
+            (5, 4, "invalid size"),
+            (3, u64::MAX, "virtual range overflowed"),
+            (7, 15, "invalid size"),
+            (8, 8, "invalid size"),
+        ] {
+            let mut bytes = v2_relocation_dso(0);
+            write_dynamic_value_at(&mut bytes, 1, index, value);
+            let error = inspect_startup_dependency_amd64_dso_v2(
+                &bytes,
+                V2_INTERPRETER,
+                StartupDependencyPolicyV2::GlibcRelocation,
+            )
+            .unwrap_err();
+            assert!(
+                format!("{error:#}").contains(expected),
+                "{index}: {error:#}"
+            );
+        }
+        let mut unknown = v2_relocation_dso(0);
+        write_dynamic_tag_at(&mut unknown, 1, 3, 0x7000_0002);
+        let error = inspect_startup_dependency_amd64_dso_v2(
+            &unknown,
+            V2_INTERPRETER,
+            StartupDependencyPolicyV2::GlibcRelocation,
+        )
+        .unwrap_err();
+        assert!(format!("{error:#}").contains("unlisted dynamic tag"));
+    }
+
+    #[test]
+    fn v2_diagnostic_limits_interp_exception_to_exact_libc_and_launcher_path() {
+        let mut libc = startup_runtime_elf_bytes(&["libc.so.6"], None);
+        write_dynamic_tag_at(&mut libc, 2, 2, abi::DT_SONAME);
+        assert!(
+            format!(
+                "{:#}",
+                inspect_startup_dependency_amd64_dso(&libc).unwrap_err()
+            )
+            .contains("omit PT_INTERP")
+        );
+        let inspected = inspect_startup_dependency_amd64_dso_v2(
+            &libc,
+            V2_INTERPRETER,
+            StartupDependencyPolicyV2::GlibcRelocation,
+        )
+        .unwrap();
+        assert_eq!(inspected.interpreter_path(), Some(V2_INTERPRETER));
+        assert_eq!(inspected.dynamic().soname(), "libc.so.6");
+        assert!(inspected.common().entry_point_in_executable_load());
+
+        let mismatch = inspect_startup_dependency_amd64_dso_v2(
+            &libc,
+            "/lib/ld-linux-x86-64.so.2",
+            StartupDependencyPolicyV2::GlibcRelocation,
+        )
+        .unwrap_err();
+        assert!(format!("{mismatch:#}").contains("only for libc.so.6"));
+        let mut other_dso = startup_runtime_elf_bytes(&["libm.so.6"], None);
+        write_dynamic_tag_at(&mut other_dso, 2, 2, abi::DT_SONAME);
+        let error = inspect_startup_dependency_amd64_dso_v2(
+            &other_dso,
+            V2_INTERPRETER,
+            StartupDependencyPolicyV2::GlibcRelocation,
+        )
+        .unwrap_err();
+        assert!(format!("{error:#}").contains("only for libc.so.6"));
+
+        let interp_offset = usize::try_from(read_u64(&libc, program_header_offset(1) + 8)).unwrap();
+        libc[interp_offset + 1] = 0;
+        let error = inspect_startup_dependency_amd64_dso_v2(
+            &libc,
+            V2_INTERPRETER,
+            StartupDependencyPolicyV2::GlibcRelocation,
+        )
+        .unwrap_err();
+        assert!(format!("{error:#}").contains("NUL-terminated payload"));
     }
 
     #[test]

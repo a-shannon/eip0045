@@ -12,16 +12,20 @@ use std::{
 };
 
 use anyhow::{Context as _, Result, ensure};
+use eip_0045_reproduction::b4_campaign_contract::B4ContractArtifactIdentityV1;
 #[cfg(target_os = "linux")]
 use eip_0045_reproduction::b4_positive_gate::B4PositiveOciImageLayoutV1;
-use eip_0045_reproduction::b4_positive_gate::{PositiveGateBindings, PositiveRunnerRole};
+use eip_0045_reproduction::b4_positive_gate::{
+    B4PositivePrecommitWithOciExpectationV2, PositiveGateBindings, PositiveRunnerRole,
+};
 use sha2::{Digest as _, Sha256};
 
 use super::{
     artifact_import_contract::{B4ImmutableArtifactRoleV1, OciLayerStreamLimitsV1},
     capability::MutationCapability,
     preflight::{
-        AuthenticatedOciSlotConstructionPermitV1, ProjectedCampaignLayout,
+        AuthenticatedOciSlotConstructionPermitV1, AuthenticatedOciSlotConstructionPermitV2,
+        ProjectedCampaignLayout,
         ProjectedPrepareInputSetCampaignLayout,
     },
 };
@@ -2947,6 +2951,109 @@ fn parse_octal_digits(digits: &[u8], label: &str) -> Result<u64> {
     Ok(value)
 }
 
+/// Preparatory V2 slot: its role and locator can only be selected by the
+/// private preflight permit. The exact provider obligation remains in the
+/// unconsumed precommit/OCI bundle held by the inventory.
+#[allow(dead_code, reason = "V2 OCI import is not yet admitted")]
+struct OciOuterUstarSlotV2 {
+    role: PositiveRunnerRole,
+    profile_index: usize,
+    profile_identity: B4ContractArtifactIdentityV1,
+    expected_mode_table_sha256: [u8; 32],
+    root_index: usize,
+    relative_path: String,
+}
+
+/// This value deliberately has no V1 conversion or import method. Its private
+/// authority field keeps all four provider identities and mode-table digests
+/// affine with the four projected physical archive locators.
+#[allow(dead_code, reason = "V2 OCI import is not yet admitted")]
+#[must_use = "the V2 OCI inventory must retain its exact precommit/expectation bundle"]
+pub(super) struct AuthenticatedOciOuterUstarInventoryV2 {
+    authority: B4PositivePrecommitWithOciExpectationV2,
+    slots: [OciOuterUstarSlotV2; AUTHENTICATED_OCI_INVENTORY_SIZE],
+}
+
+fn require_v2_permit_binding(
+    permit_index: usize,
+    permit_identity: &B4ContractArtifactIdentityV1,
+    permit_mode_table_sha256: [u8; 32],
+    expected_index: usize,
+    profile_identity: &B4ContractArtifactIdentityV1,
+    provider_mode_table_sha256: [u8; 32],
+) -> Result<()> {
+    ensure!(
+        permit_index == expected_index,
+        "V2 OCI permit profile index differs from canonical role order"
+    );
+    ensure!(
+        permit_identity == profile_identity,
+        "V2 OCI permit profile identity differs from its retained precommit bundle"
+    );
+    ensure!(
+        permit_mode_table_sha256 == provider_mode_table_sha256,
+        "V2 OCI permit mode-table digest differs from its retained provider"
+    );
+    Ok(())
+}
+
+fn require_v2_provider_role(
+    profile_role: PositiveRunnerRole,
+    provider_role: PositiveRunnerRole,
+    expected_role: PositiveRunnerRole,
+) -> Result<()> {
+    ensure!(
+        profile_role == expected_role && provider_role == expected_role,
+        "V2 OCI profile or metadata provider differs from canonical runner role"
+    );
+    Ok(())
+}
+
+/// Consume the only four permits minted by the V2 topology and the same
+/// non-Clone authority bundle. No archive or metadata observation occurs here.
+#[allow(dead_code, reason = "V2 OCI custody/import consumer is not yet admitted")]
+pub(super) fn project_authenticated_oci_outer_ustar_inventory_v2(
+    permits: [AuthenticatedOciSlotConstructionPermitV2; AUTHENTICATED_OCI_INVENTORY_SIZE],
+    authority: B4PositivePrecommitWithOciExpectationV2,
+) -> Result<AuthenticatedOciOuterUstarInventoryV2> {
+    let mut slots = Vec::with_capacity(AUTHENTICATED_OCI_INVENTORY_SIZE);
+    for (expected_index, ((permit, profile), expected_role)) in permits
+        .into_iter()
+        .zip(authority.oci_image_layouts())
+        .zip(canonical_positive_runner_roles())
+        .enumerate()
+    {
+        let (profile_index, profile_identity, expected_mode_table_sha256, root_index, relative_path) =
+            permit.into_parts();
+        require_v2_permit_binding(
+            profile_index,
+            &profile_identity,
+            expected_mode_table_sha256,
+            expected_index,
+            profile.profile_identity(),
+            profile.metadata_provider().expected_mode_table_sha256(),
+        )?;
+        require_v2_provider_role(
+            profile.role(),
+            profile.metadata_provider().role(),
+            expected_role,
+        )?;
+        slots.push(OciOuterUstarSlotV2 {
+            role: expected_role,
+            profile_index,
+            profile_identity,
+            expected_mode_table_sha256,
+            root_index,
+            relative_path,
+        });
+    }
+    let slots: [OciOuterUstarSlotV2; AUTHENTICATED_OCI_INVENTORY_SIZE] = slots
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("V2 OCI inventory cardinality drift"))?;
+    validate_canonical_inventory_roles(slots.each_ref().map(|slot| slot.role))?;
+    Ok(AuthenticatedOciOuterUstarInventoryV2 { authority, slots })
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
@@ -2964,6 +3071,104 @@ mod tests {
     use sha2::{Digest as _, Sha256};
 
     use eip_0045_reproduction::canonical::canonical_json_bytes;
+
+    #[test]
+    fn preparatory_v2_permit_rejects_isolated_index_profile_and_mode_table_drift() {
+        use crate::b4_campaign_executor::preflight::AuthenticatedOciSlotConstructionPermitV2;
+        use eip_0045_reproduction::b4_campaign_contract::{
+            B4ContractArtifactEncodingV1, B4ContractArtifactIdentityV1,
+        };
+
+        let profile = B4ContractArtifactIdentityV1::from_bytes(
+            "runner/profile.json",
+            B4ContractArtifactEncodingV1::Rfc8785Jcs,
+            br#"{"role":"jvm"}"#,
+        )
+        .unwrap();
+        let other_profile = B4ContractArtifactIdentityV1::from_bytes(
+            "runner/other.json",
+            B4ContractArtifactEncodingV1::Rfc8785Jcs,
+            br#"{"role":"rust"}"#,
+        )
+        .unwrap();
+        let mode_table = [0xa5; 32];
+        let permit = AuthenticatedOciSlotConstructionPermitV2::test_only(
+            1,
+            profile.clone(),
+            mode_table,
+        );
+        let (index, identity, digest, _, _) = permit.into_parts();
+        super::require_v2_permit_binding(
+            index, &identity, digest, 1, &profile, mode_table,
+        )
+        .unwrap();
+        assert!(super::require_v2_permit_binding(
+            index + 1, &identity, digest, 1, &profile, mode_table,
+        ).is_err());
+        assert!(super::require_v2_permit_binding(
+            index, &other_profile, digest, 1, &profile, mode_table,
+        ).is_err());
+        let mut wrong_mode_table = mode_table;
+        wrong_mode_table[0] ^= 1;
+        assert!(super::require_v2_permit_binding(
+            index, &identity, wrong_mode_table, 1, &profile, mode_table,
+        ).is_err());
+    }
+
+    #[test]
+    fn preparatory_v2_provider_role_rejects_isolated_substitution() {
+        use eip_0045_reproduction::b4_positive_gate::PositiveRunnerRole as Role;
+        super::require_v2_provider_role(
+            Role::JvmValidatorBuild,
+            Role::JvmValidatorBuild,
+            Role::JvmValidatorBuild,
+        )
+        .unwrap();
+        assert!(super::require_v2_provider_role(
+            Role::JvmValidatorBuild,
+            Role::RustVerifier,
+            Role::JvmValidatorBuild,
+        ).is_err());
+        assert!(super::require_v2_provider_role(
+            Role::RustVerifier,
+            Role::JvmValidatorBuild,
+            Role::JvmValidatorBuild,
+        ).is_err());
+    }
+
+    #[test]
+    fn preparatory_v2_inventory_keeps_provider_obligation_and_has_no_import_entry() {
+        let source = include_str!("oci_image_layout_import.rs").replace("\r\n", "\n");
+        let production = source.split("#[cfg(test)]\nmod tests").next().unwrap();
+        let projector = production
+            .split("pub(super) fn project_authenticated_oci_outer_ustar_inventory_v2(")
+            .nth(1)
+            .unwrap();
+        let compact = projector.split_whitespace().collect::<String>();
+        for required in [
+            "authority:B4PositivePrecommitWithOciExpectationV2",
+            "permit.into_parts()",
+            "require_v2_permit_binding(",
+            "profile.profile_identity()",
+            "profile.metadata_provider().expected_mode_table_sha256()",
+            "require_v2_provider_role(",
+            "Ok(AuthenticatedOciOuterUstarInventoryV2{authority,slots})",
+        ] {
+            assert!(compact.contains(required), "V2 inventory omits {required}");
+        }
+        assert!(!production.contains("fn import_authenticated_oci_outer_ustar_inventory_v2("));
+        assert!(!production.contains("fn authenticate_physical_rootfs_inventory_v2("));
+        let require_mode_table_join = |body: &str| {
+            assert!(body.contains("profile.metadata_provider().expected_mode_table_sha256()"));
+        };
+        require_mode_table_join(&compact);
+        let omission_mutant = compact.replacen(
+            "profile.metadata_provider().expected_mode_table_sha256()",
+            "[0;32]",
+            1,
+        );
+        assert!(std::panic::catch_unwind(|| require_mode_table_join(&omission_mutant)).is_err());
+    }
 
     use super::{
         B4ImmutableArtifactRoleV1, OCI_INDEX_JSON_MAX_BYTES, OCI_LAYOUT_BYTES,

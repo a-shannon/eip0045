@@ -64,6 +64,7 @@ const LINEAGE_DIGEST_DOMAIN: &[u8] = b"EIP0045-B4-LINEAGE-V1\0";
 const DEPENDENCY_DIGEST_DOMAIN: &[u8] = b"EIP0045-B4-DEPENDENCY-CLOSURE-V1\0";
 const TOOLCHAIN_DIGEST_DOMAIN: &[u8] = b"EIP0045-B4-TOOLCHAIN-CLOSURE-V1\0";
 const STARTUP_DEPENDENCY_POLICY_ID: &str = "eip0045-b4-elf64-amd64-startup-dependency-closure-v1";
+const STARTUP_DEPENDENCY_POLICY_V2_ID: &str = "eip0045-b4-elf64-amd64-startup-dependency-closure-v2";
 const RUNTIME_CONFIGURATION_POLICY_ID: &str = "eip0045-b4-oci-runtime-config-projection-v1";
 const RETAINED_HOST_ROOTFS_METADATA_POLICY_ID: &str =
     "eip0045-b4-retained-host-rootfs-metadata-obligations-v1";
@@ -113,6 +114,9 @@ const INPUT_SET_SCHEMA: &str =
     include_str!("../finalizer-schema/b4-positive-input-set-v1.schema.json");
 const INPUT_SET_V2_SCHEMA: &str =
     include_str!("../finalizer-schema/b4-positive-input-set-v2.schema.json");
+#[cfg(feature = "b4-trusted-host-metadata-f0")]
+const TRUSTED_HOST_INPUT_SET_SCHEMA: &str =
+    include_str!("../finalizer-schema/b4-trusted-host-positive-input-set-v1.schema.json");
 const GENERATION_SET_SCHEMA: &str =
     include_str!("../finalizer-schema/b4-positive-generation-set-v1.schema.json");
 const GENERATION_SET_V2_SCHEMA: &str =
@@ -121,12 +125,18 @@ const VALIDATOR_DESCRIPTOR_SCHEMA: &str =
     include_str!("../finalizer-schema/b4-validator-build-descriptor-v1.schema.json");
 const VALIDATOR_DESCRIPTOR_V2_SCHEMA: &str =
     include_str!("../finalizer-schema/b4-validator-build-descriptor-v2.schema.json");
+#[cfg(feature = "b4-trusted-host-metadata-f0")]
+const TRUSTED_HOST_VALIDATOR_DESCRIPTOR_SCHEMA: &str =
+    include_str!("../finalizer-schema/b4-trusted-host-validator-build-descriptor-v1.schema.json");
 const JVM_COPY_ONLY_INCLUSION_MANIFEST_SCHEMA: &str =
     include_str!("../finalizer-schema/b4-jvm-copy-only-inclusion-manifest-v1.schema.json");
 const RUNNER_PROFILE_SCHEMA: &str =
     include_str!("../finalizer-schema/b4-positive-oci-runner-profile-v1.schema.json");
 const RUNNER_PROFILE_V2_SCHEMA: &str =
     include_str!("../finalizer-schema/b4-positive-oci-runner-profile-v2.schema.json");
+#[cfg(feature = "b4-trusted-host-metadata-f0")]
+const TRUSTED_HOST_RUNNER_PROFILE_SCHEMA: &str =
+    include_str!("../finalizer-schema/b4-trusted-host-positive-oci-runner-profile-v1.schema.json");
 const SECCOMP_SCHEMA: &str = include_str!("../finalizer-schema/b4-positive-seccomp-v1.schema.json");
 const VERIFIER_INPUT_SCHEMA: &str =
     include_str!("../finalizer-schema/b4-positive-verifier-input-v1.schema.json");
@@ -139,13 +149,19 @@ const ACCEPTANCE_V2_SCHEMA: &str =
 type CompiledSchema = std::result::Result<jsonschema::Validator, String>;
 static INPUT_SET_VALIDATOR: OnceLock<CompiledSchema> = OnceLock::new();
 static INPUT_SET_V2_VALIDATOR: OnceLock<CompiledSchema> = OnceLock::new();
+#[cfg(feature = "b4-trusted-host-metadata-f0")]
+static TRUSTED_HOST_INPUT_SET_VALIDATOR: OnceLock<CompiledSchema> = OnceLock::new();
 static GENERATION_SET_VALIDATOR: OnceLock<CompiledSchema> = OnceLock::new();
 static GENERATION_SET_V2_VALIDATOR: OnceLock<CompiledSchema> = OnceLock::new();
 static VALIDATOR_DESCRIPTOR_VALIDATOR: OnceLock<CompiledSchema> = OnceLock::new();
 static VALIDATOR_DESCRIPTOR_V2_VALIDATOR: OnceLock<CompiledSchema> = OnceLock::new();
+#[cfg(feature = "b4-trusted-host-metadata-f0")]
+static TRUSTED_HOST_VALIDATOR_DESCRIPTOR_VALIDATOR: OnceLock<CompiledSchema> = OnceLock::new();
 static JVM_COPY_ONLY_INCLUSION_MANIFEST_VALIDATOR: OnceLock<CompiledSchema> = OnceLock::new();
 static RUNNER_PROFILE_VALIDATOR: OnceLock<CompiledSchema> = OnceLock::new();
 static RUNNER_PROFILE_V2_VALIDATOR: OnceLock<CompiledSchema> = OnceLock::new();
+#[cfg(feature = "b4-trusted-host-metadata-f0")]
+static TRUSTED_HOST_RUNNER_PROFILE_VALIDATOR: OnceLock<CompiledSchema> = OnceLock::new();
 static SECCOMP_VALIDATOR: OnceLock<CompiledSchema> = OnceLock::new();
 static VERIFIER_INPUT_VALIDATOR: OnceLock<CompiledSchema> = OnceLock::new();
 static OBSERVATION_VALIDATOR: OnceLock<CompiledSchema> = OnceLock::new();
@@ -203,13 +219,19 @@ const JVM_COPY_ONLY_PACKAGER_ARGUMENTS: [&str; 7] = [
 enum EmbeddedSchema {
     InputSet,
     InputSetV2,
+    #[cfg(feature = "b4-trusted-host-metadata-f0")]
+    TrustedHostInputSet,
     GenerationSet,
     GenerationSetV2,
     ValidatorDescriptor,
     ValidatorDescriptorV2,
+    #[cfg(feature = "b4-trusted-host-metadata-f0")]
+    TrustedHostValidatorDescriptor,
     JvmCopyOnlyInclusionManifest,
     RunnerProfile,
     RunnerProfileV2,
+    #[cfg(feature = "b4-trusted-host-metadata-f0")]
+    TrustedHostRunnerProfile,
     Seccomp,
     VerifierInput,
     Observation,
@@ -222,6 +244,11 @@ impl EmbeddedSchema {
         match self {
             Self::InputSet => (INPUT_SET_SCHEMA, &INPUT_SET_VALIDATOR),
             Self::InputSetV2 => (INPUT_SET_V2_SCHEMA, &INPUT_SET_V2_VALIDATOR),
+            #[cfg(feature = "b4-trusted-host-metadata-f0")]
+            Self::TrustedHostInputSet => (
+                TRUSTED_HOST_INPUT_SET_SCHEMA,
+                &TRUSTED_HOST_INPUT_SET_VALIDATOR,
+            ),
             Self::GenerationSet => (GENERATION_SET_SCHEMA, &GENERATION_SET_VALIDATOR),
             Self::GenerationSetV2 => (GENERATION_SET_V2_SCHEMA, &GENERATION_SET_V2_VALIDATOR),
             Self::ValidatorDescriptor => {
@@ -231,12 +258,22 @@ impl EmbeddedSchema {
                 VALIDATOR_DESCRIPTOR_V2_SCHEMA,
                 &VALIDATOR_DESCRIPTOR_V2_VALIDATOR,
             ),
+            #[cfg(feature = "b4-trusted-host-metadata-f0")]
+            Self::TrustedHostValidatorDescriptor => (
+                TRUSTED_HOST_VALIDATOR_DESCRIPTOR_SCHEMA,
+                &TRUSTED_HOST_VALIDATOR_DESCRIPTOR_VALIDATOR,
+            ),
             Self::JvmCopyOnlyInclusionManifest => (
                 JVM_COPY_ONLY_INCLUSION_MANIFEST_SCHEMA,
                 &JVM_COPY_ONLY_INCLUSION_MANIFEST_VALIDATOR,
             ),
             Self::RunnerProfile => (RUNNER_PROFILE_SCHEMA, &RUNNER_PROFILE_VALIDATOR),
             Self::RunnerProfileV2 => (RUNNER_PROFILE_V2_SCHEMA, &RUNNER_PROFILE_V2_VALIDATOR),
+            #[cfg(feature = "b4-trusted-host-metadata-f0")]
+            Self::TrustedHostRunnerProfile => (
+                TRUSTED_HOST_RUNNER_PROFILE_SCHEMA,
+                &TRUSTED_HOST_RUNNER_PROFILE_VALIDATOR,
+            ),
             Self::Seccomp => (SECCOMP_SCHEMA, &SECCOMP_VALIDATOR),
             Self::VerifierInput => (VERIFIER_INPUT_SCHEMA, &VERIFIER_INPUT_VALIDATOR),
             Self::Observation => (OBSERVATION_SCHEMA, &OBSERVATION_VALIDATOR),
@@ -485,6 +522,64 @@ pub struct B4PositivePrecommitDocumentsV2<'a> {
     pub validator_descriptors: [NamedCanonicalJcs<'a>; 2],
     /// Exact V1 JVM COPY-ONLY inclusion manifest.
     pub jvm_copy_only_inclusion_manifest: NamedCanonicalJcs<'a>,
+}
+
+/// Exact TH/F0 positive wire family before any completion or physical-provider claim.
+///
+/// The verifier contract, seccomp documents, and JVM inclusion manifest retain
+/// their independently reviewed V1 formats. The input set, four runner
+/// profiles, and two descriptors have distinct trusted-host formats.
+#[cfg(feature = "b4-trusted-host-metadata-f0")]
+#[derive(Clone, Copy, Debug)]
+pub struct B4TrustedHostPositivePrecommitDocumentsV1<'a> {
+    pub input_set: NamedCanonicalJcs<'a>,
+    pub verifier_contract: NamedCanonicalJcs<'a>,
+    pub runner_profiles: [NamedCanonicalJcs<'a>; 4],
+    pub seccomp_documents: [NamedCanonicalJcs<'a>; 4],
+    pub validator_descriptors: [NamedCanonicalJcs<'a>; 2],
+    pub jvm_copy_only_inclusion_manifest: NamedCanonicalJcs<'a>,
+}
+
+/// Opaque semantic TH/F0 precommit source. It attests exact canonical
+/// documents and path-qualified identities, not host metadata observations,
+/// an OCI provider, retained custody, or publication.
+#[cfg(feature = "b4-trusted-host-metadata-f0")]
+#[derive(Debug)]
+pub struct B4TrustedHostPositivePrecommitAuthorityV1 {
+    input_set: B4ContractArtifactIdentityV1,
+    verifier_contract: B4ContractArtifactIdentityV1,
+    expectation_set: B4ContractArtifactIdentityV1,
+    validators: [B4CampaignValidatorBindingV1; 2],
+    runner_profiles: [B4NamedContractArtifactIdentityV1; 4],
+    seccomp_documents: [B4NamedContractArtifactIdentityV1; 4],
+    jvm_copy_only_inclusion_manifest: B4ContractArtifactIdentityV1,
+    provenance_paths: BTreeSet<String>,
+}
+
+#[cfg(feature = "b4-trusted-host-metadata-f0")]
+impl B4TrustedHostPositivePrecommitAuthorityV1 {
+    #[must_use]
+    pub fn input_set(&self) -> &B4ContractArtifactIdentityV1 { &self.input_set }
+    #[must_use]
+    pub fn verifier_contract(&self) -> &B4ContractArtifactIdentityV1 { &self.verifier_contract }
+    #[must_use]
+    pub fn expectation_set(&self) -> &B4ContractArtifactIdentityV1 { &self.expectation_set }
+    #[must_use]
+    pub fn validators(&self) -> &[B4CampaignValidatorBindingV1; 2] { &self.validators }
+    #[must_use]
+    pub fn runner_profiles(&self) -> &[B4NamedContractArtifactIdentityV1; 4] {
+        &self.runner_profiles
+    }
+    #[must_use]
+    pub fn seccomp_documents(&self) -> &[B4NamedContractArtifactIdentityV1; 4] {
+        &self.seccomp_documents
+    }
+    #[must_use]
+    pub fn jvm_copy_only_inclusion_manifest(&self) -> &B4ContractArtifactIdentityV1 {
+        &self.jvm_copy_only_inclusion_manifest
+    }
+    #[must_use]
+    pub fn provenance_paths(&self) -> &BTreeSet<String> { &self.provenance_paths }
 }
 
 /// Private pathless projection consumed by the canonical input-set assembler.
@@ -1784,6 +1879,7 @@ impl B4PositiveRuntimeElfIdentityV1 {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum B4PositiveStartupDependencyPolicyKindV1 {
     InitialElfClosure,
+    GlibcRelocationClosureV2,
 }
 
 /// Opaque static startup-dependency policy retained for one JVM runner image.
@@ -1805,6 +1901,9 @@ impl B4PositiveStartupDependencyPolicyV1 {
         match self.kind {
             B4PositiveStartupDependencyPolicyKindV1::InitialElfClosure => {
                 STARTUP_DEPENDENCY_POLICY_ID
+            }
+            B4PositiveStartupDependencyPolicyKindV1::GlibcRelocationClosureV2 => {
+                STARTUP_DEPENDENCY_POLICY_V2_ID
             }
         }
     }
@@ -2327,6 +2426,121 @@ impl B4PositiveOciImageLayoutV1 {
     pub fn rootfs_path_requirements(&self) -> &[B4PositiveRootfsPathRequirementV1] {
         &self.rootfs_path_requirements
     }
+}
+
+/// Exact provider obligation selected by one validated V2 runner profile.
+/// It is an inert expectation; physical metadata and the mode table remain
+/// obligations of the later descriptor-rooted OCI consumer.
+#[derive(Debug, Eq, PartialEq)]
+pub struct B4PositiveOciMetadataProviderExpectationV2 {
+    role: PositiveRunnerRole,
+    metadata_policy: String,
+    provider_profile: String,
+    session_protocol: String,
+    appliance_profile: String,
+    expected_mode_table_sha256: [u8; DIGEST_BYTES],
+}
+
+impl B4PositiveOciMetadataProviderExpectationV2 {
+    #[must_use]
+    pub const fn role(&self) -> PositiveRunnerRole { self.role }
+    #[must_use]
+    pub fn metadata_policy(&self) -> &str { &self.metadata_policy }
+    #[must_use]
+    pub fn provider_profile(&self) -> &str { &self.provider_profile }
+    #[must_use]
+    pub fn session_protocol(&self) -> &str { &self.session_protocol }
+    #[must_use]
+    pub fn appliance_profile(&self) -> &str { &self.appliance_profile }
+    #[must_use]
+    pub const fn expected_mode_table_sha256(&self) -> [u8; DIGEST_BYTES] {
+        self.expected_mode_table_sha256
+    }
+}
+
+/// Distinct V2 OCI expectation derived only after the complete V2 precommit
+/// gate accepts the same four path-qualified runner profiles. No V1 layout
+/// constructor or conversion is exposed.
+#[derive(Debug, Eq, PartialEq)]
+pub struct B4PositiveOciImageLayoutV2 {
+    profile_identity: B4ContractArtifactIdentityV1,
+    role: PositiveRunnerRole,
+    runtime_contract: B4PositiveOciRuntimeContractV1,
+    metadata_provider: B4PositiveOciMetadataProviderExpectationV2,
+    archive_path: String,
+    archive_byte_length: u64,
+    archive_sha256: [u8; DIGEST_BYTES],
+    manifest: B4PositiveOciDescriptorV1,
+    config: B4PositiveOciDescriptorV1,
+    layers: Vec<B4PositiveOciLayerV1>,
+    post_changeset_rootfs: B4PositiveOciRootfsCountsV1,
+    jvm_executables: Option<B4PositiveJvmExecutableClosureV1>,
+    jvm_release: Option<B4PositiveJvmReleaseIdentityV1>,
+    rootfs_path_requirements: Vec<B4PositiveRootfsPathRequirementV1>,
+}
+
+impl B4PositiveOciImageLayoutV2 {
+    #[must_use]
+    pub const fn profile_identity(&self) -> &B4ContractArtifactIdentityV1 {
+        &self.profile_identity
+    }
+    #[must_use]
+    pub const fn role(&self) -> PositiveRunnerRole { self.role }
+    #[must_use]
+    pub const fn runtime_contract(&self) -> &B4PositiveOciRuntimeContractV1 {
+        &self.runtime_contract
+    }
+    #[must_use]
+    pub const fn metadata_provider(&self) -> &B4PositiveOciMetadataProviderExpectationV2 {
+        &self.metadata_provider
+    }
+    #[must_use]
+    pub fn archive_path(&self) -> &str { &self.archive_path }
+    #[must_use]
+    pub const fn archive_byte_length(&self) -> u64 { self.archive_byte_length }
+    #[must_use]
+    pub const fn archive_sha256(&self) -> [u8; DIGEST_BYTES] { self.archive_sha256 }
+    #[must_use]
+    pub const fn manifest(&self) -> &B4PositiveOciDescriptorV1 { &self.manifest }
+    #[must_use]
+    pub const fn config(&self) -> &B4PositiveOciDescriptorV1 { &self.config }
+    #[must_use]
+    pub fn layers(&self) -> &[B4PositiveOciLayerV1] { &self.layers }
+    #[must_use]
+    pub const fn post_changeset_rootfs(&self) -> &B4PositiveOciRootfsCountsV1 {
+        &self.post_changeset_rootfs
+    }
+    #[must_use]
+    pub const fn jvm_executables(&self) -> Option<&B4PositiveJvmExecutableClosureV1> {
+        self.jvm_executables.as_ref()
+    }
+    #[must_use]
+    pub const fn jvm_release(&self) -> Option<&B4PositiveJvmReleaseIdentityV1> {
+        self.jvm_release.as_ref()
+    }
+    #[must_use]
+    pub fn rootfs_path_requirements(&self) -> &[B4PositiveRootfsPathRequirementV1] {
+        &self.rootfs_path_requirements
+    }
+}
+
+/// Affine producer result: one V2 precommit authority and its four OCI
+/// expectations come from one immutable set of validated documents.
+#[must_use = "the V2 gate and OCI expectation must enter the next join together"]
+pub struct B4PositivePrecommitWithOciExpectationV2 {
+    precommit: B4PositivePrecommitAuthorityV2,
+    oci_image_layouts: [B4PositiveOciImageLayoutV2; 4],
+}
+
+impl B4PositivePrecommitWithOciExpectationV2 {
+    #[must_use]
+    pub const fn precommit(&self) -> &B4PositivePrecommitAuthorityV2 { &self.precommit }
+    #[must_use]
+    pub const fn oci_image_layouts(&self) -> &[B4PositiveOciImageLayoutV2; 4] {
+        &self.oci_image_layouts
+    }
+    #[must_use]
+    pub fn into_precommit(self) -> B4PositivePrecommitAuthorityV2 { self.precommit }
 }
 
 /// Validated, immutable positive-gate provenance bindings.
@@ -3091,6 +3305,135 @@ pub fn validate_and_bind_positive_precommit_v2(
         &jvm_copy_only_inclusion_manifest,
         &provenance_closure.paths,
     )
+}
+
+#[cfg(feature = "b4-trusted-host-metadata-f0")]
+#[allow(clippy::too_many_lines)]
+pub fn validate_and_bind_trusted_host_positive_precommit_v1(
+    authoritative_build: &AuthoritativeB4BuildProjection,
+    documents: B4TrustedHostPositivePrecommitDocumentsV1<'_>,
+) -> Result<B4TrustedHostPositivePrecommitAuthorityV1> {
+    let V2InputIdentityBindings {
+        input_set,
+        runner_profiles,
+        validator_descriptors,
+    } = bind_trusted_host_input_identity_closure(
+        authoritative_build,
+        documents.input_set,
+        documents.runner_profiles,
+        documents.validator_descriptors,
+    )?;
+
+    let verifier_contract = BoundDocument::parse(
+        documents.verifier_contract,
+        "TH/F0 precommit verifier contract",
+    )?;
+    let parsed_verifier_contract =
+        Eip0045B4VerifierContractV1::from_canonical_jcs(&verifier_contract.bytes)?;
+    ensure!(
+        field(&input_set.value, "verifierCliContract")?
+            == &verifier_contract.identity_with_path("Eip0045B4VerifierContractV1"),
+        "TH/F0 input-set verifier-contract identity is stale"
+    );
+
+    let seccomp_documents: [BoundDocument; 4] = documents
+        .seccomp_documents
+        .into_iter()
+        .enumerate()
+        .map(|(index, named)| {
+            let role = PositiveRunnerRole::all()[index];
+            let label = format!("TH/F0 precommit {} seccomp profile", role.purpose());
+            let document = BoundDocument::parse(named, &label)?;
+            validate_json_schema(&document.value, EmbeddedSchema::Seccomp, &label)?;
+            validate_seccomp_document(&document.value, role.purpose())?;
+            validate_seccomp_binding(&runner_profiles[index].value, &document, role.purpose())?;
+            Ok(document)
+        })
+        .collect::<Result<Vec<_>>>()?
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("TH/F0 precommit seccomp cardinality drift"))?;
+    validate_jvm_options(&runner_profiles[PositiveRunnerRole::JvmVerifier.index()].value)?;
+
+    let jvm_copy_only_inclusion_manifest = BoundDocument::parse(
+        documents.jvm_copy_only_inclusion_manifest,
+        "TH/F0 precommit JVM COPY-ONLY inclusion manifest",
+    )?;
+    validate_json_schema(
+        &jvm_copy_only_inclusion_manifest.value,
+        EmbeddedSchema::JvmCopyOnlyInclusionManifest,
+        "TH/F0 precommit JVM COPY-ONLY inclusion manifest",
+    )?;
+    require_format(
+        &jvm_copy_only_inclusion_manifest.value,
+        "Eip0045B4JvmCopyOnlyInclusionManifestV1",
+        1,
+    )?;
+    validate_jvm_copy_only_inclusion_manifest(
+        &jvm_copy_only_inclusion_manifest,
+        &validator_descriptors[PositiveImplementation::IndependentJvm.index()].value,
+    )?;
+
+    let provenance_closure = validate_provenance_closure(
+        &input_set,
+        &runner_profiles,
+        &seccomp_documents,
+        &validator_descriptors,
+    )?;
+    ensure!(
+        provenance_closure
+            .paths
+            .contains(&jvm_copy_only_inclusion_manifest.relative_path),
+        "TH/F0 precommit JVM COPY-ONLY inclusion-manifest path is absent from provenance"
+    );
+    ensure!(
+        provenance_closure
+            .paths
+            .contains(&verifier_contract.relative_path),
+        "TH/F0 precommit verifier-contract path is absent from provenance"
+    );
+
+    build_trusted_host_positive_precommit_authority_v1(
+        &input_set,
+        &verifier_contract,
+        &parsed_verifier_contract,
+        &validator_descriptors,
+        &runner_profiles,
+        &seccomp_documents,
+        &jvm_copy_only_inclusion_manifest,
+        &provenance_closure.paths,
+    )
+}
+
+/// Bind the complete V2 precommit and four OCI expectations from the same
+/// immutable canonical input documents. The expectations do not attest that an
+/// archive, rootfs, metadata provider, or startup environment was observed.
+///
+/// # Errors
+///
+/// Rejects any document rejected by the V2 positive-precommit gate or whose
+/// profile cannot be projected into a closed V2 OCI expectation.
+pub fn validate_and_bind_positive_precommit_with_oci_v2(
+    authoritative_build: &AuthoritativeB4BuildProjection,
+    documents: B4PositivePrecommitDocumentsV2<'_>,
+) -> Result<B4PositivePrecommitWithOciExpectationV2> {
+    let precommit = validate_and_bind_positive_precommit_v2(authoritative_build, documents)?;
+    let oci_image_layouts = documents
+        .runner_profiles
+        .into_iter()
+        .enumerate()
+        .map(|(index, named)| {
+            let role = PositiveRunnerRole::all()[index];
+            let profile = BoundDocument::parse(named, "V2 OCI expectation runner profile")?;
+            validate_v2_runner_profile(&profile.value, role)?;
+            project_positive_oci_image_layout_v2(&profile, role)
+        })
+        .collect::<Result<Vec<_>>>()?
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("V2 OCI expectation cardinality drift"))?;
+    Ok(B4PositivePrecommitWithOciExpectationV2 {
+        precommit,
+        oci_image_layouts,
+    })
 }
 
 impl PositiveGenerationBindings {
@@ -3961,6 +4304,63 @@ fn build_positive_precommit_authority_v2(
         jvm_copy_only_inclusion_manifest.contract_identity(),
         provenance_paths,
     )
+}
+
+#[cfg(feature = "b4-trusted-host-metadata-f0")]
+#[allow(clippy::too_many_arguments)]
+fn build_trusted_host_positive_precommit_authority_v1(
+    input_set: &BoundDocument,
+    verifier_contract: &BoundDocument,
+    parsed_verifier_contract: &Eip0045B4VerifierContractV1,
+    descriptors: &[BoundDocument; 2],
+    runner_profiles: &[BoundDocument; 4],
+    seccomp_documents: &[BoundDocument; 4],
+    jvm_copy_only_inclusion_manifest: &BoundDocument,
+    provenance_paths: &BTreeSet<String>,
+) -> Result<B4TrustedHostPositivePrecommitAuthorityV1> {
+    let validators = [
+        campaign_validator_binding(
+            PositiveImplementation::RustReference,
+            &descriptors[PositiveImplementation::RustReference.index()],
+        )?,
+        campaign_validator_binding(
+            PositiveImplementation::IndependentJvm,
+            &descriptors[PositiveImplementation::IndependentJvm.index()],
+        )?,
+    ];
+    let runner_profiles = std::array::from_fn(|index| B4NamedContractArtifactIdentityV1 {
+        role: PositiveRunnerRole::all()[index].purpose().to_owned(),
+        artifact: runner_profiles[index].contract_identity(),
+    });
+    let seccomp_documents = std::array::from_fn(|index| B4NamedContractArtifactIdentityV1 {
+        role: PositiveRunnerRole::all()[index].purpose().to_owned(),
+        artifact: seccomp_documents[index].contract_identity(),
+    });
+    let authority = B4TrustedHostPositivePrecommitAuthorityV1 {
+        input_set: input_set.contract_identity(),
+        verifier_contract: verifier_contract.contract_identity(),
+        expectation_set: parsed_verifier_contract.expectation_set.clone(),
+        validators,
+        runner_profiles,
+        seccomp_documents,
+        jvm_copy_only_inclusion_manifest: jvm_copy_only_inclusion_manifest.contract_identity(),
+        provenance_paths: provenance_paths.clone(),
+    };
+    for path in std::iter::once(&authority.input_set.path)
+        .chain(std::iter::once(&authority.verifier_contract.path))
+        .chain(authority.validators.iter().flat_map(|binding| [
+            &binding.build_descriptor.path,
+            &binding.artifact.path,
+            &binding.reviewed_source.archive.path,
+        ]))
+        .chain(authority.runner_profiles.iter().map(|binding| &binding.artifact.path))
+        .chain(authority.seccomp_documents.iter().map(|binding| &binding.artifact.path))
+        .chain(std::iter::once(&authority.jvm_copy_only_inclusion_manifest.path))
+    {
+        ensure!(authority.provenance_paths.contains(path),
+            "TH/F0 positive precommit omits a directly bound source path: {path}");
+    }
+    Ok(authority)
 }
 
 fn campaign_validator_binding(
@@ -5369,6 +5769,40 @@ fn validate_v2_runner_profile(profile: &Value, role: PositiveRunnerRole) -> Resu
     Ok(())
 }
 
+#[cfg(feature = "b4-trusted-host-metadata-f0")]
+fn validate_trusted_host_runner_profile(profile: &Value, role: PositiveRunnerRole) -> Result<()> {
+    use crate::b4_retained_rootfs_metadata_th::{
+        HOST_PREMISE_ID_TH_F0_V1, MODE_TABLE_SHA256_HEX, POLICY_ID_TH_F0_V1,
+    };
+
+    validate_json_schema(
+        profile,
+        EmbeddedSchema::TrustedHostRunnerProfile,
+        "TH/F0 runner profile",
+    )?;
+    require_format(profile, "Eip0045B4TrustedHostPositiveOciRunnerProfileV1", 1)?;
+    require_role(profile, role, "TH/F0 runner profile")?;
+    validate_runner_profile_with_metadata_policy(profile, role.purpose(), POLICY_ID_TH_F0_V1)?;
+
+    let image = field(profile, "image")?;
+    require_string_eq(image, "retainedHostRootfsMetadataPolicy", POLICY_ID_TH_F0_V1)?;
+    let premise = field(profile, "retainedHostRootfsMetadataPremise")?;
+    require_exact_keys(
+        premise,
+        &["metadataPolicy", "hostPremise", "expectedModeTableSha256", "canonicalRole"],
+        "TH/F0 retained-host metadata premise",
+    )?;
+    require_string_eq(premise, "metadataPolicy", POLICY_ID_TH_F0_V1)?;
+    require_string_eq(premise, "hostPremise", HOST_PREMISE_ID_TH_F0_V1)?;
+    require_string_eq(premise, "expectedModeTableSha256", MODE_TABLE_SHA256_HEX)?;
+    require_string_eq(premise, "canonicalRole", v2_canonical_role(role))?;
+    ensure!(
+        field(premise, "metadataPolicy")? == field(image, "retainedHostRootfsMetadataPolicy")?,
+        "TH/F0 premise and image bind different metadata policies"
+    );
+    Ok(())
+}
+
 #[derive(Debug)]
 struct V2InputIdentityBindings {
     input_set: BoundDocument,
@@ -6045,6 +6479,203 @@ fn bind_v2_input_identity_closure(
             implementation,
             &runner_profiles,
             V2PositiveDocumentKind::RunnerProfile.format(),
+        )?;
+    }
+    validate_non_alias_lineage_separation(&validator_descriptors)?;
+    Ok(V2InputIdentityBindings {
+        input_set,
+        runner_profiles,
+        validator_descriptors,
+    })
+}
+
+#[cfg(feature = "b4-trusted-host-metadata-f0")]
+fn bind_trusted_host_input_identity_closure(
+    authoritative_build: &AuthoritativeB4BuildProjection,
+    input_set: NamedCanonicalJcs<'_>,
+    runner_profiles: [NamedCanonicalJcs<'_>; 4],
+    validator_descriptors: [NamedCanonicalJcs<'_>; 2],
+) -> Result<V2InputIdentityBindings> {
+    let input_set = BoundDocument::parse(input_set, "TH/F0 positive input set")?;
+    validate_json_schema(
+        &input_set.value,
+        EmbeddedSchema::TrustedHostInputSet,
+        "TH/F0 positive input set",
+    )?;
+    require_format(
+        &input_set.value,
+        "Eip0045B4TrustedHostPositiveInputSetV1",
+        1,
+    )?;
+
+    let runner_profiles: [BoundDocument; 4] = runner_profiles
+        .into_iter()
+        .enumerate()
+        .map(|(index, named)| {
+            let role = PositiveRunnerRole::all()[index];
+            let label = format!("TH/F0 {} runner profile", role.purpose());
+            let document = BoundDocument::parse(named, &label)?;
+            validate_json_schema(
+                &document.value,
+                EmbeddedSchema::TrustedHostRunnerProfile,
+                &label,
+            )?;
+            require_format(
+                &document.value,
+                "Eip0045B4TrustedHostPositiveOciRunnerProfileV1",
+                1,
+            )?;
+            require_role(&document.value, role, "TH/F0 runner profile")?;
+            Ok(document)
+        })
+        .collect::<Result<Vec<_>>>()?
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("TH/F0 runner-profile cardinality drift"))?;
+
+    let validator_descriptors: [BoundDocument; 2] = validator_descriptors
+        .into_iter()
+        .enumerate()
+        .map(|(index, named)| {
+            let implementation = if index == 0 {
+                PositiveImplementation::RustReference
+            } else {
+                PositiveImplementation::IndependentJvm
+            };
+            let label = format!(
+                "TH/F0 {} validator descriptor",
+                implementation.implementation()
+            );
+            let document = BoundDocument::parse(named, &label)?;
+            validate_json_schema(
+                &document.value,
+                EmbeddedSchema::TrustedHostValidatorDescriptor,
+                &label,
+            )?;
+            require_format(
+                &document.value,
+                "Eip0045B4TrustedHostValidatorBuildDescriptorV1",
+                1,
+            )?;
+            require_string_eq(
+                &document.value,
+                "implementation",
+                implementation.implementation(),
+            )?;
+            require_string_eq(
+                &document.value,
+                "implementationLanguage",
+                implementation.language(),
+            )?;
+            Ok(document)
+        })
+        .collect::<Result<Vec<_>>>()?
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("TH/F0 validator-descriptor cardinality drift"))?;
+
+    let mut document_paths = BTreeSet::new();
+    ensure!(
+        document_paths.insert(input_set.relative_path.as_str()),
+        "TH/F0 input-set path aliases another identity document"
+    );
+    for runner in &runner_profiles {
+        ensure!(
+            document_paths.insert(runner.relative_path.as_str()),
+            "TH/F0 runner-profile path aliases another identity document"
+        );
+    }
+    for descriptor in &validator_descriptors {
+        ensure!(
+            document_paths.insert(descriptor.relative_path.as_str()),
+            "TH/F0 validator-descriptor path aliases another identity document"
+        );
+    }
+
+    let input_profiles = array_field(&input_set.value, "runnerProfiles")?;
+    ensure!(
+        input_profiles.len() == 4,
+        "TH/F0 input set must bind exactly four runner profiles"
+    );
+    for (index, role) in PositiveRunnerRole::all().into_iter().enumerate() {
+        require_role(&input_profiles[index], role, "TH/F0 input-set runner profile")?;
+        let expected = runner_profiles[index]
+            .identity_with_path("Eip0045B4TrustedHostPositiveOciRunnerProfileV1");
+        ensure!(
+            field(&input_profiles[index], "artifact")? == &expected,
+            "TH/F0 input-set {} runner-profile identity is stale",
+            role.purpose()
+        );
+    }
+
+    for (index, implementation) in [
+        PositiveImplementation::RustReference,
+        PositiveImplementation::IndependentJvm,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let descriptor = &validator_descriptors[index].value;
+        let build_role = implementation.build_role();
+        validate_profile_reference_with_format(
+            field(field(descriptor, "deterministicBuild")?, "runnerProfile")?,
+            build_role,
+            &runner_profiles[build_role.index()],
+            "TH/F0 descriptor build runner",
+            "Eip0045B4TrustedHostPositiveOciRunnerProfileV1",
+        )?;
+        let execution_role = implementation.execution_role();
+        validate_profile_reference_with_format(
+            field(field(descriptor, "executionEnvironment")?, "runnerProfile")?,
+            execution_role,
+            &runner_profiles[execution_role.index()],
+            "TH/F0 descriptor execution runner",
+            "Eip0045B4TrustedHostPositiveOciRunnerProfileV1",
+        )?;
+    }
+
+    let validators = array_field(&input_set.value, "validators")?;
+    ensure!(
+        validators.len() == 2,
+        "TH/F0 input set must bind exactly two validator descriptors"
+    );
+    for (index, implementation) in [
+        PositiveImplementation::RustReference,
+        PositiveImplementation::IndependentJvm,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        require_u64_eq(&validators[index], "implementationIndex", index as u64)?;
+        require_string_eq(
+            &validators[index],
+            "implementation",
+            implementation.implementation(),
+        )?;
+        require_string_eq(&validators[index], "language", implementation.language())?;
+        let expected = validator_descriptors[index]
+            .identity_with_path("Eip0045B4TrustedHostValidatorBuildDescriptorV1");
+        ensure!(
+            field(&validators[index], "buildDescriptor")? == &expected,
+            "TH/F0 input-set validator descriptor identity is stale for {}",
+            implementation.implementation()
+        );
+    }
+
+    validate_authoritative_build_projection(&input_set.value, authoritative_build)?;
+    for (index, role) in PositiveRunnerRole::all().into_iter().enumerate() {
+        validate_trusted_host_runner_profile(&runner_profiles[index].value, role)?;
+    }
+    for (index, implementation) in [
+        PositiveImplementation::RustReference,
+        PositiveImplementation::IndependentJvm,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        validate_descriptor_with_runner_profile_format(
+            &validator_descriptors[index].value,
+            implementation,
+            &runner_profiles,
+            "Eip0045B4TrustedHostPositiveOciRunnerProfileV1",
         )?;
     }
     validate_non_alias_lineage_separation(&validator_descriptors)?;
@@ -6888,6 +7519,104 @@ fn project_positive_oci_image_layout(
     })
 }
 
+fn project_positive_oci_image_layout_v2(
+    profile: &BoundDocument,
+    role: PositiveRunnerRole,
+) -> Result<B4PositiveOciImageLayoutV2> {
+    validate_v2_runner_profile(&profile.value, role)?;
+    let runtime_contract = project_positive_oci_runtime_contract(profile, role)?;
+    let image = field(&profile.value, "image")?;
+    let provider = field(&profile.value, "retainedHostRootfsMetadataProvider")?;
+    ensure!(
+        field(provider, "metadataPolicy")? == field(image, "retainedHostRootfsMetadataPolicy")?,
+        "V2 OCI expectation metadata-policy binding drift"
+    );
+    let metadata_provider = B4PositiveOciMetadataProviderExpectationV2 {
+        role,
+        metadata_policy: string_field(provider, "metadataPolicy")?.to_owned(),
+        provider_profile: string_field(provider, "providerProfile")?.to_owned(),
+        session_protocol: string_field(provider, "sessionProtocol")?.to_owned(),
+        appliance_profile: string_field(provider, "applianceProfile")?.to_owned(),
+        expected_mode_table_sha256: decode_digest(
+            string_field(provider, "expectedModeTableSha256")?,
+            &format!("{} V2 expected mode-table SHA-256", role.purpose()),
+        )?,
+    };
+    let archive = field(image, "archive")?;
+    let manifest = field(image, "manifest")?;
+    let config = field(image, "config")?;
+    let layers = array_field(image, "layers")?
+        .iter()
+        .enumerate()
+        .map(|(index, layer)| {
+            Ok(B4PositiveOciLayerV1 {
+                compressed_digest: decode_oci_sha256_digest(
+                    string_field(layer, "digest")?,
+                    &format!("{} OCI layer {index} digest", role.purpose()),
+                )?,
+                compressed_byte_length: u64_field(layer, "size")?,
+                uncompressed_byte_length: u64_field(layer, "uncompressedBytes")?,
+                diff_id: decode_oci_sha256_digest(
+                    string_field(layer, "diffId")?,
+                    &format!("{} OCI layer {index} DiffID", role.purpose()),
+                )?,
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let rootfs = field(image, "postChangesetRootfs")?;
+    let jvm_executables = project_positive_jvm_executable_closure(profile, role)?;
+    let jvm_release = match role {
+        PositiveRunnerRole::JvmValidatorBuild => Some(project_positive_jvm_release_identity(
+            field(&profile.value, "buildJdk")?,
+            "JVM build JDK release",
+        )?),
+        PositiveRunnerRole::JvmVerifier => Some(project_positive_jvm_release_identity(
+            field(&profile.value, "javaRuntime")?,
+            "JVM verifier release",
+        )?),
+        PositiveRunnerRole::RustValidatorBuild | PositiveRunnerRole::RustVerifier => None,
+    };
+    let rootfs_path_requirements = project_positive_rootfs_path_requirements(profile, role)?;
+
+    Ok(B4PositiveOciImageLayoutV2 {
+        profile_identity: profile.contract_identity(),
+        role,
+        runtime_contract,
+        metadata_provider,
+        archive_path: string_field(archive, "path")?.to_owned(),
+        archive_byte_length: u64_field(archive, "byteLength")?,
+        archive_sha256: decode_digest(
+            string_field(archive, "sha256")?,
+            &format!("{} OCI archive SHA-256", role.purpose()),
+        )?,
+        manifest: B4PositiveOciDescriptorV1 {
+            digest: decode_oci_sha256_digest(
+                string_field(manifest, "digest")?,
+                &format!("{} OCI manifest digest", role.purpose()),
+            )?,
+            byte_length: u64_field(manifest, "size")?,
+        },
+        config: B4PositiveOciDescriptorV1 {
+            digest: decode_oci_sha256_digest(
+                string_field(config, "digest")?,
+                &format!("{} OCI config digest", role.purpose()),
+            )?,
+            byte_length: u64_field(config, "size")?,
+        },
+        layers,
+        post_changeset_rootfs: B4PositiveOciRootfsCountsV1 {
+            entry_count: u64_field(rootfs, "entryCount")?,
+            regular_file_count: u64_field(rootfs, "regularFileCount")?,
+            directory_count: u64_field(rootfs, "directoryCount")?,
+            symbolic_link_count: u64_field(rootfs, "symbolicLinkCount")?,
+            regular_file_bytes: u64_field(rootfs, "regularFileBytes")?,
+        },
+        jvm_executables,
+        jvm_release,
+        rootfs_path_requirements,
+    })
+}
+
 fn project_positive_startup_dependency_policy(
     runtime: &Value,
     label: &str,
@@ -6895,6 +7624,9 @@ fn project_positive_startup_dependency_policy(
     match string_field(runtime, "startupDependencyPolicy")? {
         STARTUP_DEPENDENCY_POLICY_ID => Ok(B4PositiveStartupDependencyPolicyV1 {
             kind: B4PositiveStartupDependencyPolicyKindV1::InitialElfClosure,
+        }),
+        STARTUP_DEPENDENCY_POLICY_V2_ID => Ok(B4PositiveStartupDependencyPolicyV1 {
+            kind: B4PositiveStartupDependencyPolicyKindV1::GlibcRelocationClosureV2,
         }),
         other => anyhow::bail!("{label} has unsupported startup-dependency policy: {other}"),
     }
@@ -10101,6 +10833,24 @@ pub(crate) mod test_support {
         ) -> Result<B4PositivePrecommitAuthorityV2> {
             validate_and_bind_positive_precommit_v2(
                 &self.authoritative_build,
+                self.precommit_documents(retained_v1_documents),
+            )
+        }
+
+        fn bind_positive_precommit_with_oci(
+            &self,
+            retained_v1_documents: &MaterializedFixture,
+        ) -> Result<B4PositivePrecommitWithOciExpectationV2> {
+            validate_and_bind_positive_precommit_with_oci_v2(
+                &self.authoritative_build,
+                self.precommit_documents(retained_v1_documents),
+            )
+        }
+
+        fn precommit_documents<'a>(
+            &'a self,
+            retained_v1_documents: &'a MaterializedFixture,
+        ) -> B4PositivePrecommitDocumentsV2<'a> {
                 B4PositivePrecommitDocumentsV2 {
                     input_set: NamedCanonicalJcs {
                         relative_path: INPUT_SET_PATH,
@@ -10126,8 +10876,107 @@ pub(crate) mod test_support {
                         relative_path: JVM_COPY_ONLY_INCLUSION_MANIFEST_PATH,
                         bytes: &retained_v1_documents.jvm_copy_only_inclusion_manifest_bytes,
                     },
+                }
+        }
+
+        #[cfg(feature = "b4-trusted-host-metadata-f0")]
+        fn promote_trusted_host_f0(&mut self) {
+            use crate::b4_retained_rootfs_metadata_th::{
+                HOST_PREMISE_ID_TH_F0_V1, MODE_TABLE_SHA256_HEX, POLICY_ID_TH_F0_V1,
+            };
+            for (index, role) in PositiveRunnerRole::all().into_iter().enumerate() {
+                let runner = &mut self.runner_values[index];
+                runner["format"] = json!("Eip0045B4TrustedHostPositiveOciRunnerProfileV1");
+                runner["formatVersion"] = json!(1);
+                runner["image"]["retainedHostRootfsMetadataPolicy"] = json!(POLICY_ID_TH_F0_V1);
+                runner.as_object_mut().unwrap().remove("retainedHostRootfsMetadataProvider");
+                runner["retainedHostRootfsMetadataPremise"] = json!({
+                    "metadataPolicy": POLICY_ID_TH_F0_V1,
+                    "hostPremise": HOST_PREMISE_ID_TH_F0_V1,
+                    "expectedModeTableSha256": MODE_TABLE_SHA256_HEX,
+                    "canonicalRole": v2_canonical_role(role)
+                });
+            }
+            for descriptor in &mut self.descriptor_values {
+                descriptor["format"] = json!("Eip0045B4TrustedHostValidatorBuildDescriptorV1");
+                descriptor["formatVersion"] = json!(1);
+            }
+            self.input_value["format"] = json!("Eip0045B4TrustedHostPositiveInputSetV1");
+            self.input_value["formatVersion"] = json!(1);
+            self.refresh_trusted_host_commitments();
+        }
+
+        #[cfg(feature = "b4-trusted-host-metadata-f0")]
+        fn refresh_trusted_host_commitments(&mut self) {
+            self.runner_bytes = self.runner_values.clone()
+                .map(|value| canonical_json_bytes(&value).unwrap());
+            let runner_identities: [Value; 4] = std::array::from_fn(|index| document_identity(
+                "Eip0045B4TrustedHostPositiveOciRunnerProfileV1",
+                RUNNER_PATHS[index], &self.runner_bytes[index]));
+            for (index, implementation) in [
+                PositiveImplementation::RustReference,
+                PositiveImplementation::IndependentJvm,
+            ].into_iter().enumerate() {
+                let build = implementation.build_role();
+                self.descriptor_values[index]["deterministicBuild"]["runnerProfile"] =
+                    profile_reference(build, &runner_identities[build.index()]);
+                let execution = implementation.execution_role();
+                self.descriptor_values[index]["executionEnvironment"]["runnerProfile"] =
+                    profile_reference(execution, &runner_identities[execution.index()]);
+            }
+            for (index, role) in PositiveRunnerRole::all().into_iter().enumerate() {
+                self.input_value["runnerProfiles"][index] = json!({
+                    "runnerProfileIndex": index,
+                    "purpose": role.purpose(),
+                    "artifact": runner_identities[index]
+                });
+            }
+            self.descriptor_bytes = self.descriptor_values.clone()
+                .map(|value| canonical_json_bytes(&value).unwrap());
+            for (index, implementation) in [
+                PositiveImplementation::RustReference,
+                PositiveImplementation::IndependentJvm,
+            ].into_iter().enumerate() {
+                self.input_value["validators"][index] = json!({
+                    "implementationIndex": index,
+                    "implementation": implementation.implementation(),
+                    "language": implementation.language(),
+                    "buildDescriptor": document_identity(
+                        "Eip0045B4TrustedHostValidatorBuildDescriptorV1",
+                        DESCRIPTOR_PATHS[index], &self.descriptor_bytes[index])
+                });
+            }
+            self.refresh_input_source();
+        }
+
+        #[cfg(feature = "b4-trusted-host-metadata-f0")]
+        fn trusted_host_documents<'a>(
+            &'a self,
+            retained_v1_documents: &'a MaterializedFixture,
+        ) -> B4TrustedHostPositivePrecommitDocumentsV1<'a> {
+            B4TrustedHostPositivePrecommitDocumentsV1 {
+                input_set: NamedCanonicalJcs {
+                    relative_path: INPUT_SET_PATH, bytes: &self.input_bytes,
                 },
-            )
+                verifier_contract: NamedCanonicalJcs {
+                    relative_path: VERIFIER_CONTRACT_PATH,
+                    bytes: &retained_v1_documents.verifier_contract_bytes,
+                },
+                runner_profiles: std::array::from_fn(|index| NamedCanonicalJcs {
+                    relative_path: RUNNER_PATHS[index], bytes: &self.runner_bytes[index],
+                }),
+                seccomp_documents: std::array::from_fn(|index| NamedCanonicalJcs {
+                    relative_path: SECCOMP_PATHS[index],
+                    bytes: &retained_v1_documents.seccomp_bytes[index],
+                }),
+                validator_descriptors: std::array::from_fn(|index| NamedCanonicalJcs {
+                    relative_path: DESCRIPTOR_PATHS[index], bytes: &self.descriptor_bytes[index],
+                }),
+                jvm_copy_only_inclusion_manifest: NamedCanonicalJcs {
+                    relative_path: JVM_COPY_ONLY_INCLUSION_MANIFEST_PATH,
+                    bytes: &retained_v1_documents.jvm_copy_only_inclusion_manifest_bytes,
+                },
+            }
         }
     }
 
@@ -10673,6 +11522,121 @@ pub(crate) mod test_support {
         }
     }
 
+    #[cfg(feature = "b4-trusted-host-metadata-f0")]
+    #[test]
+    fn trusted_host_f0_positive_precommit_binds_distinct_closed_wire() {
+        let retained = Fixture::valid().materialize();
+        let mut fixture = V2InputIdentityFixture::from_materialized(&retained);
+        fixture.promote_trusted_host_f0();
+        let authority = validate_and_bind_trusted_host_positive_precommit_v1(
+            &fixture.authoritative_build, fixture.trusted_host_documents(&retained),
+        ).unwrap();
+        assert_eq!(authority.input_set().path, INPUT_SET_PATH);
+        assert_eq!(authority.runner_profiles().len(), 4);
+        assert_eq!(authority.validators().len(), 2);
+        for path in RUNNER_PATHS.into_iter().chain(DESCRIPTOR_PATHS) {
+            assert!(authority.provenance_paths().contains(path));
+        }
+        assert!(validate_v2_input_identity_closure(
+            &fixture.authoritative_build,
+            NamedCanonicalJcs { relative_path: INPUT_SET_PATH, bytes: &fixture.input_bytes },
+            std::array::from_fn(|index| NamedCanonicalJcs {
+                relative_path: RUNNER_PATHS[index], bytes: &fixture.runner_bytes[index],
+            }),
+            std::array::from_fn(|index| NamedCanonicalJcs {
+                relative_path: DESCRIPTOR_PATHS[index], bytes: &fixture.descriptor_bytes[index],
+            }),
+        ).is_err());
+    }
+
+    #[cfg(feature = "b4-trusted-host-metadata-f0")]
+    #[test]
+    fn trusted_host_f0_wire_rejects_rebound_h0_and_policy_substitutions() {
+        let retained = Fixture::valid().materialize();
+        let mut healthy = V2InputIdentityFixture::from_materialized(&retained);
+        healthy.promote_trusted_host_f0();
+        let accept = |fixture: &V2InputIdentityFixture| {
+            validate_and_bind_trusted_host_positive_precommit_v1(
+                &fixture.authoritative_build, fixture.trusted_host_documents(&retained),
+            )
+        };
+        accept(&healthy).unwrap();
+
+        let mut selected = healthy.clone();
+        selected.runner_values[0]["retainedHostRootfsMetadataPremise"]
+            ["expectedModeTableSha256"] = json!(digest(0x42));
+        selected.refresh_trusted_host_commitments();
+        assert!(accept(&selected).is_err(), "changed mode table was accepted");
+
+        let mut selected = healthy.clone();
+        selected.runner_values[0]["retainedHostRootfsMetadataPremise"]["hostPremise"] =
+            json!("eip0045-b4-trusted-host-wsl-unknown-v1");
+        selected.refresh_trusted_host_commitments();
+        assert!(accept(&selected).is_err(), "changed host premise was accepted");
+
+        let mut selected = healthy.clone();
+        selected.runner_values[0]["retainedHostRootfsMetadataProvider"] = json!({
+            "metadataPolicy": RETAINED_HOST_ROOTFS_METADATA_POLICY_V2_ID,
+            "providerProfile": TMPFS_METADATA_PROVIDER_PROFILE_ID
+        });
+        selected.refresh_trusted_host_commitments();
+        assert!(accept(&selected).is_err(), "H0 provider field was accepted");
+
+        let mut selected = healthy.clone();
+        selected.runner_values.swap(0, 1);
+        selected.refresh_trusted_host_commitments();
+        assert!(accept(&selected).is_err(), "runner roles were accepted out of order");
+
+        let mut selected = healthy.clone();
+        selected.descriptor_values[0]["format"] = json!("Eip0045B4ValidatorBuildDescriptorV2");
+        selected.refresh_trusted_host_commitments();
+        assert!(accept(&selected).is_err(), "H0 descriptor format was accepted");
+
+        let mut selected = healthy.clone();
+        selected.input_value["format"] = json!("Eip0045B4PositiveInputSetV2");
+        selected.refresh_input_source();
+        assert!(accept(&selected).is_err(), "H0 input-set format was accepted");
+    }
+
+    #[cfg(feature = "b4-trusted-host-metadata-f0")]
+    #[test]
+    fn trusted_host_f0_wire_rejects_stale_identity_and_path_alias() {
+        let retained = Fixture::valid().materialize();
+        let mut healthy = V2InputIdentityFixture::from_materialized(&retained);
+        healthy.promote_trusted_host_f0();
+        let accept = |fixture: &V2InputIdentityFixture| {
+            validate_and_bind_trusted_host_positive_precommit_v1(
+                &fixture.authoritative_build, fixture.trusted_host_documents(&retained),
+            )
+        };
+        accept(&healthy).unwrap();
+
+        let mut stale_runner = healthy.clone();
+        stale_runner.runner_values[0]["image"]["archive"]["sha256"] = json!(digest(0x43));
+        stale_runner.runner_bytes[0] =
+            canonical_json_bytes(&stale_runner.runner_values[0]).unwrap();
+        let error = accept(&stale_runner).unwrap_err();
+        assert!(format!("{error:#}").contains("runner-profile identity is stale"),
+            "stale runner failed outside the input-set identity join: {error:#}");
+
+        let mut stale_descriptor = healthy.clone();
+        stale_descriptor.descriptor_values[0]["toolchainClosure"]["closureSha256"] =
+            json!(digest(0x44));
+        stale_descriptor.descriptor_bytes[0] =
+            canonical_json_bytes(&stale_descriptor.descriptor_values[0]).unwrap();
+        let error = accept(&stale_descriptor).unwrap_err();
+        assert!(format!("{error:#}").contains("validator descriptor identity is stale"),
+            "stale descriptor failed outside the input-set identity join: {error:#}");
+
+        let mut aliased = healthy.trusted_host_documents(&retained);
+        aliased.runner_profiles[0].relative_path = DESCRIPTOR_PATHS[0];
+        let error = validate_and_bind_trusted_host_positive_precommit_v1(
+            &healthy.authoritative_build, aliased,
+        ).unwrap_err();
+        assert!(format!("{error:#}").contains("path aliases another identity document"),
+            "path alias failed outside the antichain guard: {error:#}");
+    }
+
     #[test]
     fn v2_runner_profile_closes_provider_bindings_and_four_roles() {
         for role in PositiveRunnerRole::all() {
@@ -11085,6 +12049,93 @@ pub(crate) mod test_support {
                 .is_err(),
             "the V2 precommit gate accepted a V1 validator descriptor"
         );
+    }
+
+    #[test]
+    fn v2_positive_precommit_produces_four_pathful_oci_expectations() {
+        let retained = Fixture::valid().materialize();
+        let v2 = V2InputIdentityFixture::valid();
+        let bound = v2.bind_positive_precommit_with_oci(&retained).unwrap();
+        let layouts = bound.oci_image_layouts();
+        for (index, layout) in layouts.iter().enumerate() {
+            let role = PositiveRunnerRole::all()[index];
+            assert_eq!(layout.role(), role);
+            assert_eq!(layout.profile_identity().path, RUNNER_PATHS[index]);
+            assert_eq!(layout.profile_identity().byte_length, v2.runner_bytes[index].len() as u64);
+            assert_eq!(layout.profile_identity().sha256, sha256_hex(&v2.runner_bytes[index]));
+            let provider = layout.metadata_provider();
+            assert_eq!(provider.role(), role);
+            assert_eq!(provider.metadata_policy(), RETAINED_HOST_ROOTFS_METADATA_POLICY_V2_ID);
+            assert_eq!(provider.provider_profile(), TMPFS_METADATA_PROVIDER_PROFILE_ID);
+            assert_eq!(provider.session_protocol(), SUPERVISED_FILESYSTEM_SESSION_PROTOCOL_ID);
+            assert_eq!(provider.appliance_profile(), BUILDROOT_APPLIANCE_PROFILE_ID);
+            assert_eq!(provider.expected_mode_table_sha256(), [0xa5; DIGEST_BYTES]);
+            assert!(!layout.archive_path().is_empty());
+            assert!(!layout.layers().is_empty());
+        }
+        assert!(layouts[0].jvm_executables().is_none());
+        assert!(layouts[1].jvm_executables().is_some());
+        assert!(layouts[2].jvm_executables().is_none());
+        assert!(layouts[3].jvm_executables().is_some());
+        let _precommit = bound.into_precommit();
+    }
+
+    #[test]
+    fn v2_oci_expectation_rejects_stale_and_wrong_provider_profiles() {
+        let retained = Fixture::valid().materialize();
+        let valid = V2InputIdentityFixture::valid();
+
+        let mut stale = valid.clone();
+        stale.runner_values[0]["retainedHostRootfsMetadataProvider"]["expectedModeTableSha256"] =
+            json!(digest(0xa6));
+        stale.runner_bytes[0] = canonical_json_bytes(&stale.runner_values[0]).unwrap();
+        assert!(stale.bind_positive_precommit_with_oci(&retained).is_err());
+
+        for (field, wrong) in [
+            ("providerProfile", "wrong-provider"),
+            ("sessionProtocol", "wrong-session"),
+            ("applianceProfile", "wrong-appliance"),
+            ("canonicalRole", "wrong-role"),
+        ] {
+            let mut wrong_provider = valid.clone();
+            wrong_provider.runner_values[0]["retainedHostRootfsMetadataProvider"][field] =
+                json!(wrong);
+            wrong_provider.refresh_all_commitments();
+            assert!(wrong_provider.bind_positive_precommit_with_oci(&retained).is_err(), "{field}");
+        }
+
+        let mut missing_mode_table = valid.clone();
+        missing_mode_table.runner_values[0]["retainedHostRootfsMetadataProvider"]
+            .as_object_mut().unwrap().remove("expectedModeTableSha256");
+        missing_mode_table.refresh_all_commitments();
+        assert!(missing_mode_table.bind_positive_precommit_with_oci(&retained).is_err());
+
+        let mut v1_profile = valid.clone();
+        v1_profile.runner_values[0] = retained.runner_values[0].clone();
+        v1_profile.refresh_all_commitments();
+        assert!(v1_profile.bind_positive_precommit_with_oci(&retained).is_err());
+    }
+
+    #[test]
+    fn v2_oci_expectation_retains_rebound_mode_table_and_startup_policy() {
+        let retained = Fixture::valid().materialize();
+        let mut v2 = V2InputIdentityFixture::valid();
+        v2.runner_values[1]["retainedHostRootfsMetadataProvider"]["expectedModeTableSha256"] =
+            json!(digest(0xa6));
+        v2.runner_values[1]["buildJdk"]["startupDependencyPolicy"] =
+            json!(STARTUP_DEPENDENCY_POLICY_V2_ID);
+        v2.refresh_all_commitments();
+        let bound = v2.bind_positive_precommit_with_oci(&retained).unwrap();
+        let build = &bound.oci_image_layouts()[1];
+        assert_eq!(build.metadata_provider().expected_mode_table_sha256(), [0xa6; DIGEST_BYTES]);
+        assert_eq!(build.jvm_executables().unwrap().startup_dependency_policy().policy_id(),
+            STARTUP_DEPENDENCY_POLICY_V2_ID);
+
+        let mut unknown_policy = v2.clone();
+        unknown_policy.runner_values[1]["buildJdk"]["startupDependencyPolicy"] =
+            json!("unrecognized-startup-policy");
+        unknown_policy.refresh_all_commitments();
+        assert!(unknown_policy.bind_positive_precommit_with_oci(&retained).is_err());
     }
 
     #[test]
@@ -14307,6 +15358,46 @@ pub(crate) mod test_support {
             verifier.startup_dependency_policy().policy_id(),
             STARTUP_DEPENDENCY_POLICY_ID
         );
+    }
+
+    #[test]
+    fn v2_runner_profile_selects_distinct_glibc_startup_policy_without_widening_v1() {
+        fn document(value: Value) -> BoundDocument {
+            BoundDocument {
+                relative_path: String::new(),
+                bytes: Vec::new(),
+                value,
+                sha256: String::new(),
+            }
+        }
+
+        for (role, runtime_field) in [
+            (PositiveRunnerRole::JvmValidatorBuild, "buildJdk"),
+            (PositiveRunnerRole::JvmVerifier, "javaRuntime"),
+        ] {
+            let mut v2 = v2_runner_profile(role);
+            v2[runtime_field]["startupDependencyPolicy"] =
+                json!(STARTUP_DEPENDENCY_POLICY_V2_ID);
+            validate_v2_runner_profile(&v2, role).unwrap();
+            let projected = project_positive_jvm_executable_closure(&document(v2), role).unwrap();
+            assert_eq!(projected.unwrap()
+                .startup_dependency_policy().policy_id(), STARTUP_DEPENDENCY_POLICY_V2_ID);
+
+            let mut v1 = Fixture::valid().runner_values[role.index()].clone();
+            v1[runtime_field]["startupDependencyPolicy"] =
+                json!(STARTUP_DEPENDENCY_POLICY_V2_ID);
+            assert!(validate_json_schema(&v1, EmbeddedSchema::RunnerProfile,
+                "V1 startup profile").is_err());
+
+            let mut unknown = v2_runner_profile(role);
+            unknown[runtime_field]["startupDependencyPolicy"] =
+                json!("eip0045-b4-elf64-amd64-startup-dependency-closure-unknown");
+            assert!(validate_json_schema(&unknown, EmbeddedSchema::RunnerProfileV2,
+                "unknown startup policy").is_err());
+            let error = project_positive_jvm_executable_closure(
+                &document(unknown), role).unwrap_err();
+            assert!(format!("{error:#}").contains("unsupported startup-dependency policy"));
+        }
     }
 
     #[test]

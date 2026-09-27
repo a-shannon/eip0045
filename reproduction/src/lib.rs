@@ -127,6 +127,9 @@ pub mod b4_result;
 /// Pure, non-authorizing Linux/tmpfs metadata theorem and packet validator.
 #[cfg(feature = "h0-tmpfs-provider-v2")]
 pub mod b4_retained_rootfs_metadata_v2;
+/// Pure trusted-host F0 metadata policy declaration; no provider or authority.
+#[cfg(feature = "b4-trusted-host-metadata-f0")]
+pub mod b4_retained_rootfs_metadata_th;
 #[cfg(all(test, feature = "h0-tmpfs-provider-v2"))]
 #[path = "b4_retained_rootfs_metadata_v2_tests.rs"]
 mod b4_retained_rootfs_metadata_v2_tests;

@@ -27,13 +27,15 @@ use sha2::{Digest as _, Sha256};
 
 use crate::b4_campaign_executor::{
     amd64_elf_inspection::{
-        Amd64ElfAcceptedDynamicTagV1, Amd64ElfCommonInspectionV1, Amd64ElfOsAbiV1,
-        Amd64ElfRunpathComponentV1, Amd64ElfStartupDynamicInspectionV1, Amd64ElfTypeV1,
-        with_gate_bound_runtime_amd64_elf, with_inspected_startup_dependency_amd64_dso,
+        Amd64ElfAcceptedDynamicTagV1, Amd64ElfAcceptedDynamicTagV2, Amd64ElfCommonInspectionV1,
+        Amd64ElfOsAbiV1, Amd64ElfRunpathComponentV1, Amd64ElfStartupDynamicInspectionV1,
+        Amd64ElfStartupDynamicInspectionV2, Amd64ElfTypeV1, with_gate_bound_runtime_amd64_elf,
+        with_inspected_startup_dependency_amd64_dso,
+        with_inspected_startup_dependency_amd64_dso_v2,
     },
     artifact_import_contract::{
         Amd64ElfPolicyV1, B4ImmutableArtifactRoleV1, StartupDependencyClosureLimitsV1,
-        startup_dependency_closure_limits_v1,
+        StartupDependencyPolicyV2, startup_dependency_closure_limits_v1,
     },
 };
 
@@ -1061,6 +1063,17 @@ struct StartupDynamicProjectionV1 {
     runpath_components: Vec<StartupRunpathComponentV1>,
 }
 
+/// Separate diagnostic projection; a V2 tag cannot inhabit a V1 receipt.
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct StartupDynamicProjectionV2 {
+    accepted_records: Vec<(i64, u64)>,
+    accepted_tags: Vec<Amd64ElfAcceptedDynamicTagV2>,
+    needed_libraries: Vec<StartupNeededLibraryV1>,
+    soname: String,
+    runpath_raw: Option<String>,
+    runpath_components: Vec<StartupRunpathComponentV1>,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct StartupElfProjectionV1 {
     elf_type: Amd64ElfTypeV1,
@@ -1113,6 +1126,28 @@ struct StaticStartupDependencyClosureV1 {
     edges: Vec<StaticStartupDependencyEdgeV1>,
 }
 
+/// V2 keeps the gate-bound executable in its runtime-ELF projection and every
+/// interpreter/dependency in the typed glibc-relocation DSO projection.
+#[derive(Debug, Eq, PartialEq)]
+struct StaticStartupDependencyClosureV2 {
+    policy: StartupDependencyPolicyV2,
+    interpreter_path: String,
+    executable: StaticStartupDependencyNodeV1,
+    dsos: Vec<StaticStartupDependencyDsoNodeV2>,
+    edges: Vec<StaticStartupDependencyEdgeV1>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct StaticStartupDependencyDsoNodeV2 {
+    resolution: ResolvedRootfsPathV1,
+    byte_length: u64,
+    sha256: [u8; SHA256_BYTES],
+    elf: StartupElfProjectionV1,
+    interpreter_path: Option<String>,
+    dynamic: StartupDynamicProjectionV2,
+    depth: u64,
+}
+
 /// Exact per-executable startup closures retained under one physical rootfs.
 ///
 /// The fixed launcher/compiler shape prevents a caller from reordering or
@@ -1123,6 +1158,18 @@ struct StaticStartupDependencyClosureV1 {
 struct StaticStartupDependencyBaselinesV1 {
     launcher: Option<StaticStartupDependencyClosureV1>,
     compiler: Option<StaticStartupDependencyClosureV1>,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct StaticStartupDependencyBaselinesV2 {
+    launcher: StaticStartupDependencyClosureV2,
+    compiler: Option<StaticStartupDependencyClosureV2>,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+enum StaticStartupDependencyBaselines {
+    InitialV1(StaticStartupDependencyBaselinesV1),
+    GlibcRelocationV2(StaticStartupDependencyBaselinesV2),
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -1140,6 +1187,17 @@ struct StaticStartupDependencyDerivationStateV1 {
     counters: StaticStartupDependencyCountersV1,
 }
 
+struct StaticStartupDependencyDerivationStateV2 {
+    executable: StaticStartupDependencyNodeV1,
+    dsos: Vec<StaticStartupDependencyDsoNodeV2>,
+    loaded_soname_nodes: Vec<usize>,
+    edges: Vec<StaticStartupDependencyEdgeV1>,
+    queue: VecDeque<usize>,
+    counters: StaticStartupDependencyCountersV1,
+    interpreter_path: String,
+    policy: StartupDependencyPolicyV2,
+}
+
 struct StartupDependencyDsoInspectionV1<'a> {
     resolution: ResolvedRootfsPathV1,
     selected_basename: &'a str,
@@ -1147,6 +1205,17 @@ struct StartupDependencyDsoInspectionV1<'a> {
     depth: u64,
     limits: StartupDependencyClosureLimitsV1,
     label: &'a str,
+}
+
+struct StartupDependencyDsoInspectionV2<'a> {
+    resolution: ResolvedRootfsPathV1,
+    selected_basename: &'a str,
+    required_modes: &'a [u32],
+    depth: u64,
+    limits: StartupDependencyClosureLimitsV1,
+    label: &'a str,
+    expected_interpreter: &'a str,
+    policy: StartupDependencyPolicyV2,
 }
 
 struct AuthenticatedRootfsResolutionStateV1 {
@@ -1177,6 +1246,15 @@ pub(super) struct StartupClosureTestExpectationV1<'a> {
 pub(super) enum TestOnlyRetainedStartupBaselineV1 {
     Launcher,
     Compiler,
+}
+
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum TestOnlyRetainedStartupBaselineMutationV2 {
+    LauncherTag,
+    CompilerTag,
+    LauncherEdge,
+    Discriminant,
 }
 
 #[cfg(test)]
@@ -1482,7 +1560,7 @@ pub(super) struct AuthenticatedPrivateOciRootfsMaterializationV1 {
 #[must_use = "retained physical OCI rootfs custody must be reauthenticated and explicitly cleaned"]
 pub(super) struct AuthenticatedPrivateOciRetainedPhysicalRootfsV1 {
     rootfs: AuthenticatedPrivateOciRootfsMaterializationV1,
-    static_startup_dependencies: StaticStartupDependencyBaselinesV1,
+    static_startup_dependencies: StaticStartupDependencyBaselines,
 }
 
 /// Affine failure that retains retry custody while named physical state remains.
@@ -2089,7 +2167,7 @@ impl AuthenticatedPrivateOciRootfsMaterializationV1 {
     fn authenticate_expected_rootfs_identity(
         &self,
         expectation: &B4PositiveOciImageLayoutV1,
-    ) -> Result<StaticStartupDependencyBaselinesV1> {
+    ) -> Result<StaticStartupDependencyBaselines> {
         let validation = (|| {
             self.validate_retained_tree(true)?;
             self.validate_live_entry_ordering()?;
@@ -2098,13 +2176,66 @@ impl AuthenticatedPrivateOciRootfsMaterializationV1 {
                 "physical OCI rootfs role differs from its positive gate"
             );
             self.authenticate_gate_rootfs_path_requirements(expectation)?;
-            self.authenticate_expected_jvm_identity(expectation)
+            self.authenticate_expected_startup_identity(expectation)
         })();
         merge_rootfs_revalidation(
             validation,
             self.validate_retained_tree(true),
             "private OCI rootfs revalidation also failed",
         )
+    }
+
+    fn authenticate_expected_startup_identity(
+        &self,
+        expectation: &B4PositiveOciImageLayoutV1,
+    ) -> Result<StaticStartupDependencyBaselines> {
+        let policy_id = expectation
+            .jvm_executables()
+            .map(|closure| closure.startup_dependency_policy().policy_id());
+        match policy_id {
+            None | Some(STARTUP_DEPENDENCY_POLICY_ID) => self
+                .authenticate_expected_jvm_identity(expectation)
+                .map(StaticStartupDependencyBaselines::InitialV1),
+            Some(id) if id == StartupDependencyPolicyV2::GlibcRelocation.policy_id() => self
+                .authenticate_expected_jvm_identity_v2(expectation)
+                .map(StaticStartupDependencyBaselines::GlibcRelocationV2),
+            Some(_) => anyhow::bail!("rootfs startup dependency policy is not supported"),
+        }
+    }
+
+    fn authenticate_expected_jvm_identity_v2(
+        &self,
+        expectation: &B4PositiveOciImageLayoutV1,
+    ) -> Result<StaticStartupDependencyBaselinesV2> {
+        let closure = expectation
+            .jvm_executables()
+            .context("V2 startup closure omits JVM executable identities")?;
+        let release = expectation
+            .jvm_release()
+            .context("V2 startup closure omits its JVM release identity")?;
+        ensure!(
+            matches!(
+                (self.transaction.role, closure.compiler().is_some()),
+                (PositiveRunnerRole::JvmValidatorBuild, true)
+                    | (PositiveRunnerRole::JvmVerifier, false)
+            ),
+            "V2 startup closure role or compiler differs from its positive gate"
+        );
+        self.authenticate_java_release(release)?;
+        let launcher = self.authenticate_static_startup_dependency_closure_v2(
+            expectation,
+            GateRootedStartupExecutableV1::Launcher,
+        )?;
+        let compiler = closure
+            .compiler()
+            .map(|_| {
+                self.authenticate_static_startup_dependency_closure_v2(
+                    expectation,
+                    GateRootedStartupExecutableV1::Compiler,
+                )
+            })
+            .transpose()?;
+        Ok(StaticStartupDependencyBaselinesV2 { launcher, compiler })
     }
 
     fn authenticate_expected_jvm_identity(
@@ -2529,6 +2660,99 @@ impl AuthenticatedPrivateOciRootfsMaterializationV1 {
         )
     }
 
+    fn authenticate_static_startup_dependency_closure_v2(
+        &self,
+        expectation: &B4PositiveOciImageLayoutV1,
+        executable_kind: GateRootedStartupExecutableV1,
+    ) -> Result<StaticStartupDependencyClosureV2> {
+        let closure = expectation
+            .jvm_executables()
+            .context("gate-rooted V2 startup closure omits JVM executable identities")?;
+        let expected = match executable_kind {
+            GateRootedStartupExecutableV1::Launcher => closure.launcher(),
+            GateRootedStartupExecutableV1::Compiler => closure
+                .compiler()
+                .context("gate-rooted V2 startup closure omits its compiler")?,
+        };
+        let policy = StartupDependencyPolicyV2::GlibcRelocation;
+        ensure!(
+            closure.startup_dependency_policy().policy_id() == policy.policy_id(),
+            "V2 startup dependency policy differs from its closed positive gate"
+        );
+        self.authenticate_startup_loader_exclusions()?;
+        let mut mount_targets = Vec::new();
+        mount_targets
+            .try_reserve_exact(expectation.rootfs_path_requirements().len())
+            .context("cannot reserve gate-rooted V2 mount-target projection")?;
+        for requirement in expectation.rootfs_path_requirements() {
+            if requirement.image_path() != "/dev" {
+                mount_targets.push(requirement.image_path());
+            }
+        }
+        let limits = startup_dependency_closure_limits_v1();
+        let resolution = self.resolve_startup_rootfs_regular_path(
+            expected.image_path(),
+            &mount_targets,
+            "V2 startup executable",
+        )?;
+        Self::authenticate_startup_resolution_antichain(
+            &resolution,
+            &mount_targets,
+            "V2 startup executable",
+        )?;
+        let byte_length =
+            self.authenticated_regular_byte_length(&resolution, &[0o555], "V2 startup executable")?;
+        let mut counters = StaticStartupDependencyCountersV1::default();
+        reserve_startup_object(limits, &mut counters, byte_length, "V2 startup executable")?;
+        let mut linkage = None;
+        self.with_authenticated_resolved_rootfs_regular_modes(
+            &resolution,
+            &[0o555],
+            |file, authenticated_byte_length| {
+                let bytes = read_complete_materialized_regular(
+                    file,
+                    authenticated_byte_length,
+                    "profile-bound V2 startup executable",
+                )?;
+                with_gate_bound_runtime_amd64_elf(
+                    &bytes,
+                    expected,
+                    |interpreter_path, common, dynamic| {
+                        linkage = Some((
+                            try_owned_startup_string(interpreter_path, "V2 interpreter path")?,
+                            own_startup_elf_projection(common),
+                            own_startup_dynamic_projection(dynamic)?,
+                        ));
+                        Ok(())
+                    },
+                )
+            },
+        )?;
+        let (interpreter_path, elf, dynamic) =
+            linkage.context("V2 startup executable omitted its closed dynamic projection")?;
+        ensure!(
+            dynamic.soname.is_none(),
+            "V2 startup executable unexpectedly carries DT_SONAME"
+        );
+        validate_owned_startup_dynamic_for_resolution(&resolution, &dynamic)?;
+        let executable = StaticStartupDependencyNodeV1 {
+            resolution,
+            byte_length,
+            sha256: expected.sha256(),
+            elf,
+            dynamic,
+            depth: 0,
+        };
+        self.derive_static_startup_dependency_closure_v2(
+            executable,
+            &interpreter_path,
+            &mount_targets,
+            limits,
+            counters,
+            policy,
+        )
+    }
+
     #[cfg(test)]
     fn authenticate_test_static_startup_dependency_closure(
         &self,
@@ -2854,6 +3078,221 @@ impl AuthenticatedPrivateOciRootfsMaterializationV1 {
         Ok(closure)
     }
 
+    fn derive_static_startup_dependency_closure_v2(
+        &self,
+        executable: StaticStartupDependencyNodeV1,
+        interpreter_path: &str,
+        mount_targets: &[&str],
+        limits: StartupDependencyClosureLimitsV1,
+        mut counters: StaticStartupDependencyCountersV1,
+        policy: StartupDependencyPolicyV2,
+    ) -> Result<StaticStartupDependencyClosureV2> {
+        limits.checked_add_distinct_objects(counters.distinct_objects, 1, "V2 startup interpreter")?;
+        let interpreter_basename = canonical_rootfs_basename(interpreter_path)?;
+        limits.validate_dynamic_basename_bytes(
+            u64::try_from(interpreter_basename.len())?,
+            "V2 startup interpreter",
+        )?;
+        let interpreter_resolution = self.resolve_startup_rootfs_regular_path(
+            interpreter_path,
+            mount_targets,
+            "V2 startup interpreter",
+        )?;
+        Self::authenticate_startup_resolution_antichain(
+            &interpreter_resolution,
+            mount_targets,
+            "V2 startup interpreter",
+        )?;
+        let interpreter = self.inspect_startup_dependency_dso_v2(
+            StartupDependencyDsoInspectionV2 {
+                resolution: interpreter_resolution,
+                selected_basename: interpreter_basename,
+                required_modes: &[0o555],
+                depth: 0,
+                limits,
+                label: "V2 startup interpreter",
+                expected_interpreter: interpreter_path,
+                policy,
+            },
+            &mut counters,
+        )?;
+        let mut dsos = Vec::new();
+        dsos.try_reserve_exact(usize::try_from(limits.maximum_distinct_objects())?)
+            .context("cannot reserve bounded V2 startup DSO vector")?;
+        dsos.push(interpreter);
+        let mut loaded_soname_nodes = Vec::new();
+        loaded_soname_nodes
+            .try_reserve_exact(usize::try_from(limits.maximum_distinct_objects())?)
+            .context("cannot reserve bounded V2 loaded-SONAME table")?;
+        loaded_soname_nodes.push(1);
+        let mut edges = Vec::new();
+        edges
+            .try_reserve_exact(usize::try_from(limits.maximum_dependency_edges())?)
+            .context("cannot reserve bounded V2 startup edge vector")?;
+        let mut queue = VecDeque::new();
+        queue
+            .try_reserve_exact(usize::try_from(limits.maximum_distinct_objects())?)
+            .context("cannot reserve bounded V2 startup FIFO")?;
+        queue.extend([0, 1]);
+        let mut state = StaticStartupDependencyDerivationStateV2 {
+            executable,
+            dsos,
+            loaded_soname_nodes,
+            edges,
+            queue,
+            counters,
+            interpreter_path: try_owned_startup_string(interpreter_path, "V2 interpreter path")?,
+            policy,
+        };
+        let mut basename_index = None;
+        while let Some(requester_index) = state.queue.pop_front() {
+            let needed_count = if requester_index == 0 {
+                state.executable.dynamic.needed_libraries.len()
+            } else {
+                state
+                    .dsos
+                    .get(requester_index - 1)
+                    .context("V2 startup queue left its DSO vector")?
+                    .dynamic
+                    .needed_libraries
+                    .len()
+            };
+            for needed_index in 0..needed_count {
+                self.append_static_startup_dependency_request_v2(
+                    &mut state,
+                    requester_index,
+                    needed_index,
+                    mount_targets,
+                    limits,
+                    &mut basename_index,
+                )?;
+            }
+        }
+        ensure!(
+            u64::try_from(state.dsos.len() + 1)? == state.counters.distinct_objects
+                && u64::try_from(state.edges.len())? == state.counters.dependency_edges
+                && state.dsos.iter().try_fold(state.executable.byte_length, |sum, node| {
+                    sum.checked_add(node.byte_length)
+                }) == Some(state.counters.aggregate_distinct_object_bytes),
+            "V2 static startup dependency counters differ from their ordered result"
+        );
+        let result = StaticStartupDependencyClosureV2 {
+            policy: state.policy,
+            interpreter_path: state.interpreter_path,
+            executable: state.executable,
+            dsos: state.dsos,
+            edges: state.edges,
+        };
+        validate_static_startup_dependency_closure_identity_v2(&result)?;
+        Ok(result)
+    }
+
+    fn append_static_startup_dependency_request_v2<'a>(
+        &'a self,
+        state: &mut StaticStartupDependencyDerivationStateV2,
+        requester_index: usize,
+        needed_index: usize,
+        mount_targets: &[&str],
+        limits: StartupDependencyClosureLimitsV1,
+        basename_index: &mut Option<Vec<(&'a str, usize)>>,
+    ) -> Result<()> {
+        let (needed, requester_resolution, requester_runpath, requester_depth) =
+            if requester_index == 0 {
+                let node = &state.executable;
+                (
+                    node.dynamic.needed_libraries.get(needed_index),
+                    &node.resolution,
+                    &node.dynamic.runpath_components,
+                    node.depth,
+                )
+            } else {
+                let node = state
+                    .dsos
+                    .get(requester_index - 1)
+                    .context("V2 startup requester left its DSO vector")?;
+                (
+                    node.dynamic.needed_libraries.get(needed_index),
+                    &node.resolution,
+                    &node.dynamic.runpath_components,
+                    node.depth,
+                )
+            };
+        let needed = needed.context("V2 startup request left its dynamic projection")?;
+        let dynamic_ordinal = needed.dynamic_ordinal;
+        let requested_name =
+            try_owned_startup_string(&needed.requested_name, "V2 dependency edge name")?;
+        state.counters.dependency_edges = limits.checked_add_dependency_edges(
+            state.counters.dependency_edges,
+            1,
+            "V2 static startup dependency closure",
+        )?;
+        let loaded_selection = state.loaded_soname_nodes.iter().copied().find(|selected| {
+            state.dsos.get(*selected - 1).map(|node| node.dynamic.soname.as_str())
+                == Some(requested_name.as_str())
+        });
+        if let Some(selected) = loaded_selection {
+            state.edges.push(StaticStartupDependencyEdgeV1 {
+                requester: requester_index,
+                dynamic_ordinal,
+                requested_name,
+                resolution_kind: StaticStartupDependencyResolutionKindV1::LoadedSoname,
+                selected,
+            });
+            return Ok(());
+        }
+        let depth = requester_depth
+            .checked_add(1)
+            .context("V2 startup dependency depth overflowed")?;
+        limits.validate_depth(depth, "V2 static startup dependency closure")?;
+        limits.checked_add_distinct_objects(
+            state.counters.distinct_objects,
+            1,
+            "V2 static startup dependency closure",
+        )?;
+        if basename_index.is_none() {
+            *basename_index = Some(self.build_startup_basename_index()?);
+        }
+        let selected_resolution = self.resolve_startup_dependency_search_from_runpath(
+            requester_resolution,
+            requester_runpath,
+            &requested_name,
+            mount_targets,
+            basename_index.as_deref().expect("V2 basename index was just constructed"),
+        )?;
+        let selected_node = self.inspect_startup_dependency_dso_v2(
+            StartupDependencyDsoInspectionV2 {
+                resolution: selected_resolution,
+                selected_basename: &requested_name,
+                required_modes: &[0o444, 0o555],
+                depth,
+                limits,
+                label: "selected V2 startup dependency",
+                expected_interpreter: &state.interpreter_path,
+                policy: state.policy,
+            },
+            &mut state.counters,
+        )?;
+        ensure!(
+            state.loaded_soname_nodes.iter().all(|loaded| {
+                state.dsos.get(*loaded - 1).map(|node| node.dynamic.soname.as_str())
+                    != Some(requested_name.as_str())
+            }),
+            "two distinct V2 startup nodes carry the same SONAME"
+        );
+        let selected = state.dsos.len() + 1;
+        state.dsos.push(selected_node);
+        state.loaded_soname_nodes.push(selected);
+        state.edges.push(StaticStartupDependencyEdgeV1 {
+            requester: requester_index,
+            dynamic_ordinal,
+            requested_name,
+            resolution_kind: StaticStartupDependencyResolutionKindV1::RootfsSearch,
+            selected,
+        });
+        state.queue.push_back(selected);
+        Ok(())
+    }
+
     fn inspect_startup_dependency_dso(
         &self,
         inspection: StartupDependencyDsoInspectionV1<'_>,
@@ -2904,9 +3343,97 @@ impl AuthenticatedPrivateOciRootfsMaterializationV1 {
         })
     }
 
+    fn inspect_startup_dependency_dso_v2(
+        &self,
+        inspection: StartupDependencyDsoInspectionV2<'_>,
+        counters: &mut StaticStartupDependencyCountersV1,
+    ) -> Result<StaticStartupDependencyDsoNodeV2> {
+        let StartupDependencyDsoInspectionV2 {
+            resolution,
+            selected_basename,
+            required_modes,
+            depth,
+            limits,
+            label,
+            expected_interpreter,
+            policy,
+        } = inspection;
+        let byte_length =
+            self.authenticated_regular_byte_length(&resolution, required_modes, label)?;
+        reserve_startup_object(limits, counters, byte_length, label)?;
+        let mut inspected_projection = None;
+        self.with_authenticated_resolved_rootfs_regular_modes(
+            &resolution,
+            required_modes,
+            |file, authenticated_byte_length| {
+                let bytes =
+                    read_complete_materialized_regular(file, authenticated_byte_length, label)?;
+                with_inspected_startup_dependency_amd64_dso_v2(
+                    &bytes,
+                    expected_interpreter,
+                    policy,
+                    |inspected| {
+                        ensure!(
+                            inspected.policy() == policy
+                                && inspected.dynamic().soname() == selected_basename,
+                            "selected startup V2 DSO policy or SONAME differs from its request"
+                        );
+                        inspected_projection = Some((
+                            inspected.sha256(),
+                            own_startup_elf_projection(inspected.common()),
+                            inspected
+                                .interpreter_path()
+                                .map(|path| try_owned_startup_string(path, "DSO PT_INTERP"))
+                                .transpose()?,
+                            own_startup_dynamic_projection_v2(inspected.dynamic())?,
+                        ));
+                        Ok(())
+                    },
+                )
+            },
+        )?;
+        let (sha256, elf, interpreter_path, dynamic) = inspected_projection
+            .context("startup V2 DSO inspection omitted its closed dynamic projection")?;
+        validate_owned_startup_dynamic_projection_v2(&dynamic)?;
+        ensure!(
+            u64::from(interpreter_path.is_some()) == elf.interpreter_segment_count
+                && interpreter_path.as_deref().is_none_or(|path| {
+                    dynamic.soname == "libc.so.6" && path == expected_interpreter
+                }),
+            "owned V2 DSO PT_INTERP differs from its exact parser projection"
+        );
+        validate_owned_startup_runpath_for_resolution(&resolution, &dynamic.runpath_components)?;
+        Ok(StaticStartupDependencyDsoNodeV2 {
+            resolution,
+            byte_length,
+            sha256,
+            elf,
+            interpreter_path,
+            dynamic,
+            depth,
+        })
+    }
+
     fn resolve_startup_dependency_search(
         &self,
         requester: &StaticStartupDependencyNodeV1,
+        requested_name: &str,
+        mount_targets: &[&str],
+        basename_index: &[(&str, usize)],
+    ) -> Result<ResolvedRootfsPathV1> {
+        self.resolve_startup_dependency_search_from_runpath(
+            &requester.resolution,
+            &requester.dynamic.runpath_components,
+            requested_name,
+            mount_targets,
+            basename_index,
+        )
+    }
+
+    fn resolve_startup_dependency_search_from_runpath(
+        &self,
+        requester_resolution: &ResolvedRootfsPathV1,
+        requester_runpath: &[StartupRunpathComponentV1],
         requested_name: &str,
         mount_targets: &[&str],
         basename_index: &[(&str, usize)],
@@ -2916,7 +3443,10 @@ impl AuthenticatedPrivateOciRootfsMaterializationV1 {
             u64::try_from(requested_name.len())?,
             "startup dependency request",
         )?;
-        let search_directories = expanded_startup_search_directories(requester)?;
+        let search_directories = expanded_startup_search_directories_for(
+            requester_resolution,
+            requester_runpath,
+        )?;
         let mut resolved_directories = Vec::new();
         resolved_directories
             .try_reserve_exact(search_directories.len())
@@ -3057,6 +3587,197 @@ impl AuthenticatedPrivateOciRootfsMaterializationV1 {
     }
 
     #[cfg(test)]
+    pub(super) fn test_only_inspect_startup_dso_v2(
+        &self,
+        image_path: &str,
+        selected_basename: &str,
+        expected_interpreter: &str,
+        consume: impl FnOnce(&[u8; SHA256_BYTES], &[(i64, u64)], Option<&str>) -> Result<()>,
+    ) -> Result<()> {
+        let validation = (|| {
+            self.validate_retained_tree(true)?;
+            self.validate_live_entry_ordering()?;
+            let resolution =
+                self.resolve_startup_rootfs_regular_path(image_path, &[], "test physical V2 DSO")?;
+            let node = self
+                .inspect_startup_dependency_dso_v2(
+                    StartupDependencyDsoInspectionV2 {
+                        resolution,
+                        selected_basename,
+                        required_modes: &[0o555],
+                        depth: 0,
+                        limits: startup_dependency_closure_limits_v1(),
+                        label: "test physical V2 DSO",
+                        expected_interpreter,
+                        policy: StartupDependencyPolicyV2::GlibcRelocation,
+                    },
+                    &mut StaticStartupDependencyCountersV1::default(),
+                )
+                .context("physical V2 DSO reader boundary")?;
+            consume(
+                &node.sha256,
+                &node.dynamic.accepted_records,
+                node.interpreter_path.as_deref(),
+            )
+        })();
+        merge_rootfs_revalidation(
+            validation,
+            self.validate_retained_tree(true),
+            "test physical V2 DSO final rootfs revalidation also failed",
+        )
+    }
+
+    #[cfg(test)]
+    fn authenticate_test_static_startup_closure_v2(
+        &self,
+        image_path: &str,
+        mount_targets: &[&str],
+    ) -> Result<StaticStartupDependencyClosureV2> {
+        let validation = (|| {
+            self.validate_retained_tree(true)?;
+            self.validate_live_entry_ordering()?;
+            self.authenticate_startup_loader_exclusions()?;
+            let limits = startup_dependency_closure_limits_v1();
+            let resolution = self.resolve_startup_rootfs_regular_path(
+                image_path,
+                mount_targets,
+                "test V2 startup executable",
+            )?;
+            Self::authenticate_startup_resolution_antichain(
+                &resolution,
+                mount_targets,
+                "test V2 startup executable",
+            )?;
+            let byte_length = self.authenticated_regular_byte_length(
+                &resolution,
+                &[0o555],
+                "test V2 startup executable",
+            )?;
+            let mut counters = StaticStartupDependencyCountersV1::default();
+            reserve_startup_object(limits, &mut counters, byte_length, "test V2 executable")?;
+            let mut linkage = None;
+            self.with_authenticated_resolved_rootfs_regular_modes(
+                &resolution,
+                &[0o555],
+                |file, authenticated_byte_length| {
+                    let bytes = read_complete_materialized_regular(
+                        file,
+                        authenticated_byte_length,
+                        "test V2 startup executable",
+                    )?;
+                    let sha256 = Sha256::digest(&bytes).into();
+                    crate::b4_campaign_executor::amd64_elf_inspection::with_test_inspected_runtime_amd64_elf(
+                        &bytes,
+                        |interpreter_path, common, dynamic| {
+                            linkage = Some((
+                                try_owned_startup_string(interpreter_path, "test V2 interpreter")?,
+                                sha256,
+                                own_startup_elf_projection(common),
+                                own_startup_dynamic_projection(dynamic)?,
+                            ));
+                            Ok(())
+                        },
+                    )
+                },
+            )?;
+            let (interpreter_path, sha256, elf, dynamic) =
+                linkage.context("test V2 executable omitted its closed projection")?;
+            ensure!(dynamic.soname.is_none(), "test V2 executable carries DT_SONAME");
+            validate_owned_startup_dynamic_for_resolution(&resolution, &dynamic)?;
+            let executable = StaticStartupDependencyNodeV1 {
+                resolution,
+                byte_length,
+                sha256,
+                elf,
+                dynamic,
+                depth: 0,
+            };
+            let closure = self.derive_static_startup_dependency_closure_v2(
+                executable,
+                &interpreter_path,
+                mount_targets,
+                limits,
+                counters,
+                StartupDependencyPolicyV2::GlibcRelocation,
+            )?;
+            Ok(closure)
+        })();
+        merge_rootfs_revalidation(
+            validation,
+            self.validate_retained_tree(true),
+            "test V2 startup closure final rootfs revalidation also failed",
+        )
+    }
+
+    #[cfg(test)]
+    pub(super) fn test_only_authenticate_startup_closure_v2_and_cleanup(
+        self,
+        image_path: &str,
+        mount_targets: &[&str],
+        expected_paths: &[&str],
+        expected_edges: &[(usize, u64, &str, usize)],
+    ) -> Result<PrivateOciRootfsAbandonedV1> {
+        let validation = (|| {
+            let closure = self.authenticate_test_static_startup_closure_v2(
+                image_path,
+                mount_targets,
+            )?;
+            ensure!(
+                expected_paths.len() == closure.dsos.len() + 1
+                    && expected_paths.first() == Some(&closure.executable.resolution.canonical_path.as_str())
+                    && expected_paths[1..]
+                        .iter()
+                        .zip(&closure.dsos)
+                        .all(|(expected, node)| *expected == node.resolution.canonical_path),
+                "test V2 closure node order differs from physical FIFO"
+            );
+            ensure!(
+                expected_edges.len() == closure.edges.len()
+                    && expected_edges.iter().zip(&closure.edges).all(|(expected, edge)| {
+                        expected.0 == edge.requester
+                            && expected.1 == edge.dynamic_ordinal
+                            && expected.2 == edge.requested_name
+                            && expected.3 == edge.selected
+                    }),
+                "test V2 closure edges differ from physical FIFO"
+            );
+            Ok(())
+        })();
+        match validation {
+            Ok(()) => self.cleanup().map_err(anyhow::Error::new),
+            Err(primary) => Err(self.fail_after_named_effect(primary)),
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) fn test_only_authenticate_startup_closure_v2_and_retain(
+        self,
+        image_path: &str,
+        compiler_image_path: Option<&str>,
+        mount_targets: &[&str],
+    ) -> Result<AuthenticatedPrivateOciRetainedPhysicalRootfsV1> {
+        let validation = (|| {
+            let launcher = self.authenticate_test_static_startup_closure_v2(
+                image_path,
+                mount_targets,
+            )?;
+            let compiler = compiler_image_path
+                .map(|path| self.authenticate_test_static_startup_closure_v2(path, mount_targets))
+                .transpose()?;
+            Ok(StaticStartupDependencyBaselines::GlibcRelocationV2(
+                StaticStartupDependencyBaselinesV2 { launcher, compiler },
+            ))
+        })();
+        match validation {
+            Ok(static_startup_dependencies) => Ok(AuthenticatedPrivateOciRetainedPhysicalRootfsV1 {
+                rootfs: self,
+                static_startup_dependencies,
+            }),
+            Err(primary) => Err(self.fail_after_named_effect(primary)),
+        }
+    }
+
+    #[cfg(test)]
     pub(super) fn test_only_authenticate_startup_dependency_closure_and_cleanup(
         self,
         expectation: &StartupClosureTestExpectationV1<'_>,
@@ -3076,7 +3797,8 @@ impl AuthenticatedPrivateOciRootfsMaterializationV1 {
             Ok(static_startup_dependencies) => {
                 Ok(AuthenticatedPrivateOciRetainedPhysicalRootfsV1 {
                     rootfs: self,
-                    static_startup_dependencies,
+                    static_startup_dependencies:
+                        StaticStartupDependencyBaselines::InitialV1(static_startup_dependencies),
                 })
             }
             Err(primary) => Err(self.fail_after_named_effect(primary)),
@@ -6018,23 +6740,33 @@ impl AuthenticatedPrivateOciRootfsMaterializationV1 {
 }
 
 impl AuthenticatedPrivateOciRetainedPhysicalRootfsV1 {
+    fn finalize_rederived_startup_baseline(
+        &self,
+        rederived: Result<StaticStartupDependencyBaselines>,
+        mismatch_label: &str,
+        revalidation_label: &str,
+    ) -> Result<()> {
+        let validation = rederived.and_then(|rederived| {
+            ensure!(
+                rederived == self.static_startup_dependencies,
+                "{mismatch_label}"
+            );
+            Ok(())
+        });
+        merge_rootfs_revalidation(
+            validation,
+            self.rootfs.validate_retained_tree(true),
+            revalidation_label,
+        )
+    }
+
     pub(super) fn reauthenticate_static_startup_dependencies(
         &self,
         expectation: &B4PositiveOciImageLayoutV1,
     ) -> Result<()> {
-        let validation = (|| {
-            let rederived = self
-                .rootfs
-                .authenticate_expected_rootfs_identity(expectation)?;
-            ensure!(
-                rederived == self.static_startup_dependencies,
-                "retained static startup dependency closure differs from its rederived identity"
-            );
-            Ok(())
-        })();
-        merge_rootfs_revalidation(
-            validation,
-            self.rootfs.validate_retained_tree(true),
+        self.finalize_rederived_startup_baseline(
+            self.rootfs.authenticate_expected_rootfs_identity(expectation),
+            "retained static startup dependency closure differs from its rederived identity",
             "retained private OCI rootfs final revalidation also failed",
         )
     }
@@ -6044,21 +6776,74 @@ impl AuthenticatedPrivateOciRetainedPhysicalRootfsV1 {
         &self,
         expectation: &StartupClosureTestExpectationV1<'_>,
     ) -> Result<()> {
-        let validation = (|| {
-            let rederived = self
-                .rootfs
-                .authenticate_test_static_startup_dependency_identity(expectation)?;
-            ensure!(
-                rederived == self.static_startup_dependencies,
-                "retained static startup dependency closure differs from its rederived identity"
-            );
-            Ok(())
-        })();
-        merge_rootfs_revalidation(
-            validation,
-            self.rootfs.validate_retained_tree(true),
+        self.finalize_rederived_startup_baseline(
+            self.rootfs
+                .authenticate_test_static_startup_dependency_identity(expectation)
+                .map(StaticStartupDependencyBaselines::InitialV1),
+            "retained static startup dependency closure differs from its rederived identity",
             "retained private OCI rootfs test final revalidation also failed",
         )
+    }
+
+    #[cfg(test)]
+    pub(super) fn test_only_reauthenticate_startup_closure_v2(
+        &self,
+        image_path: &str,
+        compiler_image_path: Option<&str>,
+        mount_targets: &[&str],
+    ) -> Result<()> {
+        let rederived = (|| {
+            let launcher = self.rootfs.authenticate_test_static_startup_closure_v2(
+                image_path,
+                mount_targets,
+            )?;
+            let compiler = compiler_image_path
+                .map(|path| self.rootfs.authenticate_test_static_startup_closure_v2(path, mount_targets))
+                .transpose()?;
+            Ok(StaticStartupDependencyBaselines::GlibcRelocationV2(
+                StaticStartupDependencyBaselinesV2 { launcher, compiler },
+            ))
+        })();
+        self.finalize_rederived_startup_baseline(
+            rederived,
+            "retained V2 startup dependency closure differs from its rederived identity",
+            "retained V2 startup closure final rootfs revalidation also failed",
+        )
+    }
+
+    #[cfg(test)]
+    pub(super) fn test_only_mutate_startup_baseline_v2(
+        &mut self,
+        mutation: TestOnlyRetainedStartupBaselineMutationV2,
+    ) {
+        if mutation == TestOnlyRetainedStartupBaselineMutationV2::Discriminant {
+            self.static_startup_dependencies = StaticStartupDependencyBaselines::InitialV1(
+                StaticStartupDependencyBaselinesV1 { launcher: None, compiler: None },
+            );
+            return;
+        }
+        let StaticStartupDependencyBaselines::GlibcRelocationV2(baselines) =
+            &mut self.static_startup_dependencies
+        else {
+            panic!("V2 test mutation requires a V2 retained baseline");
+        };
+        match mutation {
+            TestOnlyRetainedStartupBaselineMutationV2::LauncherTag => {
+                baselines.launcher.dsos[0].dynamic.accepted_tags[0] =
+                    Amd64ElfAcceptedDynamicTagV2::V1(Amd64ElfAcceptedDynamicTagV1::Null);
+            }
+            TestOnlyRetainedStartupBaselineMutationV2::CompilerTag => {
+                baselines.compiler.as_mut().expect("V2 compiler baseline is present")
+                    .dsos[0].dynamic.accepted_tags[0] =
+                    Amd64ElfAcceptedDynamicTagV2::V1(Amd64ElfAcceptedDynamicTagV1::Null);
+            }
+            TestOnlyRetainedStartupBaselineMutationV2::LauncherEdge => {
+                baselines.launcher.edges.first_mut()
+                    .expect("V2 launcher has a dependency edge")
+                    .requested_name.push_str(".mutated");
+            }
+            TestOnlyRetainedStartupBaselineMutationV2::Discriminant => unreachable!(),
+        }
     }
 
     #[cfg(test)]
@@ -6066,12 +6851,17 @@ impl AuthenticatedPrivateOciRetainedPhysicalRootfsV1 {
         &mut self,
         baseline: TestOnlyRetainedStartupBaselineV1,
     ) {
+        let StaticStartupDependencyBaselines::InitialV1(baselines) =
+            &mut self.static_startup_dependencies
+        else {
+            panic!("V1 test mutation cannot relabel a V2 startup baseline");
+        };
         let closure = match baseline {
             TestOnlyRetainedStartupBaselineV1::Launcher => {
-                &mut self.static_startup_dependencies.launcher
+                &mut baselines.launcher
             }
             TestOnlyRetainedStartupBaselineV1::Compiler => {
-                &mut self.static_startup_dependencies.compiler
+                &mut baselines.compiler
             }
         }
         .as_mut()
@@ -6277,6 +7067,214 @@ fn own_startup_dynamic_projection(
     })
 }
 
+fn own_startup_dynamic_projection_v2(
+    dynamic: &Amd64ElfStartupDynamicInspectionV2<'_>,
+) -> Result<StartupDynamicProjectionV2> {
+    let mut accepted_records = Vec::new();
+    accepted_records
+        .try_reserve_exact(dynamic.accepted_records().len())
+        .context("cannot reserve bounded V2 dynamic-record projection")?;
+    for record in dynamic.accepted_records() {
+        accepted_records.push((record.d_tag(), record.d_un()));
+    }
+    let mut accepted_tags = Vec::new();
+    accepted_tags
+        .try_reserve_exact(dynamic.accepted_tags().len())
+        .context("cannot reserve bounded V2 typed dynamic-tag projection")?;
+    accepted_tags.extend_from_slice(dynamic.accepted_tags());
+    let mut needed_libraries = Vec::new();
+    needed_libraries
+        .try_reserve_exact(dynamic.needed_libraries().len())
+        .context("cannot reserve bounded V2 DT_NEEDED projection")?;
+    for needed in dynamic.needed_libraries() {
+        needed_libraries.push(StartupNeededLibraryV1 {
+            dynamic_ordinal: needed.dynamic_ordinal(),
+            requested_name: try_owned_startup_string(needed.requested_name(), "DT_NEEDED name")?,
+        });
+    }
+    let (runpath_raw, runpath_components) = match dynamic.runpath() {
+        Some(runpath) => {
+            let mut components = Vec::new();
+            components
+                .try_reserve_exact(runpath.components().len())
+                .context("cannot reserve bounded V2 RUNPATH projection")?;
+            for component in runpath.components() {
+                components.push(match component {
+                    Amd64ElfRunpathComponentV1::Absolute(path) => {
+                        StartupRunpathComponentV1::Absolute(try_owned_startup_string(
+                            path,
+                            "absolute RUNPATH component",
+                        )?)
+                    }
+                    Amd64ElfRunpathComponentV1::OriginRelative { raw, suffix } => {
+                        StartupRunpathComponentV1::OriginRelative {
+                            raw: try_owned_startup_string(raw, "ORIGIN RUNPATH component")?,
+                            suffix: try_owned_startup_string(suffix, "ORIGIN RUNPATH suffix")?,
+                        }
+                    }
+                });
+            }
+            (
+                Some(try_owned_startup_string(runpath.raw(), "DT_RUNPATH value")?),
+                components,
+            )
+        }
+        None => (None, Vec::new()),
+    };
+    Ok(StartupDynamicProjectionV2 {
+        accepted_records,
+        accepted_tags,
+        needed_libraries,
+        soname: try_owned_startup_string(dynamic.soname(), "DT_SONAME value")?,
+        runpath_raw,
+        runpath_components,
+    })
+}
+
+fn startup_dynamic_tag_matches_raw_v2(
+    raw_tag: i64,
+    accepted_tag: Amd64ElfAcceptedDynamicTagV2,
+) -> bool {
+    match accepted_tag {
+        Amd64ElfAcceptedDynamicTagV2::V1(tag) => startup_dynamic_tag_matches_raw(raw_tag, tag),
+        Amd64ElfAcceptedDynamicTagV2::RelrSize => raw_tag == 0x23,
+        Amd64ElfAcceptedDynamicTagV2::Relr => raw_tag == 0x24,
+        Amd64ElfAcceptedDynamicTagV2::RelrEntrySize => raw_tag == 0x25,
+        Amd64ElfAcceptedDynamicTagV2::X86_64Plt => raw_tag == 0x7000_0000,
+        Amd64ElfAcceptedDynamicTagV2::X86_64PltSize => raw_tag == 0x7000_0001,
+        Amd64ElfAcceptedDynamicTagV2::X86_64PltEntrySize => raw_tag == 0x7000_0003,
+    }
+}
+
+fn validate_owned_startup_dynamic_projection_v2(
+    dynamic: &StartupDynamicProjectionV2,
+) -> Result<()> {
+    ensure!(
+        dynamic.accepted_records.len() == dynamic.accepted_tags.len()
+            && dynamic
+                .accepted_records
+                .iter()
+                .zip(&dynamic.accepted_tags)
+                .all(|((raw_tag, _), accepted_tag)| {
+                    startup_dynamic_tag_matches_raw_v2(*raw_tag, *accepted_tag)
+                })
+            && dynamic
+                .accepted_records
+                .last()
+                .is_some_and(|(tag, _)| *tag == elf::abi::DT_NULL)
+            && dynamic.accepted_tags.last()
+                == Some(&Amd64ElfAcceptedDynamicTagV2::V1(
+                    Amd64ElfAcceptedDynamicTagV1::Null
+                ))
+            && !dynamic.soname.is_empty()
+            && dynamic
+                .runpath_raw
+                .as_ref()
+                .map_or(0, |raw| raw.split(':').count())
+                == dynamic.runpath_components.len()
+            && dynamic.needed_libraries.iter().all(|needed| {
+                usize::try_from(needed.dynamic_ordinal)
+                    .ok()
+                    .and_then(|index| dynamic.accepted_records.get(index))
+                    .is_some_and(|(tag, _)| *tag == elf::abi::DT_NEEDED)
+            }),
+        "owned V2 DSO omits part of its exact dynamic projection"
+    );
+    Ok(())
+}
+
+#[cfg(test)]
+mod v2_physical_diagnostic_tests {
+    use super::{
+        Amd64ElfAcceptedDynamicTagV1, Amd64ElfAcceptedDynamicTagV2, StartupDependencyPolicyV2,
+        own_startup_dynamic_projection_v2, validate_owned_startup_dynamic_projection_v2,
+        with_inspected_startup_dependency_amd64_dso,
+        with_inspected_startup_dependency_amd64_dso_v2,
+    };
+    use crate::b4_campaign_executor::amd64_elf_inspection::tests::startup_dso_bytes;
+
+    const INTERPRETER: &str = "/lib64/ld-linux-x86-64.so.2";
+
+    fn glibc_relocation_dso() -> Vec<u8> {
+        let mut bytes = startup_dso_bytes(
+            "libm.so.6",
+            &["libplaceholder.so.1"; 6],
+            Some("$ORIGIN/../lib"),
+        );
+        let header_offset = 64 + 56;
+        let dynamic_offset = usize::try_from(u64::from_le_bytes(
+            bytes[header_offset + 8..header_offset + 16]
+                .try_into()
+                .unwrap(),
+        ))
+        .unwrap();
+        let address = 0x0040_0000 + u64::try_from(dynamic_offset).unwrap();
+        for (index, (tag, value)) in [
+            (0x24_i64, address),
+            (0x23, 8),
+            (0x25, 8),
+            (0x7000_0000, address),
+            (0x7000_0001, 16),
+            (0x7000_0003, 16),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let offset = dynamic_offset + (3 + index) * 16;
+            bytes[offset..offset + 8].copy_from_slice(&tag.to_le_bytes());
+            bytes[offset + 8..offset + 16].copy_from_slice(&value.to_le_bytes());
+        }
+        bytes
+    }
+
+    #[test]
+    fn owned_v2_dso_projection_keeps_six_raw_and_typed_tags_without_v1_relabel() {
+        let bytes = glibc_relocation_dso();
+        assert!(with_inspected_startup_dependency_amd64_dso(&bytes, |_| Ok(())).is_err());
+        with_inspected_startup_dependency_amd64_dso_v2(
+            &bytes,
+            INTERPRETER,
+            StartupDependencyPolicyV2::GlibcRelocation,
+            |inspected| {
+                let owned = own_startup_dynamic_projection_v2(inspected.dynamic())?;
+                validate_owned_startup_dynamic_projection_v2(&owned)?;
+                assert_eq!(owned.soname, "libm.so.6");
+                assert!(owned.needed_libraries.is_empty());
+                assert_eq!(owned.runpath_raw.as_deref(), Some("$ORIGIN/../lib"));
+                assert_eq!(owned.runpath_components.len(), 1);
+                assert_eq!(
+                    &owned.accepted_records[3..9]
+                        .iter()
+                        .map(|(tag, value)| (*tag, *value))
+                        .collect::<Vec<_>>(),
+                    &[
+                        (0x24, 0x0040_0000 + u64::try_from(64 + 3 * 56).unwrap()),
+                        (0x23, 8),
+                        (0x25, 8),
+                        (
+                            0x7000_0000,
+                            0x0040_0000 + u64::try_from(64 + 3 * 56).unwrap()
+                        ),
+                        (0x7000_0001, 16),
+                        (0x7000_0003, 16)
+                    ]
+                );
+                assert_eq!(owned.accepted_tags[3], Amd64ElfAcceptedDynamicTagV2::Relr);
+
+                let mut wrong_tag = owned.clone();
+                wrong_tag.accepted_tags[3] =
+                    Amd64ElfAcceptedDynamicTagV2::V1(Amd64ElfAcceptedDynamicTagV1::Debug);
+                assert!(validate_owned_startup_dynamic_projection_v2(&wrong_tag).is_err());
+                let mut omitted_record = owned.clone();
+                omitted_record.accepted_records.remove(3);
+                assert!(validate_owned_startup_dynamic_projection_v2(&omitted_record).is_err());
+                Ok(())
+            },
+        )
+        .unwrap();
+    }
+}
+
 fn try_owned_startup_string(value: &str, label: &str) -> Result<String> {
     let mut owned = String::new();
     owned
@@ -6286,30 +7284,28 @@ fn try_owned_startup_string(value: &str, label: &str) -> Result<String> {
     Ok(owned)
 }
 
-fn expanded_startup_search_directories(
-    requester: &StaticStartupDependencyNodeV1,
+fn expanded_startup_search_directories_for(
+    resolution: &ResolvedRootfsPathV1,
+    runpath_components: &[StartupRunpathComponentV1],
 ) -> Result<Vec<String>> {
     let mut directories = Vec::new();
     directories
         .try_reserve_exact(
-            requester
-                .dynamic
-                .runpath_components
+            runpath_components
                 .len()
                 .checked_add(STARTUP_DEFAULT_SEARCH_DIRECTORIES.len())
                 .context("startup search directory count overflowed")?,
         )
         .context("cannot retain bounded startup search directories")?;
-    for component in &requester.dynamic.runpath_components {
+    for component in runpath_components {
         match component {
             StartupRunpathComponentV1::Absolute(path) => directories.push(path.clone()),
             StartupRunpathComponentV1::OriginRelative { raw, suffix } => {
                 ensure!(
-                    requester.resolution.symbolic_link_chain.is_empty(),
+                    resolution.symbolic_link_chain.is_empty(),
                     "startup object reached through a symbolic link cannot use {raw}"
                 );
-                let (origin, _) = requester
-                    .resolution
+                let (origin, _) = resolution
                     .final_path
                     .rsplit_once('/')
                     .context("startup object final path has no parent")?;
@@ -6345,6 +7341,32 @@ fn validate_owned_startup_dynamic_for_resolution(
             .context("startup object final path has no parent")?;
         let origin = if origin.is_empty() { "/" } else { origin };
         for component in &dynamic.runpath_components {
+            if let StartupRunpathComponentV1::OriginRelative { suffix, .. } = component {
+                normalize_origin_runpath(origin, suffix)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_owned_startup_runpath_for_resolution(
+    resolution: &ResolvedRootfsPathV1,
+    runpath_components: &[StartupRunpathComponentV1],
+) -> Result<()> {
+    let uses_origin = runpath_components
+        .iter()
+        .any(|component| matches!(component, StartupRunpathComponentV1::OriginRelative { .. }));
+    ensure!(
+        !uses_origin || resolution.symbolic_link_chain.is_empty(),
+        "startup object reached through a symbolic link cannot use ORIGIN"
+    );
+    if uses_origin {
+        let (origin, _) = resolution
+            .final_path
+            .rsplit_once('/')
+            .context("startup object final path has no parent")?;
+        let origin = if origin.is_empty() { "/" } else { origin };
+        for component in runpath_components {
             if let StartupRunpathComponentV1::OriginRelative { suffix, .. } = component {
                 normalize_origin_runpath(origin, suffix)?;
             }
@@ -6471,6 +7493,91 @@ fn validate_static_startup_dependency_closure_identity(
     }
     for edge in &closure.edges {
         validate_static_startup_dependency_edge_identity(closure, edge)?;
+    }
+    Ok(())
+}
+
+fn validate_static_startup_dependency_closure_identity_v2(
+    closure: &StaticStartupDependencyClosureV2,
+) -> Result<()> {
+    ensure!(
+        closure.policy == StartupDependencyPolicyV2::GlibcRelocation
+            && !closure.dsos.is_empty()
+            && closure.dsos[0].resolution.canonical_path == closure.interpreter_path
+            && closure.executable.depth == 0
+            && closure.dsos[0].depth == 0,
+        "V2 startup closure policy or seed identity differs"
+    );
+    validate_static_startup_dependency_node_identity(0, &closure.executable)?;
+    for node in &closure.dsos {
+        ensure!(
+            node.byte_length > 0
+                && node.elf.elf_type == Amd64ElfTypeV1::SharedObject
+                && node.elf.dynamic_segment_count == 1
+                && node.elf.gnu_stack_segment_count == 1
+                && node.elf.load_segment_count >= node.elf.executable_load_segment_count
+                && (node.elf.entry_point_is_zero || node.elf.entry_point_in_executable_load)
+                && u64::from(node.interpreter_path.is_some()) == node.elf.interpreter_segment_count
+                && node.interpreter_path.as_deref().is_none_or(|path| {
+                    node.dynamic.soname == "libc.so.6" && path == closure.interpreter_path
+                })
+                && node.resolution.symbolic_link_chain.iter().all(|hop| {
+                    hop.canonical_link_path.starts_with('/')
+                        && !hop.exact_target.is_empty()
+                        && hop.normalized_target_path.starts_with('/')
+                }),
+            "V2 startup DSO differs from its closed ELF or PT_INTERP projection"
+        );
+        validate_owned_startup_dynamic_projection_v2(&node.dynamic)?;
+        validate_owned_startup_runpath_for_resolution(
+            &node.resolution,
+            &node.dynamic.runpath_components,
+        )?;
+        B4ImmutableArtifactRoleV1::Amd64Elf(Amd64ElfPolicyV1::Runtime)
+            .limits()
+            .require_amd64_elf("V2 startup DSO")?
+            .validate_section_header_count(node.elf.section_header_count, "V2 startup DSO")?;
+    }
+    for (index, node) in closure.dsos.iter().enumerate() {
+        ensure!(
+            closure.dsos[..index].iter().all(|earlier| {
+                earlier.dynamic.soname != node.dynamic.soname
+            }),
+            "V2 startup closure repeats a loaded SONAME"
+        );
+    }
+    for edge in &closure.edges {
+        ensure!(
+            edge.selected > 0 && edge.selected <= closure.dsos.len(),
+            "V2 startup edge selection is outside its DSO vector"
+        );
+        let requester_needed = if edge.requester == 0 {
+            &closure.executable.dynamic.needed_libraries
+        } else {
+            &closure
+                .dsos
+                .get(edge.requester - 1)
+                .context("V2 startup edge requester is outside its DSO vector")?
+                .dynamic
+                .needed_libraries
+        };
+        ensure!(
+            closure.dsos[edge.selected - 1].dynamic.soname == edge.requested_name
+                && requester_needed.iter().any(|needed| {
+                    needed.dynamic_ordinal == edge.dynamic_ordinal
+                        && needed.requested_name == edge.requested_name
+                }),
+            "V2 startup edge differs from its requester, selection, or resolution kind"
+        );
+    }
+    for selected in 2..=closure.dsos.len() {
+        ensure!(
+            closure.edges.iter().filter(|edge| {
+                edge.selected == selected
+                    && edge.resolution_kind == StaticStartupDependencyResolutionKindV1::RootfsSearch
+            }).count() == 1,
+            "V2 startup DSO lacks one unique rootfs-search discovery edge"
+        );
     }
     Ok(())
 }

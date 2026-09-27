@@ -12,16 +12,16 @@ mod authenticated_preflight;
 mod create_only;
 mod custody;
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_arch = "x86_64", target_os = "linux", target_env = "musl"))]
 fn compile_only_child_endpoint_exports_are_public(
     _generator: &eip0045_h0_linux_abi::ancillary::GeneratorEndpointV1,
     _worker: &eip0045_h0_linux_abi::ancillary::WorkerEndpointV1,
 ) {
 }
 
-#[cfg(any(test, feature = "b4-finalize-generation-set-handler"))]
+#[cfg(any(test, feature = "b4-finalize-generation-set-handler", feature = "b4-terminal-evidence-export"))]
 mod finalize_generation_set;
-#[cfg(any(test, feature = "b4-finalize-generation-set-handler"))]
+#[cfg(any(test, feature = "b4-finalize-generation-set-handler", feature = "b4-terminal-evidence-export"))]
 mod finalize_generation_set_handler;
 #[cfg(feature = "b4-negative-ancestry-handler")]
 mod generate_negative_ancestry_witness_catalog;
@@ -46,6 +46,10 @@ mod trusted_host_cli {
     use super::{prepare_campaign_precommit, prepare_input_set};
     #[cfg(feature = "b4-finalize-generation-set-handler")]
     use super::finalize_generation_set_handler;
+    #[cfg(feature = "b4-terminal-evidence-export")]
+    use super::publish_terminal_evidence;
+    #[cfg(feature = "b4-negative-ancestry-handler")]
+    use super::generate_negative_ancestry_witness_catalog;
 
     struct Invocation {
         command: String,
@@ -70,7 +74,11 @@ mod trusted_host_cli {
         ensure!(B4_CAMPAIGN_EXECUTOR_COMMANDS.contains(&argv[2]),
             "unknown B4 campaign command");
         ensure!(matches!(argv[2], "prepare-input-set" | "prepare-campaign-precommit"
-            | "finalize-generation-set"),
+            | "finalize-generation-set")
+            || (cfg!(feature = "b4-terminal-evidence-export")
+                && argv[2] == "publish-terminal-evidence")
+            || (cfg!(feature = "b4-negative-ancestry-handler")
+                && argv[2] == "generate-negative-ancestry-witness-catalog"),
             "B4 campaign command is not implemented for trusted-host-v1");
         let names = ["--realization", "--request", "--request-bytes", "--request-sha256",
             "--expected-source-commit", "--expected-source-tree",
@@ -198,6 +206,90 @@ mod trusted_host_cli {
             (15, "finalize-generation-set") => finalize_generation_set_handler::handle_trusted_host_finalize::<15>(&request, &expectations, invocation.preflight_only),
             #[cfg(feature = "b4-finalize-generation-set-handler")]
             (16, "finalize-generation-set") => finalize_generation_set_handler::handle_trusted_host_finalize::<16>(&request, &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-terminal-evidence-export")]
+            (1, "publish-terminal-evidence") => publish_terminal_evidence::handle_trusted_host_publish::<1>(
+                &request, invocation.request_bytes, &invocation.request_sha256,
+                &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-terminal-evidence-export")]
+            (2, "publish-terminal-evidence") => publish_terminal_evidence::handle_trusted_host_publish::<2>(
+                &request, invocation.request_bytes, &invocation.request_sha256,
+                &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-terminal-evidence-export")]
+            (3, "publish-terminal-evidence") => publish_terminal_evidence::handle_trusted_host_publish::<3>(
+                &request, invocation.request_bytes, &invocation.request_sha256,
+                &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-terminal-evidence-export")]
+            (4, "publish-terminal-evidence") => publish_terminal_evidence::handle_trusted_host_publish::<4>(
+                &request, invocation.request_bytes, &invocation.request_sha256,
+                &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-terminal-evidence-export")]
+            (5, "publish-terminal-evidence") => publish_terminal_evidence::handle_trusted_host_publish::<5>(
+                &request, invocation.request_bytes, &invocation.request_sha256,
+                &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-terminal-evidence-export")]
+            (6, "publish-terminal-evidence") => publish_terminal_evidence::handle_trusted_host_publish::<6>(
+                &request, invocation.request_bytes, &invocation.request_sha256,
+                &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-terminal-evidence-export")]
+            (7, "publish-terminal-evidence") => publish_terminal_evidence::handle_trusted_host_publish::<7>(
+                &request, invocation.request_bytes, &invocation.request_sha256,
+                &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-terminal-evidence-export")]
+            (8, "publish-terminal-evidence") => publish_terminal_evidence::handle_trusted_host_publish::<8>(
+                &request, invocation.request_bytes, &invocation.request_sha256,
+                &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-terminal-evidence-export")]
+            (9, "publish-terminal-evidence") => publish_terminal_evidence::handle_trusted_host_publish::<9>(
+                &request, invocation.request_bytes, &invocation.request_sha256,
+                &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-terminal-evidence-export")]
+            (10, "publish-terminal-evidence") => publish_terminal_evidence::handle_trusted_host_publish::<10>(
+                &request, invocation.request_bytes, &invocation.request_sha256,
+                &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-terminal-evidence-export")]
+            (11, "publish-terminal-evidence") => publish_terminal_evidence::handle_trusted_host_publish::<11>(
+                &request, invocation.request_bytes, &invocation.request_sha256,
+                &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-terminal-evidence-export")]
+            (12, "publish-terminal-evidence") => publish_terminal_evidence::handle_trusted_host_publish::<12>(
+                &request, invocation.request_bytes, &invocation.request_sha256,
+                &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-terminal-evidence-export")]
+            (13, "publish-terminal-evidence") => publish_terminal_evidence::handle_trusted_host_publish::<13>(
+                &request, invocation.request_bytes, &invocation.request_sha256,
+                &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-terminal-evidence-export")]
+            (14, "publish-terminal-evidence") => publish_terminal_evidence::handle_trusted_host_publish::<14>(
+                &request, invocation.request_bytes, &invocation.request_sha256,
+                &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-terminal-evidence-export")]
+            (15, "publish-terminal-evidence") => publish_terminal_evidence::handle_trusted_host_publish::<15>(
+                &request, invocation.request_bytes, &invocation.request_sha256,
+                &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-terminal-evidence-export")]
+            (16, "publish-terminal-evidence") => publish_terminal_evidence::handle_trusted_host_publish::<16>(
+                &request, invocation.request_bytes, &invocation.request_sha256,
+                &expectations, invocation.preflight_only),
+            #[cfg(feature = "b4-negative-ancestry-handler")]
+            (_, "generate-negative-ancestry-witness-catalog") => match request.prior_roots.len() {
+                1 => generate_negative_ancestry_witness_catalog::trusted_host::handle::<1>(&request, invocation.request_bytes, &invocation.request_sha256, &expectations, invocation.preflight_only),
+                2 => generate_negative_ancestry_witness_catalog::trusted_host::handle::<2>(&request, invocation.request_bytes, &invocation.request_sha256, &expectations, invocation.preflight_only),
+                3 => generate_negative_ancestry_witness_catalog::trusted_host::handle::<3>(&request, invocation.request_bytes, &invocation.request_sha256, &expectations, invocation.preflight_only),
+                4 => generate_negative_ancestry_witness_catalog::trusted_host::handle::<4>(&request, invocation.request_bytes, &invocation.request_sha256, &expectations, invocation.preflight_only),
+                5 => generate_negative_ancestry_witness_catalog::trusted_host::handle::<5>(&request, invocation.request_bytes, &invocation.request_sha256, &expectations, invocation.preflight_only),
+                6 => generate_negative_ancestry_witness_catalog::trusted_host::handle::<6>(&request, invocation.request_bytes, &invocation.request_sha256, &expectations, invocation.preflight_only),
+                7 => generate_negative_ancestry_witness_catalog::trusted_host::handle::<7>(&request, invocation.request_bytes, &invocation.request_sha256, &expectations, invocation.preflight_only),
+                8 => generate_negative_ancestry_witness_catalog::trusted_host::handle::<8>(&request, invocation.request_bytes, &invocation.request_sha256, &expectations, invocation.preflight_only),
+                9 => generate_negative_ancestry_witness_catalog::trusted_host::handle::<9>(&request, invocation.request_bytes, &invocation.request_sha256, &expectations, invocation.preflight_only),
+                10 => generate_negative_ancestry_witness_catalog::trusted_host::handle::<10>(&request, invocation.request_bytes, &invocation.request_sha256, &expectations, invocation.preflight_only),
+                11 => generate_negative_ancestry_witness_catalog::trusted_host::handle::<11>(&request, invocation.request_bytes, &invocation.request_sha256, &expectations, invocation.preflight_only),
+                12 => generate_negative_ancestry_witness_catalog::trusted_host::handle::<12>(&request, invocation.request_bytes, &invocation.request_sha256, &expectations, invocation.preflight_only),
+                13 => generate_negative_ancestry_witness_catalog::trusted_host::handle::<13>(&request, invocation.request_bytes, &invocation.request_sha256, &expectations, invocation.preflight_only),
+                14 => generate_negative_ancestry_witness_catalog::trusted_host::handle::<14>(&request, invocation.request_bytes, &invocation.request_sha256, &expectations, invocation.preflight_only),
+                15 => generate_negative_ancestry_witness_catalog::trusted_host::handle::<15>(&request, invocation.request_bytes, &invocation.request_sha256, &expectations, invocation.preflight_only),
+                16 => generate_negative_ancestry_witness_catalog::trusted_host::handle::<16>(&request, invocation.request_bytes, &invocation.request_sha256, &expectations, invocation.preflight_only),
+                _ => bail!("trusted-host ancestry request has unsupported root count"),
+            },
             _ => bail!("trusted-host request has unsupported root count or command"),
         };
         let postcheck = recheck(&invocation.request_path, &pinned,
@@ -229,7 +321,7 @@ mod trusted_host_cli {
         }
 
         #[test]
-        fn closed_argv_has_three_real_commands_and_each_external_anchor() {
+        fn closed_argv_has_enabled_real_commands_and_each_external_anchor() {
             let base = valid();
             assert!(parse(&base).is_ok());
             let mut precommit = base.clone();
@@ -238,6 +330,14 @@ mod trusted_host_cli {
             let mut finalizer = base.clone();
             finalizer[2] = "finalize-generation-set".into();
             assert!(parse(&finalizer).is_ok());
+            let mut terminal = base.clone();
+            terminal[2] = "publish-terminal-evidence".into();
+            assert_eq!(parse(&terminal).is_ok(),
+                cfg!(feature = "b4-terminal-evidence-export"));
+            let mut ancestry = base.clone();
+            ancestry[2] = "generate-negative-ancestry-witness-catalog".into();
+            assert_eq!(parse(&ancestry).is_ok(),
+                cfg!(feature = "b4-negative-ancestry-handler"));
             for position in [12, 14, 16] {
                 let mut changed = base.clone();
                 changed[position] = "0".into();
@@ -2766,7 +2866,10 @@ mod tests {
             "Linux ABI package identity must have exactly one dependency binding"
         );
         let (scope, dependency_key, effective_package, linux_abi_binding) = &linux_abi_bindings[0];
-        assert_eq!(scope, r#"target.cfg(target_os = "linux").dependencies"#);
+        assert_eq!(
+            scope,
+            r#"target.cfg(all(target_arch = "x86_64", target_os = "linux", target_env = "musl")).dependencies"#
+        );
         assert_eq!(dependency_key, canonical_linux_abi);
         assert_eq!(effective_package, canonical_linux_abi);
         let linux_abi_binding = linux_abi_binding
@@ -3200,7 +3303,7 @@ mod tests {
         assert_visibility_v1(&probe.vis, "", "compile-only endpoint probe");
         assert_exact_non_doc_attributes_v1(
             &probe.attrs,
-            "#[cfg(target_os = \"linux\")]",
+            "#[cfg(all(target_arch = \"x86_64\", target_os = \"linux\", target_env = \"musl\"))]",
             "compile-only endpoint probe",
         );
         assert_exact_function_v1(

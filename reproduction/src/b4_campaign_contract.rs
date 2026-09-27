@@ -36,6 +36,8 @@ use crate::{
 };
 
 mod terminal_evidence_campaign_receipt;
+#[cfg(feature = "positive-gate")]
+mod trusted_host_terminal_evidence_campaign_receipt;
 pub use terminal_evidence_campaign_receipt::{
     b4_publish_terminal_evidence_canonical_argv_sha256, validate_b4_campaign_command_invocation,
     validate_b4_publish_terminal_evidence_invocation, B4TerminalEvidenceCampaignReceiptInputsV1,
@@ -43,6 +45,15 @@ pub use terminal_evidence_campaign_receipt::{
     B4_TERMINAL_EVIDENCE_CAMPAIGN_RECEIPT_FORMAT,
     B4_TERMINAL_EVIDENCE_CAMPAIGN_RECEIPT_FORMAT_VERSION,
     MAX_TERMINAL_EVIDENCE_CAMPAIGN_RECEIPT_BYTES,
+};
+#[cfg(feature = "positive-gate")]
+pub use trusted_host_terminal_evidence_campaign_receipt::{
+    b4_trusted_host_publish_terminal_evidence_canonical_argv_sha256,
+    B4TrustedHostTerminalEvidenceCampaignReceiptInputsV1,
+    Eip0045B4TrustedHostTerminalEvidenceCampaignReceiptV1,
+    B4_TRUSTED_HOST_PUBLISH_TERMINAL_EVIDENCE_CANONICAL_ARGV_FORMAT,
+    B4_TRUSTED_HOST_TERMINAL_EVIDENCE_CAMPAIGN_RECEIPT_FORMAT,
+    MAX_TRUSTED_HOST_TERMINAL_EVIDENCE_CAMPAIGN_RECEIPT_BYTES,
 };
 
 /// Exact verifier-contract format discriminator.
@@ -321,6 +332,205 @@ mod trusted_host_request_tests {
         assert!(selected.validate_contract().is_err());
         selected = finalizer_request();
         selected.command = "prepare-input-set".to_owned();
+        assert!(selected.validate_contract().is_err());
+    }
+
+    fn terminal_publish_request() -> B4TrustedHostRequestV1 {
+        let mut selected = finalizer_request();
+        selected.command = "publish-terminal-evidence".to_owned();
+        for (name, path) in [
+            ("positiveGenerationSet", "sources/positive-generation-set.json"),
+            ("guestElf", "sources/guest.elf"),
+        ] {
+            selected.sources.insert(name.to_owned(), B4TrustedHostArtifactLocatorV1 {
+                root_index: 0, relative_path: path.to_owned(),
+            });
+        }
+        selected
+    }
+
+    fn negative_ancestry_request() -> B4TrustedHostRequestV1 {
+        let mut selected = terminal_publish_request();
+        selected.command = "generate-negative-ancestry-witness-catalog".to_owned();
+        for (name, path) in [
+            ("profileManifest", "sources/profile-manifest.json"),
+            ("profileAlgorithm", "sources/profile-algorithm.bin"),
+            ("profileConstants", "sources/profile-constants.bin"),
+            ("alternateGuestElf", "sources/alternate-guest.elf"),
+        ] {
+            selected.sources.insert(name.to_owned(), B4TrustedHostArtifactLocatorV1 {
+                root_index: 0, relative_path: path.to_owned(),
+            });
+        }
+        selected
+    }
+
+    #[test]
+    fn trusted_host_negative_ancestry_accepts_exact_fixed_and_contiguous_nested_sources() {
+        let mut selected = negative_ancestry_request();
+        assert_eq!(selected.sources.len(), 116);
+        assert!(selected.validate_contract().is_ok());
+        let wire = crate::canonical::canonical_json_bytes(
+            &serde_json::to_value(&selected).unwrap()).unwrap();
+        assert!(B4TrustedHostRequestV1::from_canonical_jcs(&wire).is_ok());
+        selected.prior_roots = (0..16).map(|i| format!("/campaign/retained-{i}")).collect();
+        selected.build_evidence_root_index = 15;
+        for index in 0..2 {
+            selected.sources.insert(format!("nestedInput{index}"),
+                B4TrustedHostArtifactLocatorV1 {
+                    root_index: 15, relative_path: format!("sources/nested-{index}.bin"),
+                });
+        }
+        assert!(selected.validate_contract().is_ok());
+        let wire = crate::canonical::canonical_json_bytes(
+            &serde_json::to_value(&selected).unwrap()).unwrap();
+        assert!(B4TrustedHostRequestV1::from_canonical_jcs(&wire).is_ok());
+    }
+
+    #[test]
+    fn trusted_host_negative_ancestry_rejects_isolated_inventory_faults() {
+        for missing in ["positiveGenerationSet", "profileManifest", "profileAlgorithm",
+            "profileConstants", "guestElf", "alternateGuestElf", "case0Manifest",
+            "case10Aux3"] {
+            let mut selected = negative_ancestry_request();
+            selected.sources.remove(missing);
+            assert!(selected.validate_contract().is_err(), "accepted missing {missing}");
+            let wire = crate::canonical::canonical_json_bytes(
+                &serde_json::to_value(&selected).unwrap()).unwrap();
+            assert!(B4TrustedHostRequestV1::from_canonical_jcs(&wire).is_err(),
+                "schema accepted missing {missing}");
+        }
+        let mut selected = negative_ancestry_request();
+        selected.sources.insert("extra".to_owned(), B4TrustedHostArtifactLocatorV1 {
+            root_index: 0, relative_path: "sources/extra.bin".to_owned(),
+        });
+        assert!(selected.validate_contract().is_err());
+        let wire = crate::canonical::canonical_json_bytes(
+            &serde_json::to_value(&selected).unwrap()).unwrap();
+        assert!(B4TrustedHostRequestV1::from_canonical_jcs(&wire).is_err());
+        let mut selected = negative_ancestry_request();
+        selected.sources.insert("nestedInput1".to_owned(), B4TrustedHostArtifactLocatorV1 {
+            root_index: 0, relative_path: "sources/nested-1.bin".to_owned(),
+        });
+        assert!(selected.validate_contract().is_err());
+        let mut selected = negative_ancestry_request();
+        selected.sources.insert("nestedInput00".to_owned(), B4TrustedHostArtifactLocatorV1 {
+            root_index: 0, relative_path: "sources/nested-00.bin".to_owned(),
+        });
+        assert!(selected.validate_contract().is_err());
+    }
+
+    #[test]
+    fn trusted_host_negative_ancestry_caps_contiguous_nested_inventory_at_4096() {
+        let mut selected = negative_ancestry_request();
+        for index in 0..4096 {
+            selected.sources.insert(format!("nestedInput{index}"),
+                B4TrustedHostArtifactLocatorV1 {
+                    root_index: 0, relative_path: format!("sources/nested-{index}.bin"),
+                });
+        }
+        assert!(selected.validate_contract().is_ok());
+        selected.sources.insert("nestedInput4096".to_owned(),
+            B4TrustedHostArtifactLocatorV1 {
+                root_index: 0, relative_path: "sources/nested-4096.bin".to_owned(),
+            });
+        assert!(selected.validate_contract().unwrap_err().to_string()
+            .contains("nested-input locator count exceeds the handler bound"));
+    }
+
+    #[test]
+    fn trusted_host_negative_ancestry_rejects_isolated_root_path_and_constructor_faults() {
+        let mut selected = negative_ancestry_request();
+        selected.sources.get_mut("alternateGuestElf").unwrap().root_index = 1;
+        assert!(selected.validate_contract().is_err());
+        let mut selected = negative_ancestry_request();
+        selected.sources.get_mut("profileManifest").unwrap().relative_path =
+            "../profile-manifest.json".to_owned();
+        assert!(selected.validate_contract().is_err());
+        let mut selected = negative_ancestry_request();
+        selected.prior_roots[0] = "/campaign/retained-1/../other".to_owned();
+        assert!(selected.validate_contract().is_err());
+        let mut selected = negative_ancestry_request();
+        selected.build_evidence_root_index = 1;
+        assert!(selected.validate_contract().is_err());
+        let mut selected = negative_ancestry_request();
+        selected.prior_roots = (0..17).map(|i| format!("/campaign/retained-{i}")).collect();
+        assert!(selected.validate_contract().is_err());
+        let mut selected = negative_ancestry_request();
+        selected.input_set_request_byte_length = Some(71);
+        assert!(selected.validate_contract().is_err());
+        let mut selected = negative_ancestry_request();
+        selected.guest_elf_path = Some("sources/guest.elf".to_owned());
+        assert!(selected.validate_contract().is_err());
+        let mut selected = negative_ancestry_request();
+        selected.command = "publish-terminal-evidence".to_owned();
+        assert!(selected.validate_contract().is_err());
+    }
+
+    #[test]
+    fn trusted_host_terminal_publish_accepts_exact_fixed_and_contiguous_nested_sources() {
+        let mut selected = terminal_publish_request();
+        assert_eq!(selected.sources.len(), 112);
+        assert!(selected.validate_contract().is_ok());
+        let wire = crate::canonical::canonical_json_bytes(
+            &serde_json::to_value(&selected).unwrap()).unwrap();
+        assert!(B4TrustedHostRequestV1::from_canonical_jcs(&wire).is_ok());
+        selected.prior_roots = (0..16).map(|i| format!("/campaign/retained-{i}")).collect();
+        selected.build_evidence_root_index = 15;
+        for index in 0..2 {
+            selected.sources.insert(format!("nestedInput{index}"),
+                B4TrustedHostArtifactLocatorV1 {
+                    root_index: 15, relative_path: format!("sources/nested-{index}.bin"),
+                });
+        }
+        assert!(selected.validate_contract().is_ok());
+        let wire = crate::canonical::canonical_json_bytes(
+            &serde_json::to_value(&selected).unwrap()).unwrap();
+        assert!(B4TrustedHostRequestV1::from_canonical_jcs(&wire).is_ok());
+    }
+
+    #[test]
+    fn trusted_host_terminal_publish_rejects_isolated_locator_inventory_faults() {
+        for missing in ["positiveGenerationSet", "guestElf", "case0Manifest", "case10Aux3"] {
+            let mut selected = terminal_publish_request();
+            selected.sources.remove(missing);
+            assert!(selected.validate_contract().is_err(), "accepted missing {missing}");
+        }
+        let mut selected = terminal_publish_request();
+        selected.sources.insert("extra".to_owned(), B4TrustedHostArtifactLocatorV1 {
+            root_index: 0, relative_path: "sources/extra.bin".to_owned(),
+        });
+        assert!(selected.validate_contract().is_err());
+        let mut selected = terminal_publish_request();
+        selected.sources.insert("nestedInput1".to_owned(), B4TrustedHostArtifactLocatorV1 {
+            root_index: 0, relative_path: "sources/nested-1.bin".to_owned(),
+        });
+        assert!(selected.validate_contract().is_err());
+    }
+
+    #[test]
+    fn trusted_host_terminal_publish_rejects_isolated_root_path_and_constructor_faults() {
+        let mut selected = terminal_publish_request();
+        selected.sources.get_mut("guestElf").unwrap().root_index = 1;
+        assert!(selected.validate_contract().is_err());
+        let mut selected = terminal_publish_request();
+        selected.sources.get_mut("positiveGenerationSet").unwrap().relative_path =
+            "../positive-generation-set.json".to_owned();
+        assert!(selected.validate_contract().is_err());
+        let mut selected = terminal_publish_request();
+        selected.prior_roots[0] = "/campaign/retained-1/../other".to_owned();
+        assert!(selected.validate_contract().is_err());
+        let mut selected = terminal_publish_request();
+        selected.build_evidence_root_index = 1;
+        assert!(selected.validate_contract().is_err());
+        let mut selected = terminal_publish_request();
+        selected.prior_roots = (0..17).map(|i| format!("/campaign/retained-{i}")).collect();
+        assert!(selected.validate_contract().is_err());
+        let mut selected = terminal_publish_request();
+        selected.input_set_request_byte_length = Some(71);
+        assert!(selected.validate_contract().is_err());
+        let mut selected = terminal_publish_request();
+        selected.guest_elf_path = Some("sources/guest.elf".to_owned());
         assert!(selected.validate_contract().is_err());
     }
 }
@@ -3046,6 +3256,122 @@ impl CanonicalContract for Eip0045B4TrustedHostCampaignPrecommitV1 {
     }
 }
 
+/// Opaque semantic authority for the separately discriminated trusted-host
+/// precommit. Physical root, build, and running-executable custody remain
+/// obligations of the descriptor-rooted campaign handler.
+///
+/// This type has no conversion to either historical campaign authority.
+///
+/// ```compile_fail
+/// use eip_0045_reproduction::b4_campaign_contract::{
+///     B4CampaignPrecommitAuthorityV1, B4TrustedHostCampaignPrecommitAuthorityV1,
+/// };
+/// fn downgrade(value: B4TrustedHostCampaignPrecommitAuthorityV1) -> B4CampaignPrecommitAuthorityV1 {
+///     value.into()
+/// }
+/// ```
+///
+/// ```compile_fail
+/// use eip_0045_reproduction::b4_campaign_contract::{
+///     B4CampaignPrecommitAuthorityV2, B4TrustedHostCampaignPrecommitAuthorityV1,
+/// };
+/// fn relabel(value: B4TrustedHostCampaignPrecommitAuthorityV1) -> B4CampaignPrecommitAuthorityV2 {
+///     value.into()
+/// }
+/// ```
+///
+/// ```compile_fail
+/// use eip_0045_reproduction::b4_campaign_contract::B4TrustedHostCampaignPrecommitAuthorityV1;
+/// fn require_clone<T: Clone>() {}
+/// require_clone::<B4TrustedHostCampaignPrecommitAuthorityV1>();
+/// ```
+#[cfg(feature = "positive-gate")]
+pub struct B4TrustedHostCampaignPrecommitAuthorityV1 {
+    inner: B4CampaignPrecommitAuthorityV2,
+    envelope: Eip0045B4TrustedHostCampaignPrecommitV1,
+    envelope_identity: B4ContractArtifactIdentityV1,
+    request_identity: B4ContractArtifactIdentityV1,
+    artifact_paths: BTreeSet<String>,
+}
+
+#[cfg(feature = "positive-gate")]
+impl B4TrustedHostCampaignPrecommitAuthorityV1 {
+    /// Bind a V2-derived precommit to exact retained trusted-host request and
+    /// completion bytes, caller-held pins, and a distinct output path.
+    ///
+    /// This is a semantic constructor. The caller must separately establish
+    /// descriptor-rooted custody and the identity of the running executable.
+    #[allow(clippy::too_many_arguments)]
+    pub fn from_external_closure(
+        positive_precommit: B4PositivePrecommitAuthorityV2,
+        verifier_authority: &B4VerifierContractAuthorityV1,
+        external: B4CampaignPrecommitExternalInputsV1<'_>,
+        completion: crate::b4_positive_input_set::B4ValidatedTrustedHostInputSetCompletionV1,
+        completion_source: B4ExternalArtifactV1<'_>,
+        request_source: B4ExternalArtifactV1<'_>,
+        expected_request_byte_length: u64,
+        expected_request_sha256: &str,
+        expected_build_evidence_root_sha256: &str,
+    ) -> Result<Self> {
+        let request_identity = request_source.identity(B4ContractArtifactEncodingV1::Rfc8785Jcs,
+            65536, "trusted-host precommit request")?;
+        ensure!(request_identity.byte_length == expected_request_byte_length
+            && request_identity.sha256 == expected_request_sha256,
+            "trusted-host precommit request differs from its external pin");
+        let request = B4TrustedHostRequestV1::from_canonical_jcs(request_source.bytes)?;
+        ensure!(request.command == "prepare-campaign-precommit"
+            && request.input_set_request_byte_length == Some(completion.request_byte_length())
+            && request.input_set_request_sha256.as_deref() == Some(completion.request_sha256()),
+            "trusted-host precommit request does not bind the validated input-set request");
+        ensure!(completion.build_evidence_root_sha256() == expected_build_evidence_root_sha256,
+            "trusted-host completion differs from the external build-evidence pin");
+        let (inner, envelope) = construct_trusted_host_campaign_precommit(
+            positive_precommit, verifier_authority, external, completion, completion_source,
+            expected_request_byte_length, expected_request_sha256)?;
+        ensure!(envelope.build_evidence_root_sha256 == expected_build_evidence_root_sha256,
+            "trusted-host precommit envelope differs from the external build-evidence pin");
+        let relative_phase = request.outer_final_root
+            .strip_prefix(&format!("{}/", request.campaign_root.trim_end_matches('/')))
+            .context("trusted-host precommit output is outside its campaign root")?;
+        let envelope_path = format!("{relative_phase}/trusted-host/campaign-precommit.json");
+        let envelope_bytes = envelope.to_canonical_jcs()?;
+        let envelope_identity = B4ContractArtifactIdentityV1::from_bytes(&envelope_path,
+            B4ContractArtifactEncodingV1::Rfc8785Jcs, &envelope_bytes)?;
+        let artifact_paths = require_path_antichain(inner.artifact_paths().iter().map(String::as_str)
+            .chain([request_identity.path.as_str(), envelope_identity.path.as_str()]),
+            "trusted-host campaign precommit closure")?;
+        Ok(Self { inner, envelope, envelope_identity, request_identity, artifact_paths })
+    }
+
+    /// The complete trusted-host envelope, including completion and request pins.
+    #[must_use]
+    pub fn envelope(&self) -> &Eip0045B4TrustedHostCampaignPrecommitV1 { &self.envelope }
+
+    /// The inner historical wire is data within this distinct authority.
+    #[must_use]
+    pub fn inner_precommit(&self) -> &Eip0045B4CampaignPrecommitV1 { self.inner.precommit() }
+
+    /// Canonical bytes of the complete trusted-host envelope.
+    pub fn to_canonical_precommit_jcs(&self) -> Result<Vec<u8>> { self.envelope.to_canonical_jcs() }
+
+    /// Require exact retained envelope bytes; an inner V1 precommit is rejected.
+    pub fn verify_candidate_jcs(&self, source: &[u8]) -> Result<()> {
+        let candidate = Eip0045B4TrustedHostCampaignPrecommitV1::from_canonical_jcs(source)?;
+        ensure!(candidate == self.envelope && source == self.to_canonical_precommit_jcs()?,
+            "candidate trusted-host precommit differs from its authenticated authority");
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn envelope_identity(&self) -> &B4ContractArtifactIdentityV1 { &self.envelope_identity }
+
+    #[must_use]
+    pub fn request_identity(&self) -> &B4ContractArtifactIdentityV1 { &self.request_identity }
+
+    #[must_use]
+    pub fn artifact_paths(&self) -> &BTreeSet<String> { &self.artifact_paths }
+}
+
 /// Bind the exact retained completion bytes to the already validated semantic token.
 #[cfg(feature = "positive-gate")]
 fn bind_trusted_host_completion_source(
@@ -3116,6 +3442,22 @@ pub fn derive_b4_trusted_host_campaign_precommit_jcs_v1(
     precommit_request_byte_length: u64,
     precommit_request_sha256: &str,
 ) -> Result<Vec<u8>> {
+    let (_, envelope) = construct_trusted_host_campaign_precommit(positive_precommit,
+        verifier_authority, external, completion, completion_source,
+        precommit_request_byte_length, precommit_request_sha256)?;
+    envelope.to_canonical_jcs()
+}
+
+#[cfg(feature = "positive-gate")]
+fn construct_trusted_host_campaign_precommit(
+    positive_precommit: B4PositivePrecommitAuthorityV2,
+    verifier_authority: &B4VerifierContractAuthorityV1,
+    external: B4CampaignPrecommitExternalInputsV1<'_>,
+    completion: crate::b4_positive_input_set::B4ValidatedTrustedHostInputSetCompletionV1,
+    completion_source: B4ExternalArtifactV1<'_>,
+    precommit_request_byte_length: u64,
+    precommit_request_sha256: &str,
+) -> Result<(B4CampaignPrecommitAuthorityV2, Eip0045B4TrustedHostCampaignPrecommitV1)> {
     ensure!(completion.input_set_identity() == &positive_precommit.input_set,
         "trusted-host completion binds another input set");
     let completion_identity = bind_trusted_host_completion_source(&completion, completion_source)?;
@@ -3123,6 +3465,11 @@ pub fn derive_b4_trusted_host_campaign_precommit_jcs_v1(
         positive_precommit, verifier_authority, external, completion.completion_path())?;
     ensure!(&checked.expected.campaign_executor.artifact == completion.executor_artifact(),
         "trusted-host completion binds another running executor");
+    let inner = B4CampaignPrecommitAuthorityV2 {
+        expected: checked.expected,
+        verifier_authority: checked.verifier_authority,
+        artifact_paths: checked.artifact_paths,
+    };
     let envelope = Eip0045B4TrustedHostCampaignPrecommitV1 {
         format: "Eip0045B4TrustedHostCampaignPrecommitV1".to_owned(),
         format_version: 1,
@@ -3131,9 +3478,10 @@ pub fn derive_b4_trusted_host_campaign_precommit_jcs_v1(
         request_byte_length: precommit_request_byte_length,
         request_sha256: precommit_request_sha256.to_owned(),
         build_evidence_root_sha256: completion.build_evidence_root_sha256().to_owned(),
-        inner_precommit: checked.expected,
+        inner_precommit: inner.precommit().clone(),
     };
-    envelope.to_canonical_jcs()
+    envelope.to_canonical_jcs()?;
+    Ok((inner, envelope))
 }
 
 trait CanonicalContract: Serialize + DeserializeOwned {
@@ -3208,11 +3556,15 @@ impl CanonicalContract for B4TrustedHostRequestV1 {
         ensure!(self.format == "Eip0045B4TrustedHostRequestV1" && self.format_version == 1
             && self.realization == "trusted-host-v1", "wrong trusted-host request discriminator");
         ensure!(matches!(self.command.as_str(), "prepare-input-set" | "prepare-campaign-precommit"
-            | "finalize-generation-set"), "trusted-host request command is not implemented");
+            | "finalize-generation-set" | "publish-terminal-evidence"
+            | "generate-negative-ancestry-witness-catalog"),
+            "trusted-host request command is not implemented");
         Self::validate_absolute_source_path(&self.campaign_root, "campaign root")?;
         Self::validate_absolute_source_path(&self.outer_final_root, "final root")?;
         Self::validate_absolute_source_path(&self.configured_executor_artifact, "executor artifact")?;
-        let root_limit = if self.command == "finalize-generation-set" { 16 } else { 2 };
+        let root_limit = if matches!(self.command.as_str(), "finalize-generation-set"
+            | "publish-terminal-evidence" | "generate-negative-ancestry-witness-catalog")
+            { 16 } else { 2 };
         ensure!((1..=root_limit).contains(&self.prior_roots.len())
             && self.build_evidence_root_index < self.prior_roots.len(),
             "trusted-host root count or build-root index is invalid");
@@ -3250,7 +3602,7 @@ impl CanonicalContract for B4TrustedHostRequestV1 {
                 "seccomp0", "seccomp1", "seccomp2", "seccomp3"] { required.push(name); }
             ensure!(self.sources.len() == required.len() && required.iter().all(|key| self.sources.contains_key(*key)),
                 "trusted-host precommit locator inventory is not closed");
-        } else {
+        } else if self.command == "finalize-generation-set" {
             ensure!(self.input_set_path.is_none() && self.guest_elf_path.is_none()
                 && self.proof_generator_path.is_none()
                 && self.input_set_request_byte_length.is_none()
@@ -3280,6 +3632,43 @@ impl CanonicalContract for B4TrustedHostRequestV1 {
             }
             ensure!(self.sources.keys().cloned().collect::<BTreeSet<_>>() == required,
                 "trusted-host finalize-generation-set locator inventory is not closed");
+        } else {
+            let negative_ancestry = self.command == "generate-negative-ancestry-witness-catalog";
+            ensure!(self.input_set_path.is_none() && self.guest_elf_path.is_none()
+                && self.proof_generator_path.is_none()
+                && self.input_set_request_byte_length.is_none()
+                && self.input_set_request_sha256.is_none(),
+                "terminal or negative-ancestry request carries another command's constructor fields");
+            let nested = self.sources.keys().filter(|key| key.starts_with("nestedInput")).count();
+            ensure!(nested <= 4096,
+                "trusted-host terminal nested-input locator count exceeds the handler bound");
+            let mut required = BTreeSet::from([
+                "campaignPrecommit".to_owned(), "precommitRequest".to_owned(),
+                "inputSet".to_owned(), "inputSetCompletion".to_owned(),
+                "proofGenerator".to_owned(), "positiveGenerationSet".to_owned(),
+                "guestElf".to_owned(),
+            ]);
+            if negative_ancestry {
+                for name in ["profileManifest", "profileAlgorithm", "profileConstants",
+                    "alternateGuestElf"] { required.insert(name.to_owned()); }
+            }
+            for i in 0..4 { required.insert(format!("runnerProfile{i}")); }
+            for i in 0..2 { required.insert(format!("validatorDescriptor{i}")); }
+            for i in 0..nested { required.insert(format!("nestedInput{i}")); }
+            for case in 0..11 {
+                required.insert(format!("case{case}Manifest"));
+                let primary_count = if case < 8 { 7 } else { 8 };
+                for primary in 0..primary_count {
+                    required.insert(format!("case{case}Primary{primary}"));
+                }
+                if case >= 8 {
+                    for auxiliary in 0..[2, 2, 4][case - 8] {
+                        required.insert(format!("case{case}Aux{auxiliary}"));
+                    }
+                }
+            }
+            ensure!(self.sources.keys().cloned().collect::<BTreeSet<_>>() == required,
+                "trusted-host terminal or negative-ancestry locator inventory is not closed");
         }
         for locator in self.sources.values() {
             ensure!(locator.root_index < self.prior_roots.len(), "trusted-host locator root index is invalid");
@@ -4494,6 +4883,12 @@ pub(crate) mod test_support {
     #[cfg(feature = "recursive-ancestry")]
     pub(crate) struct TerminalLineageConstructorTestSupportV2 {
         pub(crate) campaign_precommit_authority: B4CampaignPrecommitAuthorityV1,
+        pub(crate) trusted_host_campaign_precommit_authority:
+            B4TrustedHostCampaignPrecommitAuthorityV1,
+        pub(crate) trusted_host_alternate_request_authority:
+            B4TrustedHostCampaignPrecommitAuthorityV1,
+        pub(crate) trusted_host_alternate_request_path_authority:
+            B4TrustedHostCampaignPrecommitAuthorityV1,
         pub(crate) positive_generation_authority: B4PositiveGenerationAuthorityV2,
         pub(crate) sources: PositiveGenerationConstructorSourcesV2,
     }
@@ -5742,11 +6137,154 @@ pub(crate) mod test_support {
                 == *positive_generation_authority.positive_input_set_identity(),
             "V2 terminal-lineage fixture input identities differ after production construction"
         );
+        let trusted_host_paths =
+            crate::b4_positive_input_set::project_b4_trusted_host_input_set_paths_v1(
+                "h0/prepare-001")?;
+        ensure!(trusted_host_paths.input_set_path() == sources.positive_input_set.path,
+            "trusted-host terminal-lineage fixture input path differs from the V2 source");
+        let executor_identity = B4ContractArtifactIdentityV1::from_bytes(
+            "reproduction/preproof/campaign-executor",
+            B4ContractArtifactEncodingV1::RawBytes, &campaign.executor_artifact)?;
+        let input_request_sha256 = "a".repeat(64);
+        let build_evidence_root_sha256 = "b".repeat(64);
+        let completion_bytes =
+            crate::b4_positive_input_set::derive_b4_trusted_host_input_set_completion_jcs_v1(
+                &trusted_host_paths, &sources.positive_input_set.bytes, 71,
+                &input_request_sha256, &build_evidence_root_sha256, &executor_identity)?;
+        let completion =
+            crate::b4_positive_input_set::validate_b4_trusted_host_input_set_completion_jcs_v1(
+                &completion_bytes, &trusted_host_paths, &sources.positive_input_set.bytes,
+                71, &input_request_sha256, &build_evidence_root_sha256, &executor_identity)?;
+        let precommit_request_bytes = trusted_host_precommit_request();
+        let precommit_request_sha256 = hex::encode(Sha256::digest(&precommit_request_bytes));
+        let trusted_host_campaign_precommit_authority =
+            B4TrustedHostCampaignPrecommitAuthorityV1::from_external_closure(
+                campaign.positive_precommit_v2(), &campaign.verifier_authority,
+                campaign.external(), completion,
+                B4ExternalArtifactV1 {
+                    path: trusted_host_paths.completion_path(), bytes: &completion_bytes,
+                    encoding: B4ContractArtifactEncodingV1::Rfc8785Jcs,
+                },
+                B4ExternalArtifactV1 {
+                    path: "h0/request-002.json", bytes: &precommit_request_bytes,
+                    encoding: B4ContractArtifactEncodingV1::Rfc8785Jcs,
+                },
+                precommit_request_bytes.len() as u64, &precommit_request_sha256,
+                &build_evidence_root_sha256)?;
+        let mut alternate_request: Value = serde_json::from_slice(&precommit_request_bytes)?;
+        alternate_request["sources"]["schema0"]["relativePath"] =
+            Value::String("sources/schema0-alternate".to_owned());
+        let alternate_request_bytes = canonical_json_bytes(&alternate_request)?;
+        B4TrustedHostRequestV1::from_canonical_jcs(&alternate_request_bytes)?;
+        let alternate_request_sha256 = hex::encode(Sha256::digest(&alternate_request_bytes));
+        let alternate_completion =
+            crate::b4_positive_input_set::validate_b4_trusted_host_input_set_completion_jcs_v1(
+                &completion_bytes, &trusted_host_paths, &sources.positive_input_set.bytes,
+                71, &input_request_sha256, &build_evidence_root_sha256, &executor_identity)?;
+        let trusted_host_alternate_request_authority =
+            B4TrustedHostCampaignPrecommitAuthorityV1::from_external_closure(
+                campaign.positive_precommit_v2(), &campaign.verifier_authority,
+                campaign.external(), alternate_completion,
+                B4ExternalArtifactV1 {
+                    path: trusted_host_paths.completion_path(), bytes: &completion_bytes,
+                    encoding: B4ContractArtifactEncodingV1::Rfc8785Jcs,
+                },
+                B4ExternalArtifactV1 {
+                    path: "h0/request-002.json", bytes: &alternate_request_bytes,
+                    encoding: B4ContractArtifactEncodingV1::Rfc8785Jcs,
+                },
+                alternate_request_bytes.len() as u64, &alternate_request_sha256,
+                &build_evidence_root_sha256)?;
+        let selected_case_source_path = &sources.cases[0].proof_output_manifest.path;
+        ensure!(positive_generation_authority.provenance_paths()
+            .contains(selected_case_source_path)
+            && !campaign_precommit_authority.artifact_paths()
+                .contains(selected_case_source_path),
+            "alternate trusted-host request path is not a distinct selected case source");
+        let alternate_path_completion =
+            crate::b4_positive_input_set::validate_b4_trusted_host_input_set_completion_jcs_v1(
+                &completion_bytes, &trusted_host_paths, &sources.positive_input_set.bytes,
+                71, &input_request_sha256, &build_evidence_root_sha256, &executor_identity)?;
+        let trusted_host_alternate_request_path_authority =
+            B4TrustedHostCampaignPrecommitAuthorityV1::from_external_closure(
+                campaign.positive_precommit_v2(), &campaign.verifier_authority,
+                campaign.external(), alternate_path_completion,
+                B4ExternalArtifactV1 {
+                    path: trusted_host_paths.completion_path(), bytes: &completion_bytes,
+                    encoding: B4ContractArtifactEncodingV1::Rfc8785Jcs,
+                },
+                B4ExternalArtifactV1 {
+                    path: selected_case_source_path, bytes: &precommit_request_bytes,
+                    encoding: B4ContractArtifactEncodingV1::Rfc8785Jcs,
+                },
+                precommit_request_bytes.len() as u64, &precommit_request_sha256,
+                &build_evidence_root_sha256)?;
+        ensure!(trusted_host_campaign_precommit_authority.inner_precommit()
+            == campaign_precommit_authority.precommit()
+            && trusted_host_alternate_request_authority.inner_precommit()
+                == campaign_precommit_authority.precommit()
+            && trusted_host_campaign_precommit_authority.envelope().completion
+                == trusted_host_alternate_request_authority.envelope().completion
+            && trusted_host_campaign_precommit_authority.envelope().build_evidence_root_sha256
+                == trusted_host_alternate_request_authority.envelope().build_evidence_root_sha256
+            && trusted_host_campaign_precommit_authority.envelope().request_sha256
+                != trusted_host_alternate_request_authority.envelope().request_sha256,
+            "trusted-host terminal-lineage fixture changed the paired inner precommit");
+        ensure!(trusted_host_campaign_precommit_authority.envelope()
+            == trusted_host_alternate_request_path_authority.envelope()
+            && trusted_host_campaign_precommit_authority.request_identity().path
+                != trusted_host_alternate_request_path_authority.request_identity().path,
+            "alternate trusted-host request path changed its envelope or retained path");
         Ok(TerminalLineageConstructorTestSupportV2 {
             campaign_precommit_authority,
+            trusted_host_campaign_precommit_authority,
+            trusted_host_alternate_request_authority,
+            trusted_host_alternate_request_path_authority,
             positive_generation_authority,
             sources,
         })
+    }
+
+    #[cfg(feature = "recursive-ancestry")]
+    #[test]
+    fn terminal_lineage_v2_fixture_pairs_two_distinct_trusted_host_requests() {
+        let paired = build_terminal_lineage_constructor_test_support_v2().unwrap();
+        assert_eq!(paired.campaign_precommit_authority.precommit(),
+            paired.trusted_host_campaign_precommit_authority.inner_precommit());
+        assert_eq!(paired.campaign_precommit_authority.precommit(),
+            paired.trusted_host_alternate_request_authority.inner_precommit());
+        assert_eq!(paired.trusted_host_campaign_precommit_authority.envelope().completion,
+            paired.trusted_host_alternate_request_authority.envelope().completion);
+        assert_ne!(paired.trusted_host_campaign_precommit_authority
+            .to_canonical_precommit_jcs().unwrap(),
+            paired.trusted_host_alternate_request_authority
+                .to_canonical_precommit_jcs().unwrap());
+        assert_eq!(paired.trusted_host_campaign_precommit_authority.inner_precommit().input_set,
+            *paired.positive_generation_authority.positive_input_set_identity());
+    }
+
+    #[cfg(feature = "recursive-ancestry")]
+    #[test]
+    fn terminal_lineage_v2_fixture_pairs_same_request_at_selected_case_path() {
+        let paired = build_terminal_lineage_constructor_test_support_v2().unwrap();
+        let original = &paired.trusted_host_campaign_precommit_authority;
+        let alternate = &paired.trusted_host_alternate_request_path_authority;
+        let selected_case_path = &paired.sources.cases[0].proof_output_manifest.path;
+        assert!(paired.positive_generation_authority.provenance_paths()
+            .contains(selected_case_path));
+        assert!(!paired.campaign_precommit_authority.artifact_paths()
+            .contains(selected_case_path));
+        assert_eq!(alternate.request_identity().path, *selected_case_path);
+        assert_ne!(original.request_identity().path, alternate.request_identity().path);
+        assert_eq!(original.request_identity().byte_length,
+            alternate.request_identity().byte_length);
+        assert_eq!(original.request_identity().sha256,
+            alternate.request_identity().sha256);
+        assert_eq!(original.envelope(), alternate.envelope());
+        assert_eq!(original.inner_precommit(), alternate.inner_precommit());
+        assert_eq!(original.envelope().completion, alternate.envelope().completion);
+        assert_eq!(original.envelope().build_evidence_root_sha256,
+            alternate.envelope().build_evidence_root_sha256);
     }
 
     #[cfg(feature = "recursive-ancestry")]
@@ -7565,6 +8103,179 @@ pub(crate) mod test_support {
         assert!(format!("{error:#}").contains(
             "trusted-host precommit completion bytes differ from the validated completion token"
         ));
+    }
+
+    fn trusted_host_precommit_request() -> Vec<u8> {
+        let mut roles = vec!["inputSet", "inputSetCompletion", "campaignExecutorArtifact",
+            "executorSourceArchive", "executorBuildDescriptor", "executorContract",
+            "verifierContract", "verifierCliSpec", "negativePlan", "expectationSet",
+            "jvmInclusion", "validatorDescriptor0", "validatorDescriptor1",
+            "validatorArtifact0", "validatorArtifact1", "validatorSourceArchive0",
+            "validatorSourceArchive1", "runnerProfile0", "runnerProfile1", "runnerProfile2",
+            "runnerProfile3", "seccomp0", "seccomp1", "seccomp2", "seccomp3"];
+        for index in 0..20 {
+            roles.push(match index {
+                0 => "schema0", 1 => "schema1", 2 => "schema2", 3 => "schema3",
+                4 => "schema4", 5 => "schema5", 6 => "schema6", 7 => "schema7",
+                8 => "schema8", 9 => "schema9", 10 => "schema10", 11 => "schema11",
+                12 => "schema12", 13 => "schema13", 14 => "schema14", 15 => "schema15",
+                16 => "schema16", 17 => "schema17", 18 => "schema18", _ => "schema19",
+            });
+        }
+        let sources = roles.into_iter().map(|role| (role.to_owned(),
+            B4TrustedHostArtifactLocatorV1 { root_index: 0,
+                relative_path: format!("sources/{}", role.to_ascii_lowercase()) }))
+            .collect();
+        let request = B4TrustedHostRequestV1 {
+            format: "Eip0045B4TrustedHostRequestV1".to_owned(), format_version: 1,
+            realization: "trusted-host-v1".to_owned(),
+            command: "prepare-campaign-precommit".to_owned(),
+            campaign_root: "/campaign".to_owned(),
+            prior_roots: vec!["/campaign/h0/prepare-001".to_owned(),
+                "/campaign/build".to_owned()],
+            outer_final_root: "/campaign/h0/precommit-002".to_owned(),
+            configured_executor_artifact: "/campaign/executor".to_owned(),
+            build_evidence_root_index: 1,
+            input_set_path: None, guest_elf_path: None, proof_generator_path: None,
+            input_set_request_byte_length: Some(71),
+            input_set_request_sha256: Some("a".repeat(64)), sources,
+        };
+        let bytes = canonical_json_bytes(&serde_json::to_value(request).unwrap()).unwrap();
+        B4TrustedHostRequestV1::from_canonical_jcs(&bytes).unwrap();
+        bytes
+    }
+
+    fn trusted_host_authority_from_fixture(
+        substitute_completion: bool,
+        substitute_request: bool,
+        substitute_build: bool,
+        request_path: &str,
+        repinned_input_request_field: Option<&str>,
+        external_request_length_fault: bool,
+    ) -> Result<B4TrustedHostCampaignPrecommitAuthorityV1> {
+        use crate::b4_positive_input_set::{
+            derive_b4_trusted_host_input_set_completion_jcs_v1,
+            project_b4_trusted_host_input_set_paths_v1,
+            validate_b4_trusted_host_input_set_completion_jcs_v1,
+        };
+
+        let fixture = ClosureFixture::valid();
+        let paths = project_b4_trusted_host_input_set_paths_v1("h0/prepare-001")?;
+        let executor = B4ContractArtifactIdentityV1::from_bytes(
+            "reproduction/preproof/campaign-executor",
+            B4ContractArtifactEncodingV1::RawBytes, &fixture.executor_artifact)?;
+        let completion_bytes = derive_b4_trusted_host_input_set_completion_jcs_v1(
+            &paths, &fixture.input_set, 71, &"a".repeat(64), &"b".repeat(64), &executor)?;
+        let completion = validate_b4_trusted_host_input_set_completion_jcs_v1(
+            &completion_bytes, &paths, &fixture.input_set, 71,
+            &"a".repeat(64), &"b".repeat(64), &executor)?;
+        let mut changed_completion: Value = serde_json::from_slice(&completion_bytes)?;
+        changed_completion["requestSha256"] = Value::String("c".repeat(64));
+        let changed_completion = canonical_json_bytes(&changed_completion)?;
+        let request_bytes = trusted_host_precommit_request();
+        let mut changed_request: Value = serde_json::from_slice(&request_bytes)?;
+        changed_request["sources"]["schema0"]["relativePath"] =
+            Value::String("sources/schemax".to_owned());
+        let changed_request = canonical_json_bytes(&changed_request)?;
+        let mut repinned_request: Value = serde_json::from_slice(&request_bytes)?;
+        if let Some(field) = repinned_input_request_field {
+            repinned_request[field] = match field {
+                "inputSetRequestByteLength" => Value::from(72),
+                "inputSetRequestSha256" => Value::String("c".repeat(64)),
+                _ => anyhow::bail!("unknown isolated input-set request fault"),
+            };
+        }
+        let repinned_request = canonical_json_bytes(&repinned_request)?;
+        let selected_request = if substitute_request { &changed_request }
+            else if repinned_input_request_field.is_some() { &repinned_request }
+            else { &request_bytes };
+        if repinned_input_request_field.is_some() {
+            B4TrustedHostRequestV1::from_canonical_jcs(selected_request)?;
+        }
+        let pinned_request = if repinned_input_request_field.is_some() {
+            selected_request
+        } else {
+            &request_bytes
+        };
+        let selected_completion = if substitute_completion { &changed_completion } else { &completion_bytes };
+        let expected_build = if substitute_build { "c".repeat(64) } else { "b".repeat(64) };
+        B4TrustedHostCampaignPrecommitAuthorityV1::from_external_closure(
+            fixture.positive_precommit_v2(), &fixture.verifier_authority,
+            fixture.external(), completion,
+            B4ExternalArtifactV1 { path: paths.completion_path(), bytes: selected_completion,
+                encoding: B4ContractArtifactEncodingV1::Rfc8785Jcs },
+            B4ExternalArtifactV1 { path: request_path, bytes: selected_request,
+                encoding: B4ContractArtifactEncodingV1::Rfc8785Jcs },
+            pinned_request.len() as u64 + u64::from(external_request_length_fault),
+            &hex::encode(Sha256::digest(pinned_request)),
+            &expected_build,
+        )
+    }
+
+    #[test]
+    fn trusted_host_authority_retains_full_envelope_and_rejects_inner_v1_crossing() {
+        let authority = trusted_host_authority_from_fixture(false, false, false,
+            "h0/request-002.json", None, false).unwrap();
+        let full = authority.to_canonical_precommit_jcs().unwrap();
+        authority.verify_candidate_jcs(&full).unwrap();
+        assert_eq!(authority.envelope().realization, "trusted-host-v1");
+        assert_eq!(authority.envelope_identity().path,
+            "h0/precommit-002/trusted-host/campaign-precommit.json");
+        assert_eq!(authority.request_identity().path, "h0/request-002.json");
+        assert!(authority.artifact_paths().contains(&authority.envelope_identity().path));
+        assert!(authority.artifact_paths().contains(&authority.request_identity().path));
+        assert!(authority.verify_candidate_jcs(
+            &authority.inner_precommit().to_canonical_jcs().unwrap()).is_err());
+    }
+
+    #[test]
+    fn trusted_host_authority_isolates_envelope_completion_request_build_and_path_faults() {
+        let authority = trusted_host_authority_from_fixture(false, false, false,
+            "h0/request-002.json", None, false).unwrap();
+        let full = authority.to_canonical_precommit_jcs().unwrap();
+        for (field, replacement) in [("requestSha256", "d".repeat(64)),
+            ("buildEvidenceRootSha256", "e".repeat(64))] {
+            let mut changed: Value = serde_json::from_slice(&full).unwrap();
+            changed[field] = Value::String(replacement);
+            assert!(authority.verify_candidate_jcs(&canonical_json_bytes(&changed).unwrap()).is_err(),
+                "trusted-host envelope accepted changed {field}");
+        }
+        let mut changed: Value = serde_json::from_slice(&full).unwrap();
+        changed["completion"]["sha256"] = Value::String("f".repeat(64));
+        assert!(authority.verify_candidate_jcs(&canonical_json_bytes(&changed).unwrap()).is_err());
+        assert!(trusted_host_authority_from_fixture(true, false, false,
+            "h0/request-002.json", None, false).is_err());
+        assert!(trusted_host_authority_from_fixture(false, true, false,
+            "h0/request-002.json", None, false).is_err());
+        assert!(trusted_host_authority_from_fixture(false, false, true,
+            "h0/request-002.json", None, false).is_err());
+        assert!(trusted_host_authority_from_fixture(false, false, false,
+            "h0/prepare-001/positive-input-set.json", None, false).is_err());
+    }
+
+    #[test]
+    fn trusted_host_authority_rejects_repinned_input_request_fields_at_completion_join() {
+        for field in ["inputSetRequestByteLength", "inputSetRequestSha256"] {
+            let error = match trusted_host_authority_from_fixture(false, false, false,
+                "h0/request-002.json", Some(field), false) {
+                Ok(_) => panic!("trusted-host authority accepted repinned {field}"),
+                Err(error) => error,
+            };
+            assert!(format!("{error:#}").contains(
+                "trusted-host precommit request does not bind the validated input-set request"),
+                "repinned {field} stopped at the wrong boundary: {error:#}");
+        }
+    }
+
+    #[test]
+    fn trusted_host_authority_rejects_isolated_external_request_length_fault() {
+        let error = match trusted_host_authority_from_fixture(false, false, false,
+            "h0/request-002.json", None, true) {
+            Ok(_) => panic!("trusted-host authority accepted wrong external request length"),
+            Err(error) => error,
+        };
+        assert!(format!("{error:#}").contains(
+            "trusted-host precommit request differs from its external pin"));
     }
 
     #[test]

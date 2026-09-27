@@ -1066,7 +1066,8 @@ mod execute {
         use super::*;
         use eip_0045_reproduction::{
             b4_campaign_contract::{B4CampaignPrecommitExternalInputsV1, B4ContractArtifactIdentityV1,
-                B4ExternalReviewedSourceV1, B4ExternalSchemaDocumentV1, B4TrustedHostRequestV1,
+                B4ExternalReviewedSourceV1, B4ExternalSchemaDocumentV1,
+                B4TrustedHostCampaignPrecommitAuthorityV1, B4TrustedHostRequestV1,
                 derive_b4_trusted_host_campaign_precommit_jcs_v1,
                 Eip0045B4TrustedHostCampaignPrecommitV1},
             b4_positive_input_set::{project_b4_trusted_host_input_set_paths_v1,
@@ -1182,6 +1183,58 @@ mod execute {
                 request_bytes, request_sha256)
         }
 
+        fn derive_terminal_authorities(
+            retained: &RetainedCampaignPrecommitExternalClosureV1,
+            build: &AuthoritativeB4BuildProjection,
+            previous: &B4TrustedHostRequestV1,
+            request_source: B4ExternalArtifactV1<'_>,
+            request_bytes: u64,
+            request_sha256: &str,
+        ) -> Result<(B4TrustedHostCampaignPrecommitAuthorityV1, B4VerifierContractAuthorityV1)> {
+            let parsed_request = B4TrustedHostRequestV1::from_canonical_jcs(request_source.bytes)
+                .context("terminal replay prior request source is not canonical")?;
+            ensure!(parsed_request == *previous,
+                "terminal replay prior request differs from its selected parsed request");
+            let expected = derive(retained, build, previous, request_bytes, request_sha256)?;
+            let descriptor = &retained.parsed_campaign_executor_build_descriptor;
+            let executor = B4ContractArtifactIdentityV1::from_bytes(
+                &retained.campaign_executor_artifact.campaign_relative_path,
+                B4ContractArtifactEncodingV1::RawBytes,
+                &retained.campaign_executor_artifact.bytes)?;
+            ensure!(executor == descriptor.artifact,
+                "terminal replay executor differs from its retained descriptor");
+            let phase = retained.input_set.campaign_relative_path
+                .strip_suffix("/positive-input-set.json")
+                .context("terminal replay input-set filename drift")?;
+            let paths = project_b4_trusted_host_input_set_paths_v1(phase)?;
+            ensure!(paths.input_set_path() == retained.input_set.campaign_relative_path
+                && paths.completion_path() == retained.input_set_completion.campaign_relative_path,
+                "terminal replay input and completion paths differ from the closed projection");
+            let completion = validate_b4_trusted_host_input_set_completion_jcs_v1(
+                &retained.input_set_completion.bytes, &paths, &retained.input_set.bytes,
+                previous.input_set_request_byte_length.context("missing input-set request length")?,
+                previous.input_set_request_sha256.as_deref().context("missing input-set request digest")?,
+                build.evidence_root_sha256(), &executor)?;
+            let positive = validate_and_bind_positive_precommit_v2(build,
+                retained.positive_precommit_documents())?;
+            let verifier = B4VerifierContractAuthorityV1::from_external_documents(
+                retained.verifier_cli_spec.as_external(B4ContractArtifactEncodingV1::RawBytes),
+                retained.negative_plan.as_external(B4ContractArtifactEncodingV1::Rfc8785Jcs),
+                retained.expectation_set.as_external(B4ContractArtifactEncodingV1::Rfc8785Jcs),
+                std::array::from_fn(|i| B4ExternalSchemaDocumentV1 {
+                    role: B4_VERIFIER_SCHEMA_ROLES[i],
+                    document: retained.verifier_schema_documents[i]
+                        .as_external(B4ContractArtifactEncodingV1::RawBytes),
+                }))?;
+            let authority = B4TrustedHostCampaignPrecommitAuthorityV1::from_external_closure(
+                positive, &verifier, retained.trusted_common(), completion,
+                retained.input_set_completion.as_external(B4ContractArtifactEncodingV1::Rfc8785Jcs),
+                request_source, request_bytes, request_sha256, build.evidence_root_sha256())?;
+            authority.verify_candidate_jcs(&expected)
+                .context("terminal replay authority differs from the byte-rederived envelope")?;
+            Ok((authority, verifier))
+        }
+
         fn map_previous_precommit_roots<const ROOTS: usize>(
             previous: &B4TrustedHostRequestV1,
             current_roots: [&Path; ROOTS],
@@ -1226,6 +1279,61 @@ mod execute {
             let plan = plan(&mapped)?;
             let retained = retain_external_closure(campaign_root, current_roots, read, &plan)?;
             derive(&retained, build, previous, request_bytes, request_sha256)
+        }
+
+        /// Reconstruct the distinct trusted-host authority for terminal
+        /// publication from the same immutable-root closure as the finalizer.
+        /// The caller separately binds the retained envelope to the running
+        /// executable and supplies the physically held prior-request source.
+        #[allow(clippy::too_many_arguments)]
+        pub(in crate::b4_campaign_executor) fn replay_authority_for_terminal<const ROOTS: usize, F>(
+            previous: &B4TrustedHostRequestV1,
+            request_source: B4ExternalArtifactV1<'_>,
+            campaign_root: &Path,
+            current_roots: [&Path; ROOTS],
+            build: &AuthoritativeB4BuildProjection,
+            request_bytes: u64,
+            request_sha256: &str,
+            read: F,
+        ) -> Result<B4TrustedHostCampaignPrecommitAuthorityV1>
+        where
+            F: for<'path> FnMut(usize, &'path str, RetainedArtifactReadLimit, u64) -> Result<Vec<u8>>,
+        {
+            ensure!(previous.command == "prepare-campaign-precommit"
+                && previous.campaign_root == campaign_root.to_str().context("campaign root is not UTF-8")?,
+                "terminal replay prior request is not the selected precommit command");
+            let mapped = map_previous_precommit_roots(previous, current_roots)?;
+            let plan = plan(&mapped)?;
+            let retained = retain_external_closure(campaign_root, current_roots, read, &plan)?;
+            derive_terminal_authorities(&retained, build, previous, request_source,
+                request_bytes, request_sha256).map(|(precommit, _verifier)| precommit)
+        }
+
+        /// Replay one immutable prior-request closure for the ancestry producer.
+        /// Keep the distinct verifier authority that the negative-plan bytes
+        /// require; the TH precommit envelope retains only its identity.
+        #[allow(clippy::too_many_arguments)]
+        pub(in crate::b4_campaign_executor) fn replay_authorities_for_negative_ancestry<const ROOTS: usize, F>(
+            previous: &B4TrustedHostRequestV1,
+            request_source: B4ExternalArtifactV1<'_>,
+            campaign_root: &Path,
+            current_roots: [&Path; ROOTS],
+            build: &AuthoritativeB4BuildProjection,
+            request_bytes: u64,
+            request_sha256: &str,
+            read: F,
+        ) -> Result<(B4TrustedHostCampaignPrecommitAuthorityV1, B4VerifierContractAuthorityV1)>
+        where
+            F: for<'path> FnMut(usize, &'path str, RetainedArtifactReadLimit, u64) -> Result<Vec<u8>>,
+        {
+            ensure!(previous.command == "prepare-campaign-precommit"
+                && previous.campaign_root == campaign_root.to_str().context("campaign root is not UTF-8")?,
+                "ancestry replay prior request is not the selected precommit command");
+            let mapped = map_previous_precommit_roots(previous, current_roots)?;
+            let plan = plan(&mapped)?;
+            let retained = retain_external_closure(campaign_root, current_roots, read, &plan)?;
+            derive_terminal_authorities(&retained, build, previous, request_source,
+                request_bytes, request_sha256)
         }
 
         #[cfg(test)]
@@ -1703,6 +1811,10 @@ pub(crate) use execute::{
 pub(super) use execute::trusted_host::handle as handle_trusted_host_precommit;
 #[cfg(all(target_os = "linux", feature = "b4-authoritative-build-custody"))]
 pub(in crate::b4_campaign_executor) use execute::trusted_host::replay_for_finalizer as replay_trusted_host_precommit_for_finalizer;
+#[cfg(all(target_os = "linux", feature = "b4-authoritative-build-custody"))]
+pub(in crate::b4_campaign_executor) use execute::trusted_host::replay_authority_for_terminal as replay_trusted_host_precommit_for_terminal;
+#[cfg(all(target_os = "linux", feature = "b4-authoritative-build-custody"))]
+pub(in crate::b4_campaign_executor) use execute::trusted_host::replay_authorities_for_negative_ancestry as replay_trusted_host_authorities_for_negative_ancestry;
 #[cfg(all(target_os = "linux", feature = "b4-authoritative-build-custody"))]
 pub(in crate::b4_campaign_executor) use execute::RetainedArtifactReadLimit as PrecommitReadLimit;
 

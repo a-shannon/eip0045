@@ -249,6 +249,65 @@ fn construct_v2_terminal_source_lineage(
     })
 }
 
+fn construct_trusted_host_terminal_source_lineage(
+    support: &TerminalLineageConstructorTestSupportV2,
+) -> Result<B4TerminalSourceLineageAuthorityV2> {
+    with_v2_terminal_source_closure(&support.sources, |source| {
+        B4TerminalSourceLineageAuthorityV2::from_external_closure_trusted_host(
+            &support.trusted_host_campaign_precommit_authority,
+            &support.positive_generation_authority,
+            source,
+        )
+    })
+}
+
+#[test]
+fn terminal_source_lineage_v2_trusted_host_keeps_the_full_envelope_and_kind() {
+    let support = terminal_lineage_v2_support();
+    assert_eq!(
+        support.trusted_host_campaign_precommit_authority.inner_precommit(),
+        support.campaign_precommit_authority.precommit(),
+        "the two test authorities must share the same inner precommit"
+    );
+    let trusted = construct_trusted_host_terminal_source_lineage(support)
+        .expect("trusted-host terminal lineage over the same V2 physical closure");
+    trusted.verify_authority_bindings_trusted_host(
+        &support.trusted_host_campaign_precommit_authority,
+        &support.positive_generation_authority,
+    ).expect("retained full trusted-host envelope and V2 generation authority");
+    let wrong_kind = trusted.verify_authority_bindings(
+        &support.campaign_precommit_authority,
+        &support.positive_generation_authority,
+    ).unwrap_err();
+    assert!(format!("{wrong_kind:#}").contains(
+        "supplied campaign realization differs from the retained V2 lineage"),
+        "historical H0 authority stopped at the wrong boundary: {wrong_kind:#}");
+    let alternate_envelope = trusted.verify_authority_bindings_trusted_host(
+        &support.trusted_host_alternate_request_authority,
+        &support.positive_generation_authority,
+    ).unwrap_err();
+    assert!(format!("{alternate_envelope:#}").contains(
+        "supplied campaign precommit differs from the retained V2 lineage"),
+        "same-inner alternate trusted-host envelope stopped at the wrong boundary: {alternate_envelope:#}");
+    let alternate_request_path = trusted.verify_authority_bindings_trusted_host(
+        &support.trusted_host_alternate_request_path_authority,
+        &support.positive_generation_authority,
+    ).unwrap_err();
+    assert!(format!("{alternate_request_path:#}").contains(
+        "supplied trusted-host request or envelope identity differs from the retained V2 lineage"),
+        "same-envelope alternate request path stopped at the wrong boundary: {alternate_request_path:#}");
+
+    let historical = construct_v2_terminal_source_lineage(support, &support.sources)
+        .expect("historical V2 terminal lineage");
+    let wrong_kind = historical.verify_authority_bindings_trusted_host(
+        &support.trusted_host_campaign_precommit_authority,
+        &support.positive_generation_authority,
+    ).unwrap_err();
+    assert!(format!("{wrong_kind:#}").contains(
+        "supplied campaign realization differs from the retained V2 lineage"),
+        "trusted-host authority stopped at the wrong historical boundary: {wrong_kind:#}");
+}
+
 #[test]
 fn terminal_source_lineage_v2_closes_the_five_exact_producer_sources() {
     let support = terminal_lineage_v2_support();

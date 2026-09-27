@@ -5746,6 +5746,7 @@ mod tests {
                 "pub(super) fn authenticate_physical_rootfs_and_retain(",
                 "pub(super) fn test_only_authenticate_rootfs_paths_and_cleanup(",
                 "pub(super) fn test_only_authenticate_jvm_executables_and_cleanup(",
+                "pub(super) fn test_only_inspect_startup_dso_v2(",
                 "pub(super) fn test_only_authenticate_startup_dependency_closure_and_cleanup(",
                 "pub(super) fn test_only_authenticate_startup_dependency_closure_and_retain(",
                 "pub(super) fn test_only_authenticate_java_release_and_cleanup(",
@@ -5793,7 +5794,7 @@ mod tests {
             .split("fn authenticate_expected_rootfs_identity(")
             .nth(1)
             .unwrap()
-            .split("fn authenticate_expected_jvm_identity(")
+            .split("fn authenticate_expected_startup_identity(")
             .next()
             .unwrap();
         assert_eq!(
@@ -5804,7 +5805,7 @@ mod tests {
         );
         assert_eq!(
             identity_join
-                .matches("self.authenticate_expected_jvm_identity(")
+                .matches("self.authenticate_expected_startup_identity(")
                 .count(),
             1
         );
@@ -5815,7 +5816,7 @@ mod tests {
             "self.validate_live_entry_ordering()?;",
             "self.transaction.role==expectation.role()",
             "self.authenticate_gate_rootfs_path_requirements(expectation)?;",
-            "self.authenticate_expected_jvm_identity(expectation)",
+            "self.authenticate_expected_startup_identity(expectation)",
             "merge_rootfs_revalidation(validation,self.validate_retained_tree(true),",
         ] {
             let position = remainder
@@ -6020,13 +6021,16 @@ mod tests {
             .split("fn inspect_startup_dependency_dso(")
             .next()
             .unwrap();
-        assert_eq!(
-            derivation
-                .matches("self.build_startup_basename_index()?")
-                .count(),
-            1,
-            "basename index must be built at most once per process closure"
-        );
+        let (v1_derivation, v2_derivation) = derivation
+            .split_once("fn derive_static_startup_dependency_closure_v2(")
+            .expect("V1 and V2 startup derivations must remain distinct");
+        for (label, branch) in [("V1", v1_derivation), ("V2", v2_derivation)] {
+            assert_eq!(
+                branch.matches("self.build_startup_basename_index()?").count(),
+                1,
+                "{label} basename index must be built at most once per process closure"
+            );
+        }
         for required in [
             "try_reserve_exact(usize::try_from(limits.maximum_distinct_objects())?)",
             "try_reserve_exact(usize::try_from(limits.maximum_dependency_edges())?)",
@@ -6150,13 +6154,13 @@ mod tests {
             .unwrap();
         assert_eq!(
             retained
-                .matches(".authenticate_expected_rootfs_identity(expectation)?;")
+                .matches(".authenticate_expected_rootfs_identity(expectation),")
                 .count(),
             1
         );
         assert_eq!(
             retained
-                .matches(".authenticate_test_static_startup_dependency_identity(expectation)?;")
+                .matches(".authenticate_test_static_startup_dependency_identity(expectation)")
                 .count(),
             1
         );
@@ -6172,9 +6176,49 @@ mod tests {
             retained
                 .matches("self.rootfs.validate_retained_tree(true)")
                 .count(),
-            2,
-            "each retained reauthentication must finish with tree validation"
+            1,
+            "the shared retained finalizer must finish with tree validation"
         );
+        let finalizer = retained
+            .split("fn finalize_rederived_startup_baseline(")
+            .nth(1)
+            .unwrap()
+            .split("pub(super) fn reauthenticate_static_startup_dependencies(")
+            .next()
+            .unwrap()
+            .split_whitespace()
+            .collect::<String>();
+        assert!(finalizer.contains("rederived==self.static_startup_dependencies"));
+        assert!(finalizer.contains("merge_rootfs_revalidation("));
+        assert!(finalizer.contains("self.rootfs.validate_retained_tree(true)"));
+        assert_eq!(retained.matches("self.finalize_rederived_startup_baseline(").count(), 3);
+        let production = retained
+            .split("pub(super) fn reauthenticate_static_startup_dependencies(")
+            .nth(1)
+            .unwrap()
+            .split("pub(super) fn test_only_reauthenticate_static_startup_dependencies(")
+            .next()
+            .unwrap();
+        let require_join = |body: &str| {
+            assert_eq!(body.matches("self.finalize_rederived_startup_baseline(").count(), 1);
+        };
+        require_join(production);
+        let omission_mutant = production.replacen(
+            "self.finalize_rederived_startup_baseline(",
+            "self.omitted_reauthentication(",
+            1,
+        );
+        assert!(std::panic::catch_unwind(|| require_join(&omission_mutant)).is_err());
+        let v2_reauth = retained
+            .split("pub(super) fn test_only_reauthenticate_startup_closure_v2(")
+            .nth(1)
+            .unwrap()
+            .split("pub(super) fn test_only_mutate_startup_baseline_v2(")
+            .next()
+            .unwrap()
+            .split_whitespace()
+            .collect::<String>();
+        assert!(v2_reauth.contains("self.finalize_rederived_startup_baseline("));
     }
 
     fn assert_physical_static_startup_consuming_seam(source: &str) {
@@ -6188,7 +6232,7 @@ mod tests {
         let compact_retain = retain.split_whitespace().collect::<String>();
         for required in [
             "self.authenticate_test_static_startup_dependency_identity(expectation)",
-            "Ok(static_startup_dependencies)=>{Ok(AuthenticatedPrivateOciRetainedPhysicalRootfsV1{rootfs:self,static_startup_dependencies,})}",
+            "Ok(static_startup_dependencies)=>{Ok(AuthenticatedPrivateOciRetainedPhysicalRootfsV1{rootfs:self,static_startup_dependencies:StaticStartupDependencyBaselines::InitialV1(static_startup_dependencies),})}",
             "Err(primary)=>Err(self.fail_after_named_effect(primary))",
         ] {
             assert!(
@@ -6901,6 +6945,369 @@ mod tests {
         assert_eq!(directory_names(temp.path())?, before);
         assert!(fs::symlink_metadata(&final_path).is_err());
         Ok(())
+    }
+
+    fn physical_v2_fixture_dynamic_offset(bytes: &[u8], header: usize) -> usize {
+        let offset = 64 + header * 56 + 8;
+        usize::try_from(u64::from_le_bytes(
+            bytes[offset..offset + 8].try_into().unwrap(),
+        ))
+        .unwrap()
+    }
+
+    fn physical_v2_loader_relr_fixture() -> (Vec<u8>, [(i64, u64); 3]) {
+        let mut bytes = crate::b4_campaign_executor::amd64_elf_inspection::tests::startup_dso_bytes(
+            "ld-linux-x86-64.so.2",
+            &["unused.so"; 3],
+            None,
+        );
+        let dynamic = physical_v2_fixture_dynamic_offset(&bytes, 1);
+        let records = [
+            (0x24_i64, 0x0040_0000 + dynamic as u64),
+            (0x23, 8),
+            (0x25, 8),
+        ];
+        for (index, (tag, value)) in records.iter().enumerate() {
+            let offset = dynamic + (3 + index) * 16;
+            bytes[offset..offset + 8].copy_from_slice(&tag.to_le_bytes());
+            bytes[offset + 8..offset + 16].copy_from_slice(&value.to_le_bytes());
+        }
+        (bytes, records)
+    }
+
+    fn physical_v2_libc_interp_fixture() -> Vec<u8> {
+        let mut bytes =
+            crate::b4_campaign_executor::amd64_elf_inspection::tests::startup_runtime_elf_bytes(
+                &["libc.so.6"],
+                None,
+            );
+        let dynamic = physical_v2_fixture_dynamic_offset(&bytes, 2);
+        // Reuse the string payload as the sole DT_SONAME, retaining PT_INTERP.
+        bytes[dynamic + 32..dynamic + 40].copy_from_slice(&14_i64.to_le_bytes());
+        bytes
+    }
+
+    fn exercise_physical_v2_dso_fixture(
+        bytes: &[u8],
+        selected_basename: &str,
+        expected_interpreter: &str,
+        expected_records: &[(i64, u64)],
+        expected_dso_interpreter: Option<&str>,
+        expected_error: Option<&str>,
+    ) -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let before = directory_names(temp.path())?;
+        let runtime =
+            crate::b4_campaign_executor::amd64_elf_inspection::tests::startup_runtime_elf_bytes(
+                &["libc.so.6"],
+                None,
+            );
+        let entries = [
+            RuntimeRootfsFixtureEntryV1::directory("dso"),
+            RuntimeRootfsFixtureEntryV1::regular("dso/selected.so", 0o555, bytes),
+        ];
+        let (final_path, retained) = authenticated_runtime_elf_projection_with_entries(
+            temp.path(),
+            "physical-v2-dso",
+            &runtime,
+            &entries,
+        )?;
+        let materialized = retained.materialize_private()?;
+        let reached_projection = std::cell::Cell::new(false);
+        let validation = materialized.test_only_inspect_startup_dso_v2(
+            "/dso/selected.so",
+            selected_basename,
+            expected_interpreter,
+            |digest, records, interpreter| {
+                reached_projection.set(true);
+                let expected_digest: [u8; 32] = Sha256::digest(bytes).into();
+                assert_eq!(*digest, expected_digest);
+                assert_eq!(interpreter, expected_dso_interpreter);
+                if !expected_records.is_empty() {
+                    assert_eq!(&records[3..3 + expected_records.len()], expected_records);
+                }
+                Ok(())
+            },
+        );
+        match expected_error {
+            Some(cause) => {
+                let error = validation.unwrap_err();
+                let message = format!("{error:#}");
+                assert!(
+                    message.contains("physical V2 DSO reader boundary"),
+                    "{message}"
+                );
+                assert!(message.contains(cause), "{message}");
+                assert!(!reached_projection.get());
+            }
+            None => {
+                validation?;
+                assert!(reached_projection.get());
+            }
+        }
+        assert!(materialized.cleanup()?.final_unlinked_observed);
+        assert_eq!(directory_names(temp.path())?, before);
+        assert!(!final_path.exists());
+        Ok(())
+    }
+
+    #[test]
+    fn private_physical_v2_dso_reads_loader_relr_from_authenticated_rootfs() -> Result<()> {
+        let (bytes, records) = physical_v2_loader_relr_fixture();
+        exercise_physical_v2_dso_fixture(
+            &bytes,
+            "ld-linux-x86-64.so.2",
+            "/lib64/ld-linux-x86-64.so.2",
+            &records,
+            None,
+            None,
+        )
+    }
+
+    #[test]
+    fn private_physical_v2_dso_reads_libc_interp_from_authenticated_rootfs() -> Result<()> {
+        exercise_physical_v2_dso_fixture(
+            &physical_v2_libc_interp_fixture(),
+            "libc.so.6",
+            "/lib64/ld-linux-x86-64.so.2",
+            &[],
+            Some("/lib64/ld-linux-x86-64.so.2"),
+            None,
+        )
+    }
+
+    #[test]
+    fn private_physical_v2_fifo_closes_branch_cycle_and_reuses_loaded_sonames() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let before = directory_names(temp.path())?;
+        let runtime = crate::b4_campaign_executor::amd64_elf_inspection::tests::startup_runtime_elf_bytes(
+            &["liba.so", "libb.so"],
+            None,
+        );
+        let loader = crate::b4_campaign_executor::amd64_elf_inspection::tests::startup_dso_bytes(
+            "ld-linux-x86-64.so.2", &["liba.so"], None,
+        );
+        let liba = crate::b4_campaign_executor::amd64_elf_inspection::tests::startup_dso_bytes(
+            "liba.so", &["libb.so"], None,
+        );
+        let libb = crate::b4_campaign_executor::amd64_elf_inspection::tests::startup_dso_bytes(
+            "libb.so", &["liba.so"], None,
+        );
+        let mut entries = startup_default_directory_entries();
+        entries.extend([
+            RuntimeRootfsFixtureEntryV1::regular("lib64/ld-linux-x86-64.so.2", 0o555, &loader),
+            RuntimeRootfsFixtureEntryV1::regular("lib/x86_64-linux-gnu/liba.so", 0o444, &liba),
+            RuntimeRootfsFixtureEntryV1::regular("lib/x86_64-linux-gnu/libb.so", 0o444, &libb),
+        ]);
+        let (final_path, retained) = authenticated_runtime_elf_projection_with_entries(
+            temp.path(), "physical-v2-fifo-cycle", &runtime, &entries,
+        )?;
+        let abandoned = retained.materialize_private()?.test_only_authenticate_startup_closure_v2_and_cleanup(
+            "/runtime/bin/java",
+            &[],
+            &["/runtime/bin/java", "/lib64/ld-linux-x86-64.so.2", "/lib/x86_64-linux-gnu/liba.so", "/lib/x86_64-linux-gnu/libb.so"],
+            &[(0, 2, "liba.so", 2), (0, 3, "libb.so", 3), (1, 3, "liba.so", 2), (2, 3, "libb.so", 3), (3, 3, "liba.so", 2)],
+        )?;
+        assert!(abandoned.final_unlinked_observed);
+        assert_eq!(directory_names(temp.path())?, before);
+        assert!(!final_path.exists());
+        Ok(())
+    }
+
+    #[test]
+    fn private_physical_v2_fifo_rejects_child_without_own_runpath() -> Result<()> {
+        let runtime = crate::b4_campaign_executor::amd64_elf_inspection::tests::startup_runtime_elf_bytes(
+            &["liba.so"], Some("/custom"),
+        );
+        let loader = crate::b4_campaign_executor::amd64_elf_inspection::tests::startup_dso_bytes(
+            "ld-linux-x86-64.so.2", &[], None,
+        );
+        let libb = crate::b4_campaign_executor::amd64_elf_inspection::tests::startup_dso_bytes(
+            "libb.so", &[], None,
+        );
+        for child_has_runpath in [false, true] {
+            let temp = tempfile::tempdir()?;
+            let before = directory_names(temp.path())?;
+            let liba = crate::b4_campaign_executor::amd64_elf_inspection::tests::startup_dso_bytes(
+                "liba.so", &["libb.so"], child_has_runpath.then_some("/custom"),
+            );
+            let mut entries = startup_default_directory_entries();
+            entries.extend([
+                RuntimeRootfsFixtureEntryV1::directory("custom"),
+                RuntimeRootfsFixtureEntryV1::regular("lib64/ld-linux-x86-64.so.2", 0o555, &loader),
+                RuntimeRootfsFixtureEntryV1::regular("custom/liba.so", 0o444, &liba),
+                RuntimeRootfsFixtureEntryV1::regular("custom/libb.so", 0o444, &libb),
+            ]);
+            let (final_path, retained) = authenticated_runtime_elf_projection_with_entries(
+                temp.path(),
+                if child_has_runpath { "physical-v2-child-runpath-present" } else { "physical-v2-child-runpath-absent" },
+                &runtime,
+                &entries,
+            )?;
+            let result = retained.materialize_private()?.test_only_authenticate_startup_closure_v2_and_cleanup(
+                "/runtime/bin/java",
+                &[],
+                &["/runtime/bin/java", "/lib64/ld-linux-x86-64.so.2", "/custom/liba.so", "/custom/libb.so"],
+                &[(0, 2, "liba.so", 2), (2, 3, "libb.so", 3)],
+            );
+            if child_has_runpath {
+                assert!(result?.final_unlinked_observed);
+            } else {
+                let error = expect_error(result);
+                let message = format!("{error:#}");
+                assert!(message.contains("unresolved DT_NEEDED libb.so"), "{message}");
+                assert!(message.contains("unique basename is outside the closed search directories"), "{message}");
+            }
+            assert_eq!(directory_names(temp.path())?, before);
+            assert!(!final_path.exists());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn private_physical_v2_relr_loader_is_accepted_only_under_v2_closure() -> Result<()> {
+        let runtime = crate::b4_campaign_executor::amd64_elf_inspection::tests::startup_runtime_elf_bytes(
+            &[], None,
+        );
+        let (loader, _) = physical_v2_loader_relr_fixture();
+        for use_v2 in [false, true] {
+            let temp = tempfile::tempdir()?;
+            let before = directory_names(temp.path())?;
+            let mut entries = startup_default_directory_entries();
+            entries.push(RuntimeRootfsFixtureEntryV1::regular("lib64/ld-linux-x86-64.so.2", 0o555, &loader));
+            let (final_path, retained) = authenticated_runtime_elf_projection_with_entries(
+                temp.path(),
+                if use_v2 { "physical-v2-relr-loader" } else { "physical-v1-relr-loader" },
+                &runtime,
+                &entries,
+            )?;
+            let materialized = retained.materialize_private()?;
+            if use_v2 {
+                let abandoned = materialized.test_only_authenticate_startup_closure_v2_and_cleanup(
+                    "/runtime/bin/java",
+                    &[],
+                    &["/runtime/bin/java", "/lib64/ld-linux-x86-64.so.2"],
+                    &[],
+                )?;
+                assert!(abandoned.final_unlinked_observed);
+            } else {
+                let error = expect_error(materialized.test_only_authenticate_startup_dependency_closure_and_cleanup(
+                    &StartupClosureTestExpectationV1 {
+                        image_path: "/runtime/bin/java",
+                        additional_independent_image_paths: &[],
+                        mount_targets: &[],
+                        expected_canonical_node_order: None,
+                        expected_edges: None,
+                        expected_aggregate_distinct_object_bytes: None,
+                        expected_root_entry_point_is_zero: None,
+                    },
+                ));
+                assert!(format!("{error:#}").contains("unlisted dynamic tag"), "{error:#}");
+            }
+            assert_eq!(directory_names(temp.path())?, before);
+            assert!(!final_path.exists());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn retained_physical_v2_reauthentication_rejects_isolated_tag_edge_and_discriminant_mutations()
+    -> Result<()> {
+        use super::physical::TestOnlyRetainedStartupBaselineMutationV2 as Mutation;
+
+        for mutation in [
+            Mutation::LauncherTag,
+            Mutation::CompilerTag,
+            Mutation::LauncherEdge,
+            Mutation::Discriminant,
+        ] {
+            let temp = tempfile::tempdir()?;
+            let before = directory_names(temp.path())?;
+            let java = crate::b4_campaign_executor::amd64_elf_inspection::tests::startup_runtime_elf_bytes(
+                &["libc.so.6"], None,
+            );
+            let javac = crate::b4_campaign_executor::amd64_elf_inspection::tests::startup_runtime_elf_bytes(
+                &["libc.so.6"], None,
+            );
+            let loader = crate::b4_campaign_executor::amd64_elf_inspection::tests::startup_dso_bytes(
+                "ld-linux-x86-64.so.2", &[], None,
+            );
+            let libc = crate::b4_campaign_executor::amd64_elf_inspection::tests::startup_dso_bytes(
+                "libc.so.6", &[], None,
+            );
+            let mut entries = startup_default_directory_entries();
+            entries.extend([
+                RuntimeRootfsFixtureEntryV1::regular("lib64/ld-linux-x86-64.so.2", 0o555, &loader),
+                RuntimeRootfsFixtureEntryV1::regular("lib/x86_64-linux-gnu/libc.so.6", 0o444, &libc),
+                RuntimeRootfsFixtureEntryV1::regular("runtime/bin/javac", 0o555, &javac),
+            ]);
+            let (final_path, retained) = authenticated_runtime_elf_projection_with_entries(
+                temp.path(), &format!("retained-physical-v2-{mutation:?}"), &java, &entries,
+            )?;
+            let mut retained = retained.materialize_private()?
+                .test_only_authenticate_startup_closure_v2_and_retain(
+                    "/runtime/bin/java", Some("/runtime/bin/javac"), &[],
+                )?;
+            retained.test_only_reauthenticate_startup_closure_v2(
+                "/runtime/bin/java", Some("/runtime/bin/javac"), &[],
+            )?;
+            retained.test_only_mutate_startup_baseline_v2(mutation);
+            let error = expect_error(retained.test_only_reauthenticate_startup_closure_v2(
+                "/runtime/bin/java", Some("/runtime/bin/javac"), &[],
+            ));
+            assert!(
+                format!("{error:#}").contains("retained V2 startup dependency closure differs from its rederived identity"),
+                "{mutation:?}: {error:#}"
+            );
+            assert!(retained.cleanup()?.final_unlinked_observed);
+            assert_eq!(directory_names(temp.path())?, before);
+            assert!(!final_path.exists());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn private_physical_v2_dso_rejects_isolated_selected_soname() -> Result<()> {
+        let (bytes, records) = physical_v2_loader_relr_fixture();
+        exercise_physical_v2_dso_fixture(
+            &bytes,
+            "ld-linux-x86-64.so.2",
+            "/lib64/ld-linux-x86-64.so.2",
+            &records,
+            None,
+            None,
+        )?;
+        exercise_physical_v2_dso_fixture(
+            &bytes,
+            "other-loader.so",
+            "/lib64/ld-linux-x86-64.so.2",
+            &records,
+            None,
+            Some("selected startup V2 DSO policy or SONAME differs from its request"),
+        )
+    }
+
+    #[test]
+    fn private_physical_v2_dso_rejects_isolated_launcher_interpreter() -> Result<()> {
+        let bytes = physical_v2_libc_interp_fixture();
+        exercise_physical_v2_dso_fixture(
+            &bytes,
+            "libc.so.6",
+            "/lib64/ld-linux-x86-64.so.2",
+            &[],
+            Some("/lib64/ld-linux-x86-64.so.2"),
+            None,
+        )?;
+        exercise_physical_v2_dso_fixture(
+            &bytes,
+            "libc.so.6",
+            "/lib/ld-linux-x86-64.so.2",
+            &[],
+            Some("/lib64/ld-linux-x86-64.so.2"),
+            Some(
+                "startup DSO PT_INTERP is permitted only for libc.so.6 with the launcher interpreter path",
+            ),
+        )
     }
 
     #[test]

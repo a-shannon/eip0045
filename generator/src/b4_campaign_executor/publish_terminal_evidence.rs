@@ -11,6 +11,11 @@ use super::{
 
 const TERMINAL_EVIDENCE_CAMPAIGN_RECEIPT_FILE: &str = "terminal-evidence-campaign-receipt.json";
 
+#[cfg(all(target_os = "linux", feature = "b4-prepare-input-set-kernel"))]
+mod trusted_host;
+#[cfg(all(target_os = "linux", feature = "b4-prepare-input-set-kernel"))]
+pub(in crate::b4_campaign_executor) use trusted_host::handle as handle_trusted_host_publish;
+
 fn project_publish_terminal_evidence_layout<const ROOTS: usize>(
     campaign_root: &Path,
     prior_roots: [&Path; ROOTS],
@@ -146,7 +151,7 @@ pub(super) mod execute {
     }
 
     #[derive(Clone)]
-    struct ProjectedPublishLeaves {
+    pub(super) struct ProjectedPublishLeaves {
         outer_staging_root: PathBuf,
         outer_final_root: PathBuf,
         staged_packet: PathBuf,
@@ -155,13 +160,13 @@ pub(super) mod execute {
         published_reserved_inner: PathBuf,
         staged_receipt: PathBuf,
         published_receipt: PathBuf,
-        packet_relative: String,
-        reserved_inner_relative: String,
-        receipt_relative: String,
+        pub(super) packet_relative: String,
+        pub(super) reserved_inner_relative: String,
+        pub(super) receipt_relative: String,
     }
 
     impl ProjectedPublishLeaves {
-        fn from_layout<const ROOTS: usize>(
+        pub(super) fn from_layout<const ROOTS: usize>(
             layout: &ProjectedOuterCampaignLayout<ROOTS>,
         ) -> Result<Self> {
             ensure!(
@@ -210,7 +215,7 @@ pub(super) mod execute {
             Ok(projected)
         }
 
-        fn revalidate_published_projection(&self) -> Result<()> {
+        pub(super) fn revalidate_published_projection(&self) -> Result<()> {
             ensure!(
                 self.require_equivalent_direct_leaf(
                     &self.staged_packet,
@@ -261,7 +266,7 @@ pub(super) mod execute {
     }
 
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-    enum PublishTerminalEvidenceTransition {
+    pub(super) enum PublishTerminalEvidenceTransition {
         Prepare,
         BeginOuterStaging,
         LiveInnerPublication,
@@ -269,11 +274,11 @@ pub(super) mod execute {
         OuterCommitAndPostcommitValidation,
     }
 
-    trait PublishTerminalEvidenceTransitionObserver {
+    pub(super) trait PublishTerminalEvidenceTransitionObserver {
         fn before(&mut self, transition: PublishTerminalEvidenceTransition) -> Result<()>;
     }
 
-    struct NoopPublishTerminalEvidenceTransitionObserver;
+    pub(super) struct NoopPublishTerminalEvidenceTransitionObserver;
 
     impl PublishTerminalEvidenceTransitionObserver for NoopPublishTerminalEvidenceTransitionObserver {
         fn before(&mut self, _transition: PublishTerminalEvidenceTransition) -> Result<()> {
@@ -281,7 +286,7 @@ pub(super) mod execute {
         }
     }
 
-    fn coordinate_publish_terminal_evidence<State, Prepared, Output>(
+    pub(super) fn coordinate_publish_terminal_evidence<State, Prepared, Output>(
         state: &mut State,
         observer: &mut impl PublishTerminalEvidenceTransitionObserver,
         prepare: impl FnOnce(&mut State) -> Result<Prepared>,
@@ -300,7 +305,7 @@ pub(super) mod execute {
         clippy::too_many_arguments,
         reason = "the affine handler transition coordinator keeps every one-way boundary explicit"
     )]
-    fn coordinate_publish_terminal_evidence_mutation<
+    pub(super) fn coordinate_publish_terminal_evidence_mutation<
         Transaction,
         Prepared,
         Published,
@@ -454,7 +459,10 @@ pub(super) mod execute {
                             |transaction, published, (receipt, packet_identity)| {
                                 transaction.commit_with_postcommit_validation(move |committed| {
                                     leaves.revalidate_published_projection()?;
-                                    committed.require_absent(&leaves.reserved_inner_relative)?;
+                                    committed.require_projected_reserved_staging_absent(
+                                        &leaves.packet_relative,
+                                        &leaves.reserved_inner_relative,
+                                    )?;
                                     let reopened_packet =
                                         reopen_b4_terminal_evidence_packet_from_directory_descriptor(
                                             committed.directory_descriptor(&leaves.packet_relative)?,
@@ -892,6 +900,66 @@ mod tests {
             ["pub struct ", "PublishedTerminalEvidenceHandlerResultV2"].concat();
         assert!(source.contains(&private_declaration));
         assert!(!source.contains(&public_declaration));
+    }
+
+    #[test]
+    fn both_terminal_handlers_keep_the_projected_reserved_absence_check() {
+        fn guarded_postcommit(source: &str, start: &str, end: &str) -> bool {
+            let Some((_, handler)) = source.split_once(start) else {
+                return false;
+            };
+            let Some((handler, _)) = handler.split_once(end) else {
+                return false;
+            };
+            let Some((_, postcommit)) = handler.split_once("commit_with_postcommit_validation(")
+            else {
+                return false;
+            };
+            let Some((before_reopen, _)) = postcommit
+                .split_once("reopen_b4_terminal_evidence_packet_from_directory_descriptor(")
+            else {
+                return false;
+            };
+            let check = "committed.require_projected_reserved_staging_absent(";
+            if before_reopen.matches(check).count() != 1 {
+                return false;
+            }
+            let Some(projection) = before_reopen.find("leaves.revalidate_published_projection()")
+            else {
+                return false;
+            };
+            let Some(absence) = before_reopen.find(check) else {
+                return false;
+            };
+            let Some(packet) = before_reopen.find("&leaves.packet_relative") else {
+                return false;
+            };
+            let Some(reserved) = before_reopen.find("&leaves.reserved_inner_relative") else {
+                return false;
+            };
+            projection < absence && absence < packet && packet < reserved
+        }
+
+        for (source, start, end) in [
+            (
+                include_str!("publish_terminal_evidence.rs"),
+                "pub(crate) fn execute_publish_terminal_evidence_handler",
+                "fn construct_receipt(",
+            ),
+            (
+                include_str!("publish_terminal_evidence/trusted_host.rs"),
+                "pub(in crate::b4_campaign_executor) fn handle",
+                "#[cfg(test)]\nmod tests",
+            ),
+        ] {
+            assert!(guarded_postcommit(source, start, end));
+            let omitted = source.replacen(
+                "committed.require_projected_reserved_staging_absent(",
+                "committed.omitted_reserved_staging_absence_check(",
+                1,
+            );
+            assert!(!guarded_postcommit(&omitted, start, end));
+        }
     }
 
     #[test]

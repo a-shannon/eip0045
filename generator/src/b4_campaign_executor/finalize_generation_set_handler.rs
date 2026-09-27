@@ -46,6 +46,7 @@ mod execute {
         b4_campaign_contract::{
             B4CampaignPrecommitAuthorityV1, B4ContractArtifactEncodingV1,
             B4ContractArtifactIdentityV1, B4PositiveGenerationAuthorityV2,
+            B4TrustedHostCampaignPrecommitAuthorityV1,
             Eip0045B4CampaignPrecommitV1,
             B4PositiveGenerationCaseExternalV2, B4PositiveGenerationExternalBytesV2,
             B4PositiveGenerationExternalClosureV2, MAX_CAMPAIGN_PRECOMMIT_BYTES,
@@ -58,6 +59,10 @@ mod execute {
             PositiveGenerationDocuments, construct_canonical_positive_generation_set_jcs_v2,
             construct_canonical_positive_generation_set_jcs_trusted_host_v1,
             validate_and_bind_v2_positive_generation_preacceptance,
+        },
+        b4_terminal_source_lineage::{
+            B4TerminalSourceCaseExternalV2, B4TerminalSourceExternalBytesV2,
+            B4TerminalSourceExternalClosureV2,
         },
         b4_positive_input_set::{
             B4_POSITIVE_INPUT_SET_COMPLETION_MAX_BYTES, B4_POSITIVE_INPUT_SET_MAX_BYTES,
@@ -1033,6 +1038,31 @@ mod execute {
         Ok(())
     }
 
+    fn require_published_generation_match(
+        published: &RetainedArtifactV1,
+        expected_jcs: &[u8],
+        expected_identity: &B4ContractArtifactIdentityV1,
+    ) -> Result<()> {
+        ensure!(
+            published.campaign_relative_path == POSITIVE_GENERATION_SET_CAMPAIGN_PATH,
+            "trusted-host published generation set has another campaign path"
+        );
+        ensure!(
+            published.bytes.as_slice() == expected_jcs,
+            "trusted-host published generation set differs from the reconstructed JCS"
+        );
+        let actual = B4ContractArtifactIdentityV1::from_bytes(
+            &published.campaign_relative_path,
+            B4ContractArtifactEncodingV1::Rfc8785Jcs,
+            &published.bytes,
+        )?;
+        ensure!(
+            &actual == expected_identity,
+            "trusted-host published generation set identity differs from the reconstructed JCS"
+        );
+        Ok(())
+    }
+
     /// Private authority retained only after the exact committed bytes reopen.
     pub(crate) struct FinalizedGenerationSetHandlerResultV1 {
         authority: B4PositiveGenerationAuthorityV2,
@@ -1302,12 +1332,127 @@ mod execute {
                 replay_trusted_host_precommit_for_finalizer},
         };
         use eip_0045_reproduction::b4_positive_gate::positive_auxiliary_artifact_paths;
+        use eip_0045_reproduction::b4_negative_ancestry_authority::{
+            B4NegativeAncestryCase9ExportV2, B4NegativeAncestryExternalBytesV2,
+            B4NegativeAncestryProfilePackageExternalV2, B4NegativeAncestrySourceClosureV2,
+        };
 
         #[derive(Debug)]
         struct AuthenticatedPrecommit {
             identity: B4ContractArtifactIdentityV1,
             envelope: Eip0045B4TrustedHostCampaignPrecommitV1,
             previous_request: B4TrustedHostRequestV1,
+        }
+
+        /// Owns the exact physical source closure from which the published V2
+        /// document and its affine authority were reconstructed.
+        pub(in crate::b4_campaign_executor) struct TrustedHostPublishedGenerationReplayV1 {
+            authority: B4PositiveGenerationAuthorityV2,
+            retained: RetainedGenerationClosureV1,
+            published: RetainedArtifactV1,
+        }
+
+        impl TrustedHostPublishedGenerationReplayV1 {
+            pub(in crate::b4_campaign_executor) fn authority(
+                &self,
+            ) -> &B4PositiveGenerationAuthorityV2 {
+                &self.authority
+            }
+
+            pub(in crate::b4_campaign_executor) fn into_authority(
+                self,
+            ) -> B4PositiveGenerationAuthorityV2 {
+                self.authority
+            }
+
+            pub(in crate::b4_campaign_executor) fn with_terminal_source_closure<T>(
+                &self,
+                guest_elf: B4TerminalSourceExternalBytesV2<'_>,
+                consume: impl FnOnce(
+                    &B4PositiveGenerationAuthorityV2,
+                    B4TerminalSourceExternalClosureV2<'_>,
+                ) -> Result<T>,
+            ) -> Result<T> {
+                let selected = [0, 8, 9].map(|index| &self.retained.cases[index]);
+                let primary: [Vec<_>; 3] = selected.map(|case| {
+                    case.primary_artifacts.iter()
+                        .map(|source| terminal_source(&source.artifact))
+                        .collect()
+                });
+                let auxiliary: [Vec<_>; 3] = selected.map(|case| {
+                    case.auxiliary_artifacts.iter()
+                        .map(|source| terminal_source(&source.artifact))
+                        .collect()
+                });
+                let cases: [B4TerminalSourceCaseExternalV2<'_>; 3] =
+                    std::array::from_fn(|index| B4TerminalSourceCaseExternalV2 {
+                        proof_output_manifest: terminal_source(
+                            &selected[index].proof_output_manifest),
+                        primary_artifacts: &primary[index],
+                        auxiliary_artifacts: &auxiliary[index],
+                    });
+                consume(&self.authority, B4TerminalSourceExternalClosureV2 {
+                    positive_input_set: B4TerminalSourceExternalBytesV2 {
+                        path: self.retained.positive_input_set.input_set_path(),
+                        bytes: self.retained.positive_input_set.input_set_jcs(),
+                    },
+                    positive_generation_set: terminal_source(&self.published),
+                    guest_elf,
+                    case0_lift15: cases[0],
+                    case8_terminal_join: cases[1],
+                    case9_terminal_resolve: cases[2],
+                })
+            }
+
+            pub(in crate::b4_campaign_executor) fn with_negative_ancestry_source_closure<T>(
+                &self,
+                campaign_precommit_jcs: &[u8],
+                profile_package: B4NegativeAncestryProfilePackageExternalV2<'_>,
+                alternate_guest_elf: B4NegativeAncestryExternalBytesV2<'_>,
+                consume: impl FnOnce(
+                    &B4PositiveGenerationAuthorityV2,
+                    B4NegativeAncestrySourceClosureV2<'_>,
+                ) -> Result<T>,
+            ) -> Result<T> {
+                let case9 = &self.retained.cases[9];
+                let primary = case9.primary_artifacts.iter()
+                    .map(|source| negative_ancestry_source(&source.artifact))
+                    .collect::<Vec<_>>();
+                let auxiliary = case9.auxiliary_artifacts.iter()
+                    .map(|source| negative_ancestry_source(&source.artifact))
+                    .collect::<Vec<_>>();
+                consume(&self.authority, B4NegativeAncestrySourceClosureV2 {
+                    campaign_precommit_jcs,
+                    positive_input_set: B4NegativeAncestryExternalBytesV2 {
+                        path: self.retained.positive_input_set.input_set_path(),
+                        bytes: self.retained.positive_input_set.input_set_jcs(),
+                    },
+                    positive_generation_set: negative_ancestry_source(&self.published),
+                    profile_package,
+                    case9: B4NegativeAncestryCase9ExportV2 {
+                        proof_output_manifest_jcs: &case9.proof_output_manifest.bytes,
+                        primary_artifacts: &primary,
+                        auxiliary_artifacts: &auxiliary,
+                    },
+                    alternate_guest_elf,
+                })
+            }
+        }
+
+        fn terminal_source(source: &RetainedArtifactV1) -> B4TerminalSourceExternalBytesV2<'_> {
+            B4TerminalSourceExternalBytesV2 {
+                path: &source.campaign_relative_path,
+                bytes: &source.bytes,
+            }
+        }
+
+        fn negative_ancestry_source(
+            source: &RetainedArtifactV1,
+        ) -> B4NegativeAncestryExternalBytesV2<'_> {
+            B4NegativeAncestryExternalBytesV2 {
+                path: &source.campaign_relative_path,
+                bytes: &source.bytes,
+            }
         }
 
         fn locator<'a>(request: &'a B4TrustedHostRequestV1, name: &str)
@@ -1377,6 +1522,106 @@ mod execute {
             };
             validate_source_plan::<16>(&plan)?;
             consume(&plan)
+        }
+
+        /// Reconstruct the published V2 authority and its terminal source
+        /// closure exclusively from locators opened by immutable-root custody.
+        /// The caller must supply a role-bounded descriptor read callback and
+        /// independently bind the current executable to the campaign token.
+        pub(in crate::b4_campaign_executor) fn replay_published_generation_for_terminal<
+            const ROOTS: usize, F,
+        >(
+            request: &B4TrustedHostRequestV1,
+            campaign_root: &Path,
+            prior_roots: [&Path; ROOTS],
+            build: &AuthoritativeB4BuildProjection,
+            campaign: &B4TrustedHostCampaignPrecommitAuthorityV1,
+            mut read: F,
+        ) -> Result<TrustedHostPublishedGenerationReplayV1>
+        where
+            F: FnMut(usize, &str) -> Result<Vec<u8>>,
+        {
+            ensure!(matches!(request.command.as_str(),
+                    "publish-terminal-evidence" | "generate-negative-ancestry-witness-catalog")
+                && request.prior_roots.len() == ROOTS
+                && (1..=MAX_ROOTS).contains(&ROOTS)
+                && Path::new(&request.campaign_root) == campaign_root
+                && request.prior_roots.iter().zip(prior_roots.iter())
+                    .all(|(selected, retained)| Path::new(selected.as_str()) == *retained),
+                "trusted-host terminal replay request or immutable roots changed");
+            ensure!(build.evidence_root_sha256()
+                == campaign.envelope().build_evidence_root_sha256.as_str(),
+                "trusted-host terminal replay selected another authoritative build");
+            let precommit_locator = request.locator("campaignPrecommit")?;
+            ensure!(precommit_locator.relative_path == "trusted-host/campaign-precommit.json",
+                "trusted-host terminal precommit locator is not the published file");
+            let precommit_root = *prior_roots.get(precommit_locator.root_index)
+                .context("trusted-host terminal precommit root index is invalid")?;
+            let precommit_path = derive_campaign_relative_artifact_path(campaign_root,
+                precommit_root, &precommit_locator.relative_path)?;
+            ensure!(precommit_path == campaign.envelope_identity().path,
+                "trusted-host terminal precommit path differs from its authority");
+
+            let request_locator = request.locator("precommitRequest")?;
+            let request_root = *prior_roots.get(request_locator.root_index)
+                .context("trusted-host terminal prior request root index is invalid")?;
+            let request_path = derive_campaign_relative_artifact_path(campaign_root,
+                request_root, &request_locator.relative_path)?;
+            let previous_bytes = read(request_locator.root_index,
+                &request_locator.relative_path)?;
+            ensure!((1..=65536).contains(&previous_bytes.len()),
+                "trusted-host terminal prior request exceeds its byte bound");
+            let previous_identity = B4ContractArtifactIdentityV1::from_bytes(
+                &request_path, B4ContractArtifactEncodingV1::Rfc8785Jcs,
+                &previous_bytes)?;
+            ensure!(&previous_identity == campaign.request_identity(),
+                "trusted-host terminal prior request differs from its authority");
+            let previous_request = B4TrustedHostRequestV1::from_canonical_jcs(
+                &previous_bytes)?;
+            ensure!(previous_request.command == "prepare-campaign-precommit"
+                && previous_request.campaign_root == request.campaign_root
+                && previous_request.configured_executor_artifact
+                    == request.configured_executor_artifact
+                && Path::new(&previous_request.outer_final_root) == precommit_root,
+                "trusted-host terminal prior request belongs to another command or root");
+            let previous_build_root = previous_request.prior_roots
+                .get(previous_request.build_evidence_root_index)
+                .context("trusted-host terminal prior build root index is invalid")?;
+            ensure!(Some(previous_build_root)
+                == request.prior_roots.get(request.build_evidence_root_index),
+                "trusted-host terminal prior request selected another build root");
+
+            with_source_plan(request, |plan| {
+                validate_source_plan::<ROOTS>(plan)?;
+                let input_jcs = read(plan.positive_input_phase_root_index,
+                    POSITIVE_INPUT_SET_FILE)?;
+                let completion_jcs = read(plan.positive_input_phase_root_index,
+                    "trusted-host-input-set-completion.json")?;
+                let retained = retain_generation_closure_trusted_host(campaign_root,
+                    prior_roots, input_jcs, completion_jcs,
+                    |index, path| read(index, path), campaign.envelope(),
+                    &previous_request, plan)?;
+                let candidate = validate_generation_candidate(build, &retained,
+                    POSITIVE_GENERATION_SET_CAMPAIGN_PATH)?;
+                let published_locator = locator(request, "positiveGenerationSet")?;
+                let mut published_budget = RetainedByteBudget::default();
+                let published = retain_artifact(campaign_root, prior_roots, &mut read,
+                    &mut published_budget, &published_locator)?;
+                ensure!((1..=MAX_POSITIVE_GENERATION_SET_BYTES).contains(
+                    &published.bytes.len()),
+                    "trusted-host published generation set exceeds its byte bound");
+                require_published_generation_match(&published,
+                    &candidate.generation_set_jcs,
+                    &candidate.expected_generation_identity)?;
+                let authorized = mint_generation_authority(candidate);
+                verify_generation_authority_identity(&authorized,
+                    campaign.inner_precommit())?;
+                Ok(TrustedHostPublishedGenerationReplayV1 {
+                    authority: authorized.authority,
+                    retained,
+                    published,
+                })
+            })
         }
 
         fn authenticate_reopened<const ROOTS: usize, Replay>(
@@ -1857,6 +2102,44 @@ mod execute {
                     "positive-input-set-completion.json".to_owned();
                 assert!(with_source_plan(&selected, |_| Ok(())).is_err());
             }
+
+            #[test]
+            fn trusted_host_terminal_replay_requires_exact_published_path_bytes_and_identity() {
+                let expected_jcs = br#"{"format":"positive-generation-set"}"#;
+                let expected = B4ContractArtifactIdentityV1::from_bytes(
+                    POSITIVE_GENERATION_SET_CAMPAIGN_PATH,
+                    B4ContractArtifactEncodingV1::Rfc8785Jcs,
+                    expected_jcs,
+                ).unwrap();
+                let mut published = RetainedArtifactV1 {
+                    campaign_relative_path: POSITIVE_GENERATION_SET_CAMPAIGN_PATH.to_owned(),
+                    bytes: expected_jcs.to_vec(),
+                };
+                require_published_generation_match(&published, expected_jcs, &expected).unwrap();
+
+                published.bytes = br#"{"format":"other-generation-set"}"#.to_vec();
+                assert!(format!("{:#}", require_published_generation_match(
+                    &published, expected_jcs, &expected).unwrap_err())
+                    .contains("differs from the reconstructed JCS"));
+
+                published.bytes = expected_jcs.to_vec();
+                published.campaign_relative_path =
+                    "reproduction/postproof/other-generation-set.json".to_owned();
+                assert!(format!("{:#}", require_published_generation_match(
+                    &published, expected_jcs, &expected).unwrap_err())
+                    .contains("another campaign path"));
+
+                published.campaign_relative_path =
+                    POSITIVE_GENERATION_SET_CAMPAIGN_PATH.to_owned();
+                let other_identity = B4ContractArtifactIdentityV1::from_bytes(
+                    POSITIVE_GENERATION_SET_CAMPAIGN_PATH,
+                    B4ContractArtifactEncodingV1::Rfc8785Jcs,
+                    br#"{"format":"other-generation-set"}"#,
+                ).unwrap();
+                assert!(format!("{:#}", require_published_generation_match(
+                    &published, expected_jcs, &other_identity).unwrap_err())
+                    .contains("identity differs"));
+            }
         }
     }
 
@@ -2274,6 +2557,12 @@ pub(crate) use execute::{
 #[cfg(all(target_os = "linux", feature = "b4-finalize-generation-set-handler",
     feature = "b4-prepare-input-set-kernel"))]
 pub(super) use execute::trusted_host::handle as handle_trusted_host_finalize;
+
+#[cfg(all(target_os = "linux", feature = "b4-finalize-generation-set-handler",
+    feature = "b4-prepare-input-set-kernel"))]
+pub(super) use execute::trusted_host::{
+    TrustedHostPublishedGenerationReplayV1, replay_published_generation_for_terminal,
+};
 
 #[cfg(test)]
 mod tests {

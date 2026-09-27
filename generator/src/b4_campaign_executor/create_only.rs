@@ -298,6 +298,58 @@ impl CommittedCreateOnlyDirectoryView<'_, '_> {
             "committed absence check",
         )
     }
+
+    /// Require the deterministic terminal-packet staging sibling to be absent.
+    /// The reserved dot-prefixed name is derived from the portable final leaf,
+    /// rather than parsed as a create-only descendant.
+    pub(super) fn require_projected_reserved_staging_absent(
+        &self,
+        final_leaf: &str,
+        expected_reserved_leaf: &str,
+    ) -> Result<()> {
+        self.require_projected_reserved_staging_absent_with_preprobe(
+            final_leaf,
+            expected_reserved_leaf,
+            || Ok(()),
+        )
+    }
+
+    fn require_projected_reserved_staging_absent_with_preprobe(
+        &self,
+        final_leaf: &str,
+        expected_reserved_leaf: &str,
+        before_absence_probe: impl FnOnce() -> Result<()>,
+    ) -> Result<()> {
+        let final_path = self.transaction.layout.final_path().join(final_leaf);
+        let projected = project_b4_terminal_evidence_publication_layout(&final_path)
+            .context("committed reserved staging projection failed")?;
+        ensure!(
+            projected.final_path() == final_path
+                && projected.parent() == self.transaction.layout.final_path(),
+            "committed reserved staging projection escaped the retained root"
+        );
+        let reserved = projected.reserved_staging_path();
+        ensure!(
+            reserved.parent() == Some(self.transaction.layout.final_path())
+                && reserved.file_name() == Some(OsStr::new(expected_reserved_leaf)),
+            "committed reserved staging leaf differs from the projected name"
+        );
+        self.transaction
+            .reauthenticate_final()
+            .context("committed reserved staging absence precheck failed")?;
+        before_absence_probe().context("committed reserved staging preprobe failed")?;
+        let outcome = ensure_absent(
+            self.transaction.staging_root.as_fd(),
+            OsStr::new(expected_reserved_leaf),
+            reserved,
+            "reserved committed staging sibling",
+        );
+        finish_guarded_outcome(
+            outcome,
+            self.transaction.reauthenticate_final(),
+            "committed reserved staging absence check",
+        )
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -3438,6 +3490,100 @@ mod tests {
         assert!(result.is_err());
         assert!(!callback_entered.get());
         assert!(failed_final.is_dir());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn projected_reserved_staging_absence_accepts_the_derived_name() {
+        let temp = tempfile::tempdir().unwrap();
+        let final_path = temp.path().join("published");
+        let layout = project_create_only_directory_layout(&final_path).unwrap();
+        let mut transaction = begin_test_transaction(&layout, &["payload.bin"]).unwrap();
+        transaction
+            .create_file("payload.bin", b"payload", 64)
+            .unwrap();
+        let leaf = "terminal-evidence-packet";
+        let projected =
+            super::project_b4_terminal_evidence_publication_layout(&final_path.join(leaf)).unwrap();
+        let reserved = projected
+            .reserved_staging_path()
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(reserved.starts_with('.'));
+
+        let value = transaction
+            .commit_with_postcommit_validation(|committed| {
+                committed.require_projected_reserved_staging_absent(leaf, reserved)?;
+                Ok("validated")
+            })
+            .unwrap();
+        assert_eq!(value, "validated");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn projected_reserved_staging_absence_rejects_a_substituted_expected_name() {
+        let temp = tempfile::tempdir().unwrap();
+        let final_path = temp.path().join("published");
+        let layout = project_create_only_directory_layout(&final_path).unwrap();
+        let mut transaction = begin_test_transaction(&layout, &["payload.bin"]).unwrap();
+        transaction
+            .create_file("payload.bin", b"payload", 64)
+            .unwrap();
+
+        let result: anyhow::Result<&'static str> =
+            transaction.commit_with_postcommit_validation(|committed| {
+                committed.require_projected_reserved_staging_absent(
+                    "terminal-evidence-packet",
+                    ".different-staging",
+                )?;
+                Ok("must-not-escape")
+            });
+        assert!(format!("{:#}", result.unwrap_err()).contains("differs from the projected name"));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn projected_reserved_staging_absence_rejects_an_occupied_name() {
+        let temp = tempfile::tempdir().unwrap();
+        let final_path = temp.path().join("published");
+        let layout = project_create_only_directory_layout(&final_path).unwrap();
+        let mut transaction = begin_test_transaction(&layout, &["payload.bin"]).unwrap();
+        transaction
+            .create_file("payload.bin", b"payload", 64)
+            .unwrap();
+        let leaf = "terminal-evidence-packet";
+        let projected =
+            super::project_b4_terminal_evidence_publication_layout(&final_path.join(leaf)).unwrap();
+        let reserved = projected
+            .reserved_staging_path()
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap();
+        let entered = Cell::new(false);
+
+        let result: anyhow::Result<&'static str> =
+            transaction.commit_with_postcommit_validation(|committed| {
+                committed.require_projected_reserved_staging_absent_with_preprobe(
+                    leaf,
+                    reserved,
+                    || {
+                        fs::write(final_path.join(reserved), b"occupied")?;
+                        entered.set(true);
+                        Ok(())
+                    },
+                )?;
+                Ok("must-not-escape")
+            });
+        assert!(entered.get());
+        assert_eq!(fs::read(final_path.join(reserved)).unwrap(), b"occupied");
+        assert!(
+            format!("{:#}", result.unwrap_err())
+                .contains("reserved committed staging sibling is occupied")
+        );
     }
 
     #[cfg(target_os = "linux")]

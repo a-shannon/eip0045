@@ -3,8 +3,10 @@
 use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result, ensure};
+use eip_0045_reproduction::b4_campaign_contract::B4ContractArtifactIdentityV1;
 use eip_0045_reproduction::b4_positive_gate::{
-    B4PositiveOciImageLayoutV1, PositiveGateBindings, PositiveRunnerRole,
+    B4PositiveOciImageLayoutV1, B4PositivePrecommitWithOciExpectationV2,
+    PositiveGateBindings, PositiveRunnerRole,
 };
 use eip_0045_reproduction::b4_positive_input_set::{
     B4PositiveInputSetLayoutV1, B4PositiveInputSetLayoutV2, B4PositiveInputSetPublicationPathsV1,
@@ -16,7 +18,9 @@ use eip_0045_reproduction::b4_terminal_evidence_packet::project_b4_terminal_evid
 use super::{
     create_only::project_create_only_directory_layout,
     oci_image_layout_import::{
-        AuthenticatedOciOuterUstarInventoryV1, project_authenticated_oci_outer_ustar_inventory,
+        AuthenticatedOciOuterUstarInventoryV1, AuthenticatedOciOuterUstarInventoryV2,
+        project_authenticated_oci_outer_ustar_inventory,
+        project_authenticated_oci_outer_ustar_inventory_v2,
     },
     typestate::OciTopologyCustodyBridgePermitV1,
 };
@@ -187,6 +191,70 @@ impl AuthenticatedOciSlotConstructionPermitV1 {
             relative_path: self.root_relative_path.clone(),
         }
     }
+}
+
+/// Preparatory V2 locator bound to one exact opaque profile in the retained
+/// four-role precommit bundle. There is no V2 custody or import entry point.
+#[must_use = "the V2 OCI locator must enter the same affine inventory as its profile"]
+pub(super) struct AuthenticatedOciSlotConstructionPermitV2 {
+    profile_index: usize,
+    profile_identity: B4ContractArtifactIdentityV1,
+    expected_mode_table_sha256: [u8; 32],
+    root_index: usize,
+    root_relative_path: String,
+}
+
+impl AuthenticatedOciSlotConstructionPermitV2 {
+    pub(super) fn into_parts(
+        self,
+    ) -> (usize, B4ContractArtifactIdentityV1, [u8; 32], usize, String) {
+        (
+            self.profile_index,
+            self.profile_identity,
+            self.expected_mode_table_sha256,
+            self.root_index,
+            self.root_relative_path,
+        )
+    }
+
+    fn capture_slot(&self) -> ProjectedOciImageLayoutCaptureSlotV2 {
+        ProjectedOciImageLayoutCaptureSlotV2 {
+            root_index: self.root_index,
+            relative_path: self.root_relative_path.clone(),
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) fn test_only(
+        profile_index: usize,
+        profile_identity: B4ContractArtifactIdentityV1,
+        expected_mode_table_sha256: [u8; 32],
+    ) -> Self {
+        Self {
+            profile_index,
+            profile_identity,
+            expected_mode_table_sha256,
+            root_index: 0,
+            root_relative_path: "images/test.oci.tar".to_owned(),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct ProjectedOciImageLayoutCaptureSlotV2 {
+    root_index: usize,
+    relative_path: String,
+}
+
+/// Source-only successor. Its private fields deliberately have no custody
+/// extraction method until a distinct V2 typestate bridge is reviewed.
+#[allow(dead_code, reason = "V2 OCI custody/import consumer is not yet admitted")]
+#[must_use = "the V2 topology must remain paired with its exact precommit bundle"]
+pub(super) struct AuthenticatedPrepareInputSetOciTopologyV2<const ROOTS: usize> {
+    layout: ProjectedPrepareInputSetCampaignLayoutV2<ROOTS>,
+    capture_slots:
+        [ProjectedOciImageLayoutCaptureSlotV2; MAX_PROJECTED_OCI_IMAGE_LAYOUT_CAPTURE_SLOTS],
+    import_inventory: AuthenticatedOciOuterUstarInventoryV2,
 }
 
 /// Closed H0 projection which carries physical capture and semantic import
@@ -1126,6 +1194,99 @@ pub(super) fn project_authenticated_prepare_input_set_oci_topology<const ROOTS: 
     })
 }
 
+/// The sole V2 locator/antichain calculation used before private permit mint.
+/// Archive paths are supplied by the opaque bundle at its production call.
+fn resolve_authenticated_v2_oci_archive_locators<const ROOTS: usize>(
+    layout: &ProjectedPrepareInputSetCampaignLayoutV2<ROOTS>,
+    archive_paths: [&str; MAX_PROJECTED_OCI_IMAGE_LAYOUT_CAPTURE_SLOTS],
+) -> Result<[(usize, String); MAX_PROJECTED_OCI_IMAGE_LAYOUT_CAPTURE_SLOTS]> {
+    let mut resolved = Vec::<(usize, String)>::with_capacity(
+        MAX_PROJECTED_OCI_IMAGE_LAYOUT_CAPTURE_SLOTS,
+    );
+    for archive_path in archive_paths {
+        let (root_index, root_relative_path) = resolve_authenticated_oci_archive_locator(
+            &layout.campaign_root,
+            &layout.prior_roots,
+            archive_path,
+        )?;
+        for (retained_root, retained_path) in &resolved {
+            if *retained_root == root_index {
+                ensure!(
+                    !paths_conflict(
+                        Path::new(retained_path),
+                        Path::new(&root_relative_path),
+                    ),
+                    "V2 OCI archive locators conflict within retained root {root_index}"
+                );
+            }
+        }
+        resolved.push((root_index, root_relative_path));
+    }
+    resolved
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("V2 OCI locator cardinality drift"))
+}
+
+/// Bind all four V2 OCI locators to the same affine precommit/expectation
+/// bundle. The result is preparatory: no production custody or import accepts it.
+#[allow(dead_code, reason = "V2 OCI custody/import consumer is not yet admitted")]
+pub(super) fn project_authenticated_prepare_input_set_oci_topology_v2<const ROOTS: usize>(
+    layout: ProjectedPrepareInputSetCampaignLayoutV2<ROOTS>,
+    authority: B4PositivePrecommitWithOciExpectationV2,
+) -> Result<AuthenticatedPrepareInputSetOciTopologyV2<ROOTS>> {
+    let profiles = authority.oci_image_layouts();
+    let mut capture_slots = Vec::<ProjectedOciImageLayoutCaptureSlotV2>::with_capacity(
+        MAX_PROJECTED_OCI_IMAGE_LAYOUT_CAPTURE_SLOTS,
+    );
+    let mut permits = Vec::with_capacity(MAX_PROJECTED_OCI_IMAGE_LAYOUT_CAPTURE_SLOTS);
+    for (profile, expected_role) in profiles.iter().zip(canonical_positive_runner_roles()) {
+        ensure!(
+            profile.role() == expected_role
+                && profile.metadata_provider().role() == expected_role,
+            "V2 OCI profile or metadata provider is outside canonical role order"
+        );
+    }
+    let resolved_locators = resolve_authenticated_v2_oci_archive_locators(
+        &layout,
+        std::array::from_fn(|index| profiles[index].archive_path()),
+    )?;
+    for (profile_index, (profile, (root_index, root_relative_path))) in
+        profiles.iter().zip(resolved_locators).enumerate()
+    {
+        let permit = AuthenticatedOciSlotConstructionPermitV2 {
+            profile_index,
+            profile_identity: profile.profile_identity().clone(),
+            expected_mode_table_sha256: profile
+                .metadata_provider()
+                .expected_mode_table_sha256(),
+            root_index,
+            root_relative_path,
+        };
+        capture_slots.push(permit.capture_slot());
+        permits.push(permit);
+    }
+    capture_slots.sort_by(|left, right| {
+        left.root_index
+            .cmp(&right.root_index)
+            .then_with(|| left.relative_path.cmp(&right.relative_path))
+    });
+    let capture_slots = capture_slots
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("V2 OCI capture-slot cardinality drift"))?;
+    let permits = permits
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("V2 OCI permit cardinality drift"))?;
+    let import_inventory = project_authenticated_oci_outer_ustar_inventory_v2(
+        permits,
+        authority,
+    )?;
+    Ok(AuthenticatedPrepareInputSetOciTopologyV2 {
+        layout,
+        capture_slots,
+        import_inventory,
+    })
+}
+
 /// Test-only projection of the OCI capture inventory which future H0 topology
 /// must derive before entering descriptor custody.
 #[cfg(test)]
@@ -1663,6 +1824,118 @@ mod tests {
     use eip_0045_reproduction::b4_positive_input_set::{
         B4PositiveInputSetLayoutV1, B4PositiveInputSetLayoutV2,
     };
+
+    #[test]
+    fn preparatory_v2_topology_keeps_one_affine_bundle_and_private_locator_origin() {
+        let source = include_str!("preflight.rs").replace("\r\n", "\n");
+        let production = source.split("#[cfg(test)]\nmod tests").next().unwrap();
+        let v2 = production
+            .split("pub(super) fn project_authenticated_prepare_input_set_oci_topology_v2")
+            .nth(1)
+            .unwrap()
+            .split("/// Test-only projection of the OCI capture inventory")
+            .next()
+            .unwrap();
+        let role = v2.find("profile.role() == expected_role").unwrap();
+        let locator = v2.find("resolve_authenticated_v2_oci_archive_locators(").unwrap();
+        let permit = v2.find("let permit = AuthenticatedOciSlotConstructionPermitV2").unwrap();
+        let inventory = v2.find("project_authenticated_oci_outer_ustar_inventory_v2(").unwrap();
+        assert!(role < locator && locator < permit && permit < inventory);
+        assert!(v2.contains("authority: B4PositivePrecommitWithOciExpectationV2"));
+        assert!(v2.contains("expected_mode_table_sha256: profile"));
+        assert!(v2.contains("profile_identity: profile.profile_identity().clone()"));
+        assert!(v2.contains("permits,\n        authority,"));
+        assert!(!v2.contains("into_precommit()"));
+        let locator_helper = production
+            .split("fn resolve_authenticated_v2_oci_archive_locators<const ROOTS: usize>(")
+            .nth(1)
+            .unwrap()
+            .split("/// Bind all four V2 OCI locators")
+            .next()
+            .unwrap();
+        assert!(locator_helper.contains("resolve_authenticated_oci_archive_locator("));
+        assert!(locator_helper.contains("!paths_conflict("));
+        let require_locator_join = |body: &str| {
+            assert_eq!(body.matches("resolve_authenticated_v2_oci_archive_locators(").count(), 1);
+        };
+        require_locator_join(v2);
+        let omission_mutant = v2.replacen(
+            "resolve_authenticated_v2_oci_archive_locators(",
+            "omitted_v2_locator_antichain(",
+            1,
+        );
+        assert!(std::panic::catch_unwind(|| require_locator_join(&omission_mutant)).is_err());
+        let topology = production
+            .split("pub(super) struct AuthenticatedPrepareInputSetOciTopologyV2")
+            .nth(1)
+            .unwrap()
+            .split("/// Closed H0 projection")
+            .next()
+            .unwrap();
+        assert!(!topology.contains("into_custody_parts"));
+    }
+
+    #[test]
+    fn preparatory_v2_locator_helper_accepts_closed_four_and_rejects_conflicts_and_escape() {
+        let temp = tempfile::tempdir().unwrap();
+        let campaign = temp.path().join("campaign");
+        let prior = campaign.join("inputs");
+        let outer_final = campaign.join("phases").join("prepare-001");
+        let layout = project_prepare_input_set_campaign_layout_v2(
+            &campaign,
+            [&prior],
+            &outer_final,
+        )
+        .unwrap();
+        let healthy = [
+            "inputs/images/a.oci.tar",
+            "inputs/images/b.oci.tar",
+            "inputs/images/c.oci.tar",
+            "inputs/images/d.oci.tar",
+        ];
+        let resolved = super::resolve_authenticated_v2_oci_archive_locators(&layout, healthy)
+            .unwrap();
+        assert_eq!(resolved[0], (0, "images/a.oci.tar".to_owned()));
+        assert_eq!(resolved[3], (0, "images/d.oci.tar".to_owned()));
+
+        let duplicate = [healthy[0], healthy[0], healthy[2], healthy[3]];
+        let error = super::resolve_authenticated_v2_oci_archive_locators(&layout, duplicate)
+            .unwrap_err();
+        assert!(format!("{error:#}").contains("archive locators conflict"), "{error:#}");
+
+        let nested_alias = [
+            healthy[0],
+            "inputs/images/a.oci.tar/child",
+            healthy[2],
+            healthy[3],
+        ];
+        let error = super::resolve_authenticated_v2_oci_archive_locators(&layout, nested_alias)
+            .unwrap_err();
+        assert!(format!("{error:#}").contains("archive locators conflict"), "{error:#}");
+
+        let textual_alias = [
+            healthy[0],
+            "inputs/images/./b.oci.tar",
+            healthy[2],
+            healthy[3],
+        ];
+        assert!(
+            super::resolve_authenticated_v2_oci_archive_locators(&layout, textual_alias).is_err()
+        );
+
+        let outside_prior_root = [
+            healthy[0],
+            "other/images/b.oci.tar",
+            healthy[2],
+            healthy[3],
+        ];
+        let error = super::resolve_authenticated_v2_oci_archive_locators(
+            &layout,
+            outside_prior_root,
+        )
+        .unwrap_err();
+        assert!(format!("{error:#}").contains("does not map to exactly one retained root"), "{error:#}");
+    }
 
     #[test]
     fn prepare_input_set_projection_closes_two_direct_files_and_campaign_paths() {

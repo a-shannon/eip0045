@@ -19,7 +19,8 @@ use sha2::{Digest as _, Sha256};
 use crate::{
     b4_campaign_contract::{
         B4CampaignPrecommitAuthorityV1, B4ContractArtifactEncodingV1, B4ContractArtifactIdentityV1,
-        B4PositiveGenerationAuthorityV2,
+        B4PositiveGenerationAuthorityV2, B4TrustedHostCampaignPrecommitAuthorityV1,
+        B4VerifierContractAuthorityV1,
     },
     b4_materialization_set::{
         B4AuthenticatedPositiveInputSourcesV1, B4AuthenticatedPositiveInputSourcesV2,
@@ -240,8 +241,15 @@ pub(crate) struct B4NegativeAncestryPriorCommitmentsV1 {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct B4NegativeAncestryPriorCommitmentsV2 {
     campaign_precommit: PathlessByteIdentityV1,
+    trusted_host: Option<B4NegativeAncestryTrustedHostPriorV1>,
     positive_input_set: B4ContractArtifactIdentityV1,
     positive_generation_set: B4ContractArtifactIdentityV1,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct B4NegativeAncestryTrustedHostPriorV1 {
+    envelope: B4ContractArtifactIdentityV1,
+    request: B4ContractArtifactIdentityV1,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -336,6 +344,7 @@ impl B4NegativeAncestryPriorAuthorityViewV1 {
 #[derive(Debug)]
 struct B4NegativeAncestryPriorAuthorityViewV2 {
     campaign_precommit_jcs: Vec<u8>,
+    trusted_host: Option<B4NegativeAncestryTrustedHostPriorV1>,
     positive_input_set: B4ContractArtifactIdentityV1,
     positive_generation_set: B4ContractArtifactIdentityV1,
     negative_plan: B4ContractArtifactIdentityV1,
@@ -396,6 +405,7 @@ impl B4NegativeAncestryPriorAuthorityViewV2 {
 
         Ok(Self {
             campaign_precommit_jcs,
+            trusted_host: None,
             positive_input_set: positive.positive_input_set_identity().clone(),
             positive_generation_set: positive.positive_generation_set_identity().clone(),
             negative_plan: verifier.contract().negative_plan.clone(),
@@ -403,6 +413,94 @@ impl B4NegativeAncestryPriorAuthorityViewV2 {
             positive_provenance_sha256,
         })
     }
+
+    fn from_trusted_host(
+        campaign: &B4TrustedHostCampaignPrecommitAuthorityV1,
+        positive: &B4PositiveGenerationAuthorityV2,
+        verifier: &B4VerifierContractAuthorityV1,
+    ) -> Result<Self> {
+        ensure!(
+            campaign.inner_precommit().input_set == *positive.positive_input_set_identity(),
+            "trusted-host campaign and V2 positive authorities bind different input sets"
+        );
+        require_trusted_host_verifier_identity(
+            &campaign.inner_precommit().verifier_contract,
+            verifier,
+        )?;
+        let campaign_precommit_jcs = campaign.to_canonical_precommit_jcs()?;
+        campaign.verify_candidate_jcs(&campaign_precommit_jcs)?;
+        ensure!(
+            B4ContractArtifactIdentityV1::from_bytes(
+                &campaign.envelope_identity().path,
+                B4ContractArtifactEncodingV1::Rfc8785Jcs,
+                &campaign_precommit_jcs,
+            )? == *campaign.envelope_identity(),
+            "trusted-host ancestry precommit envelope bytes differ from its pathful identity"
+        );
+        let negative_plan_jcs = verifier.negative_plan_jcs();
+        ensure!(
+            B4ContractArtifactIdentityV1::from_bytes(
+                &verifier.contract().negative_plan.path,
+                B4ContractArtifactEncodingV1::Rfc8785Jcs,
+                negative_plan_jcs,
+            )? == verifier.contract().negative_plan,
+            "trusted-host ancestry negative-plan bytes differ from the verifier identity"
+        );
+        ensure!(
+            Eip0045B4NegativePlanV1::from_canonical_jcs(negative_plan_jcs)?
+                == Eip0045B4NegativePlanV1::canonical()?,
+            "trusted-host ancestry negative plan differs from the compiled closed plan"
+        );
+
+        let mut provenance_paths = BTreeSet::new();
+        merge_prior_paths(&mut provenance_paths, campaign.artifact_paths())?;
+        merge_prior_paths(&mut provenance_paths, positive.provenance_paths())?;
+        ensure!(
+            provenance_paths.contains(&campaign.envelope_identity().path)
+                && provenance_paths.contains(&campaign.request_identity().path)
+                && provenance_paths.contains(&positive.positive_input_set_identity().path)
+                && provenance_paths.contains(&positive.positive_generation_set_identity().path)
+                && provenance_paths.contains(&verifier.contract().negative_plan.path),
+            "trusted-host ancestry prior closure omits a retained authority document"
+        );
+        let positive_provenance_sha256 = positive.provenance_sha256().clone();
+        ensure!(
+            positive
+                .provenance_paths()
+                .iter()
+                .eq(positive_provenance_sha256.keys()),
+            "trusted-host ancestry positive provenance paths and digests differ"
+        );
+
+        Ok(Self {
+            campaign_precommit_jcs,
+            trusted_host: Some(B4NegativeAncestryTrustedHostPriorV1 {
+                envelope: campaign.envelope_identity().clone(),
+                request: campaign.request_identity().clone(),
+            }),
+            positive_input_set: positive.positive_input_set_identity().clone(),
+            positive_generation_set: positive.positive_generation_set_identity().clone(),
+            negative_plan: verifier.contract().negative_plan.clone(),
+            provenance_paths,
+            positive_provenance_sha256,
+        })
+    }
+}
+
+fn require_trusted_host_verifier_identity(
+    expected: &B4ContractArtifactIdentityV1,
+    verifier: &B4VerifierContractAuthorityV1,
+) -> Result<()> {
+    let bytes = verifier.to_canonical_contract_jcs()?;
+    ensure!(
+        B4ContractArtifactIdentityV1::from_bytes(
+            &expected.path,
+            B4ContractArtifactEncodingV1::Rfc8785Jcs,
+            &bytes,
+        )? == *expected,
+        "trusted-host ancestry verifier differs from the inner precommit identity"
+    );
+    Ok(())
 }
 
 #[derive(Clone, Debug)]
@@ -781,6 +879,30 @@ impl B4NegativeAncestrySourceAuthorityV2 {
         source: B4NegativeAncestrySourceClosureV2<'_>,
     ) -> Result<Self> {
         let prior = B4NegativeAncestryPriorAuthorityViewV2::from_authorities(campaign, positive)?;
+        Self::from_prior_and_source(prior, positive, source)
+    }
+
+    /// Authenticate a distinct trusted-host envelope and the V2 positive
+    /// generation before the same fixed witness producer can borrow sources.
+    /// The verifier is explicit because the trusted-host token retains its
+    /// identity but does not expose its negative-plan source bytes.
+    pub fn from_source_closure_trusted_host(
+        campaign: &B4TrustedHostCampaignPrecommitAuthorityV1,
+        positive: &B4PositiveGenerationAuthorityV2,
+        verifier: &B4VerifierContractAuthorityV1,
+        source: B4NegativeAncestrySourceClosureV2<'_>,
+    ) -> Result<Self> {
+        let prior = B4NegativeAncestryPriorAuthorityViewV2::from_trusted_host(
+            campaign, positive, verifier,
+        )?;
+        Self::from_prior_and_source(prior, positive, source)
+    }
+
+    fn from_prior_and_source(
+        prior: B4NegativeAncestryPriorAuthorityViewV2,
+        positive: &B4PositiveGenerationAuthorityV2,
+        source: B4NegativeAncestrySourceClosureV2<'_>,
+    ) -> Result<Self> {
         let authenticated = authenticate_source_closure_v2(&prior, positive, &source)?;
         Ok(Self {
             prior,
@@ -805,9 +927,32 @@ impl B4NegativeAncestrySourceAuthorityV2 {
     ) -> Result<()> {
         let supplied = B4NegativeAncestryPriorAuthorityViewV2::from_authorities(campaign, positive)
             .context("cannot reconstruct supplied V2 ancestry prior authorities")?;
+        self.verify_prior_view(&supplied, positive)
+    }
+
+    /// Rebind the source to the exact trusted-host envelope, request and
+    /// explicit verifier identity without accepting an H0 authority.
+    pub fn verify_authority_bindings_trusted_host(
+        &self,
+        campaign: &B4TrustedHostCampaignPrecommitAuthorityV1,
+        positive: &B4PositiveGenerationAuthorityV2,
+        verifier: &B4VerifierContractAuthorityV1,
+    ) -> Result<()> {
+        let supplied = B4NegativeAncestryPriorAuthorityViewV2::from_trusted_host(
+            campaign, positive, verifier,
+        )?;
+        self.verify_prior_view(&supplied, positive)
+    }
+
+    fn verify_prior_view(
+        &self,
+        supplied: &B4NegativeAncestryPriorAuthorityViewV2,
+        positive: &B4PositiveGenerationAuthorityV2,
+    ) -> Result<()> {
         ensure!(
             supplied.campaign_precommit_jcs == self.prior.campaign_precommit_jcs
-                && supplied.negative_plan == self.prior.negative_plan,
+                && supplied.negative_plan == self.prior.negative_plan
+                && supplied.trusted_host == self.prior.trusted_host,
             "supplied campaign differs from retained V2 ancestry source authority"
         );
         ensure!(
@@ -838,6 +983,7 @@ impl B4NegativeAncestrySourceAuthorityV2 {
         );
         let supplied_commitments = B4NegativeAncestryPriorCommitmentsV2 {
             campaign_precommit: pathless_identity(&supplied.campaign_precommit_jcs)?,
+            trusted_host: supplied.trusted_host.clone(),
             positive_input_set: supplied.positive_input_set.clone(),
             positive_generation_set: supplied.positive_generation_set.clone(),
         };
@@ -1096,8 +1242,31 @@ impl B4NegativeAncestryWitnessCatalogAuthorityV2 {
         positive: &B4PositiveGenerationAuthorityV2,
     ) -> Result<()> {
         let prior = B4NegativeAncestryPriorAuthorityViewV2::from_authorities(campaign, positive)?;
+        self.verify_prior_view(&prior, positive)
+    }
+
+    /// Rebind a derived catalogue to the complete trusted-host envelope and
+    /// pathful request retained by its source authority.
+    pub fn verify_prior_authority_lineage_trusted_host(
+        &self,
+        campaign: &B4TrustedHostCampaignPrecommitAuthorityV1,
+        positive: &B4PositiveGenerationAuthorityV2,
+        verifier: &B4VerifierContractAuthorityV1,
+    ) -> Result<()> {
+        let prior = B4NegativeAncestryPriorAuthorityViewV2::from_trusted_host(
+            campaign, positive, verifier,
+        )?;
+        self.verify_prior_view(&prior, positive)
+    }
+
+    fn verify_prior_view(
+        &self,
+        prior: &B4NegativeAncestryPriorAuthorityViewV2,
+        positive: &B4PositiveGenerationAuthorityV2,
+    ) -> Result<()> {
         let rederived = B4NegativeAncestryPriorCommitmentsV2 {
             campaign_precommit: pathless_identity(&prior.campaign_precommit_jcs)?,
+            trusted_host: prior.trusted_host.clone(),
             positive_input_set: prior.positive_input_set.clone(),
             positive_generation_set: prior.positive_generation_set.clone(),
         };
@@ -1461,6 +1630,7 @@ fn authenticate_source_closure_v2(
     Ok(AuthenticatedSourceClosureV2 {
         prior_commitments: B4NegativeAncestryPriorCommitmentsV2 {
             campaign_precommit: pathless_identity(&prior.campaign_precommit_jcs)?,
+            trusted_host: prior.trusted_host.clone(),
             positive_input_set: B4ContractArtifactIdentityV1::from_bytes(
                 external.positive_input_set.path,
                 B4ContractArtifactEncodingV1::Rfc8785Jcs,
@@ -3095,10 +3265,23 @@ pub(crate) mod test_support {
             &self,
             use_source: impl FnOnce(B4NegativeAncestrySourceClosureV2<'_>) -> Result<T>,
         ) -> Result<T> {
-            let campaign_precommit_jcs = self
-                .prior
-                .campaign_precommit_authority
-                .to_canonical_precommit_jcs()?;
+            self.with_source_closure_for_precommit(false, use_source)
+        }
+
+        fn with_source_closure_for_precommit<T>(
+            &self,
+            trusted_host: bool,
+            use_source: impl FnOnce(B4NegativeAncestrySourceClosureV2<'_>) -> Result<T>,
+        ) -> Result<T> {
+            let campaign_precommit_jcs = if trusted_host {
+                self.prior
+                    .trusted_host_campaign_precommit_authority
+                    .to_canonical_precommit_jcs()?
+            } else {
+                self.prior
+                    .campaign_precommit_authority
+                    .to_canonical_precommit_jcs()?
+            };
             let input =
                 parse_positive_input_sources_v2(&self.prior.sources.positive_input_set.bytes)?;
             let profile_manifest = self.source_artifact(&input.profile_manifest)?;
@@ -3214,6 +3397,39 @@ pub(crate) mod test_support {
         })
     }
 
+    pub(crate) fn fixed_trusted_host_negative_ancestry_lineage_test_support_v2()
+    -> Result<B4NegativeAncestryLineageTestSupportV2> {
+        let fixture = FixedNegativeAncestrySourceFixtureV2::exact()?;
+        let verifier = fixture
+            .prior
+            .campaign_precommit_authority
+            .verifier_authority();
+        let source = fixture.with_source_closure_for_precommit(true, |external| {
+            B4NegativeAncestrySourceAuthorityV2::from_source_closure_trusted_host(
+                &fixture.prior.trusted_host_campaign_precommit_authority,
+                &fixture.prior.positive_generation_authority,
+                verifier,
+                external,
+            )
+        })?;
+        source.verify_authority_bindings_trusted_host(
+            &fixture.prior.trusted_host_campaign_precommit_authority,
+            &fixture.prior.positive_generation_authority,
+            verifier,
+        )?;
+        let ancestry = source.finalize_with_replay(&fixture.entries(), &fixture.replay)?;
+        ancestry.verify_prior_authority_lineage_trusted_host(
+            &fixture.prior.trusted_host_campaign_precommit_authority,
+            &fixture.prior.positive_generation_authority,
+            verifier,
+        )?;
+        Ok(B4NegativeAncestryLineageTestSupportV2 {
+            prior: fixture.prior,
+            source,
+            ancestry,
+        })
+    }
+
     pub(super) struct B4NegativeAncestrySourceBindingTestSupportV1 {
         pub(super) prior:
             crate::b4_campaign_contract::test_support::NegativeAncestryConstructorTestSupportV1,
@@ -3276,6 +3492,7 @@ mod tests {
             fixed_negative_ancestry_lineage_test_support,
             fixed_negative_ancestry_lineage_test_support_v2,
             fixed_negative_ancestry_source_binding_test_support,
+            fixed_trusted_host_negative_ancestry_lineage_test_support_v2,
         },
         *,
     };
@@ -4698,6 +4915,156 @@ mod tests {
             B4NegativeAncestrySourceClosureV2<'a>,
         ) -> Result<B4NegativeAncestrySourceAuthorityV2> =
             B4NegativeAncestrySourceAuthorityV2::from_source_closure;
+    }
+
+    #[test]
+    fn trusted_host_source_and_catalog_retain_full_envelope_and_reject_h0_crossing() {
+        let support = fixed_trusted_host_negative_ancestry_lineage_test_support_v2().unwrap();
+        let verifier = support
+            .prior
+            .campaign_precommit_authority
+            .verifier_authority();
+        let campaign = &support.prior.trusted_host_campaign_precommit_authority;
+        let positive = &support.prior.positive_generation_authority;
+        support
+            .source
+            .verify_authority_bindings_trusted_host(campaign, positive, verifier)
+            .unwrap();
+        support
+            .ancestry
+            .verify_prior_authority_lineage_trusted_host(campaign, positive, verifier)
+            .unwrap();
+        assert_eq!(
+            support.source.authenticated.prior_commitments.trusted_host,
+            Some(B4NegativeAncestryTrustedHostPriorV1 {
+                envelope: campaign.envelope_identity().clone(),
+                request: campaign.request_identity().clone(),
+            })
+        );
+        assert!(
+            support
+                .source
+                .verify_authority_bindings(&support.prior.campaign_precommit_authority, positive)
+                .is_err()
+        );
+        assert!(
+            support
+                .ancestry
+                .verify_prior_authority_lineage(
+                    &support.prior.campaign_precommit_authority,
+                    positive
+                )
+                .is_err()
+        );
+        let historical = fixed_negative_ancestry_lineage_test_support_v2().unwrap();
+        assert!(
+            historical
+                .source
+                .verify_authority_bindings_trusted_host(campaign, positive, verifier)
+                .is_err()
+        );
+        assert!(
+            historical
+                .ancestry
+                .verify_prior_authority_lineage_trusted_host(campaign, positive, verifier)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn trusted_host_source_and_catalog_reject_request_bytes_and_path_substitutions() {
+        let support = fixed_trusted_host_negative_ancestry_lineage_test_support_v2().unwrap();
+        let verifier = support
+            .prior
+            .campaign_precommit_authority
+            .verifier_authority();
+        let positive = &support.prior.positive_generation_authority;
+        for substituted in [
+            &support.prior.trusted_host_alternate_request_authority,
+            &support.prior.trusted_host_alternate_request_path_authority,
+        ] {
+            assert_eq!(
+                substituted.inner_precommit(),
+                support
+                    .prior
+                    .trusted_host_campaign_precommit_authority
+                    .inner_precommit()
+            );
+            assert!(
+                support
+                    .source
+                    .verify_authority_bindings_trusted_host(substituted, positive, verifier)
+                    .is_err()
+            );
+            assert!(
+                support
+                    .ancestry
+                    .verify_prior_authority_lineage_trusted_host(substituted, positive, verifier)
+                    .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn trusted_host_source_and_catalog_check_the_retained_request_path_itself() {
+        let mut support = fixed_trusted_host_negative_ancestry_lineage_test_support_v2().unwrap();
+        let campaign = &support.prior.trusted_host_campaign_precommit_authority;
+        let positive = &support.prior.positive_generation_authority;
+        let verifier = support
+            .prior
+            .campaign_precommit_authority
+            .verifier_authority();
+        let replacement = "phases/prepare-001/alternate-precommit-request.json";
+        support
+            .source
+            .authenticated
+            .prior_commitments
+            .trusted_host
+            .as_mut()
+            .unwrap()
+            .request
+            .path = replacement.to_owned();
+        assert!(
+            support
+                .source
+                .verify_authority_bindings_trusted_host(campaign, positive, verifier)
+                .is_err()
+        );
+        support
+            .ancestry
+            .prior_commitments
+            .trusted_host
+            .as_mut()
+            .unwrap()
+            .request
+            .path = replacement.to_owned();
+        assert!(
+            support
+                .ancestry
+                .verify_prior_authority_lineage_trusted_host(campaign, positive, verifier)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn trusted_host_verifier_identity_rejects_independent_digest_and_length_faults() {
+        let support = fixed_trusted_host_negative_ancestry_lineage_test_support_v2().unwrap();
+        let expected = &support
+            .prior
+            .trusted_host_campaign_precommit_authority
+            .inner_precommit()
+            .verifier_contract;
+        let verifier = support
+            .prior
+            .campaign_precommit_authority
+            .verifier_authority();
+        require_trusted_host_verifier_identity(expected, verifier).unwrap();
+        let mut digest = expected.clone();
+        digest.sha256 = "0".repeat(64);
+        assert!(require_trusted_host_verifier_identity(&digest, verifier).is_err());
+        let mut length = expected.clone();
+        length.byte_length += 1;
+        assert!(require_trusted_host_verifier_identity(&length, verifier).is_err());
     }
 
     #[test]

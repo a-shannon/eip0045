@@ -11,6 +11,9 @@ use super::{
 
 const REPRODUCTION_SUBTREE: &str = "reproduction";
 
+#[cfg(all(target_os = "linux", feature = "b4-prepare-input-set-kernel"))]
+pub(super) mod trusted_host;
+
 fn project_generate_negative_ancestry_witness_catalog_layout<const ROOTS: usize>(
     campaign_root: &Path,
     prior_roots: [&Path; ROOTS],

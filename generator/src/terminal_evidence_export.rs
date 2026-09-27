@@ -13,7 +13,7 @@ use eip_0045_reproduction::b4_terminal_evidence_packet::{
 use eip_0045_reproduction::{
     b4_campaign_contract::{
         B4CampaignPrecommitAuthorityV1, B4ContractArtifactIdentityV1,
-        B4PositiveGenerationAuthorityV2,
+        B4PositiveGenerationAuthorityV2, B4TrustedHostCampaignPrecommitAuthorityV1,
     },
     b4_terminal::{
         B4_TERMINAL_FIXTURE_COUNT, B4_TERMINAL_FIXTURE_LAYOUT, terminal_fixture_raw_seal_path,
@@ -44,6 +44,7 @@ use crate::{
     },
     terminal_lineage::{
         authenticate_lineaged_b4_terminal_sources, authenticate_lineaged_b4_terminal_sources_v2,
+        authenticate_lineaged_b4_terminal_sources_trusted_host,
     },
 };
 
@@ -331,6 +332,70 @@ impl B4PublishedLineagedTerminalEvidenceAuthorityV2 {
     }
 }
 
+/// Distinct trusted-host publication authority retaining both affine V2
+/// predecessors without projecting them into the historical H0 route.
+#[allow(dead_code, reason = "the trusted-host handler consumes this after descriptor-rooted publication")]
+pub(crate) struct B4PublishedLineagedTerminalEvidenceAuthorityTrustedHostV1 {
+    packet: B4VerifiedTerminalEvidencePacketV1,
+    replay: B4ReplayedTerminalEvidenceSourcesV1,
+    positive: B4PositiveGenerationAuthorityV2,
+    lineage: B4TerminalSourceLineageAuthorityV2,
+}
+
+impl B4PublishedLineagedTerminalEvidenceAuthorityTrustedHostV1 {
+    pub(crate) fn identity(&self) -> B4TerminalEvidencePacketIdentityV1 {
+        self.packet.identity()
+    }
+
+    pub(crate) fn positive_input_set_identity(&self) -> &B4ContractArtifactIdentityV1 {
+        self.positive.positive_input_set_identity()
+    }
+
+    pub(crate) fn positive_generation_set_identity(&self) -> &B4ContractArtifactIdentityV1 {
+        self.positive.positive_generation_set_identity()
+    }
+
+    pub(crate) fn positive_authority(&self) -> &B4PositiveGenerationAuthorityV2 {
+        &self.positive
+    }
+
+    /// Rebind the exact descriptor-reopened packet under the still-live
+    /// trusted-host campaign and positive-source lineage.
+    pub(crate) fn rebind_postcommit_semantically_reopened_packet_trusted_host(
+        mut self,
+        campaign: &B4TrustedHostCampaignPrecommitAuthorityV1,
+        packet: B4VerifiedTerminalEvidencePacketV1,
+    ) -> Result<Self> {
+        let retained_identity = self.packet.identity();
+        let retained_replay_identity = self.replay.packet_identity;
+        require_terminal_packet_identity_binding(
+            retained_identity.manifest_byte_length(),
+            &hex::encode(retained_identity.packet_id()),
+            retained_replay_identity.manifest_byte_length(),
+            &hex::encode(retained_replay_identity.packet_id()),
+        )
+        .context("retained trusted-host replay identity drifted from its packet")?;
+        let reopened_identity = packet.identity();
+        require_terminal_packet_identity_binding(
+            retained_identity.manifest_byte_length(),
+            &hex::encode(retained_identity.packet_id()),
+            reopened_identity.manifest_byte_length(),
+            &hex::encode(reopened_identity.packet_id()),
+        )
+        .context("post-commit packet identity differs from trusted-host publication")?;
+        let replay = replay_b4_terminal_evidence_sources(&packet)
+            .context("post-commit trusted-host packet failed semantic source replay")?;
+        self.lineage
+            .verify_authority_bindings_trusted_host(campaign, &self.positive)
+            .context("post-commit trusted-host lineage differs from live authorities")?;
+        require_official_lineage_binding_v2(&packet, &self.lineage)
+            .context("post-commit packet differs from trusted-host official source lineage")?;
+        self.packet = packet;
+        self.replay = replay;
+        Ok(self)
+    }
+}
+
 /// Opaque, single-use in-memory preparation for one lineaged packet publication.
 ///
 /// This value carries no destination, filesystem capability, authority token,
@@ -346,6 +411,16 @@ pub(crate) struct B4PreparedLineagedTerminalEvidencePacketV1 {
 
 /// Opaque single-use preparation retaining both V2 affine predecessors.
 pub(crate) struct B4PreparedLineagedTerminalEvidencePacketV2 {
+    profile: B4AuthenticatedCompiledTerminalEvidenceProfileV1,
+    authenticated: B4AuthenticatedTerminalFixtureSourcesV1,
+    generated: B4GeneratedTerminalFixtureSetV1,
+    direct: B4Case8FinalJoinDirectEvidenceV1,
+    positive: B4PositiveGenerationAuthorityV2,
+    lineage: B4TerminalSourceLineageAuthorityV2,
+}
+
+/// Opaque single-use trusted-host preparation retaining its V2 predecessors.
+pub(crate) struct B4PreparedLineagedTerminalEvidencePacketTrustedHostV1 {
     profile: B4AuthenticatedCompiledTerminalEvidenceProfileV1,
     authenticated: B4AuthenticatedTerminalFixtureSourcesV1,
     generated: B4GeneratedTerminalFixtureSetV1,
@@ -417,6 +492,38 @@ pub(crate) fn prepare_lineaged_b4_terminal_evidence_packet_v2(
         .context("V2 case-8 direct evidence aliases a generated terminal fixture")?;
 
     Ok(B4PreparedLineagedTerminalEvidencePacketV2 {
+        profile,
+        authenticated,
+        generated,
+        direct,
+        positive,
+        lineage,
+    })
+}
+
+/// Prepare one trusted-host lineaged packet without converting its campaign
+/// authority to the historical H0 token.
+pub(crate) fn prepare_lineaged_b4_terminal_evidence_packet_trusted_host(
+    prover: &LocalProver,
+    campaign: &B4TrustedHostCampaignPrecommitAuthorityV1,
+    positive: B4PositiveGenerationAuthorityV2,
+    lineage: B4TerminalSourceLineageAuthorityV2,
+) -> Result<B4PreparedLineagedTerminalEvidencePacketTrustedHostV1> {
+    let prepared_sources =
+        authenticate_lineaged_b4_terminal_sources_trusted_host(campaign, &positive, &lineage)
+            .context("cannot authenticate trusted-host official terminal-source lineage")?;
+    let profile =
+        authenticate_compiled_terminal_evidence_profile(prepared_sources.sources().statement())
+            .context("trusted-host terminal sources do not bind the compiled profile")?;
+    let composition = compose_authenticated_b4_terminal_fixture_set(
+        prover,
+        prepared_sources.into_authenticated(),
+    )
+    .context("cannot compose the fixed trusted-host terminal-fixture set")?;
+    let (authenticated, generated, direct) = composition.into_parts();
+    require_case8_direct_non_substitution(&generated, &direct)
+        .context("trusted-host case-8 direct evidence aliases a generated fixture")?;
+    Ok(B4PreparedLineagedTerminalEvidencePacketTrustedHostV1 {
         profile,
         authenticated,
         generated,
@@ -508,6 +615,29 @@ pub(crate) fn publish_prepared_lineaged_b4_terminal_evidence_packet_from_directo
     complete_prepared_lineaged_publication_v2(packet, campaign, prepared)
 }
 
+/// Publish a trusted-host preparation through retained parent-directory custody.
+#[cfg(unix)]
+pub(crate) fn publish_prepared_lineaged_b4_terminal_evidence_packet_from_directory_descriptor_trusted_host(
+    parent: BorrowedFd<'_>,
+    final_component: &str,
+    campaign: &B4TrustedHostCampaignPrecommitAuthorityV1,
+    prepared: B4PreparedLineagedTerminalEvidencePacketTrustedHostV1,
+) -> Result<B4PublishedLineagedTerminalEvidenceAuthorityTrustedHostV1> {
+    preflight_b4_terminal_evidence_publication_from_directory_descriptor(parent, final_component)
+        .context("descriptor-rooted trusted-host terminal-evidence preflight failed")?;
+    prepared.lineage
+        .verify_authority_bindings_trusted_host(campaign, &prepared.positive)
+        .context("trusted-host lineage changed before descriptor-rooted publication")?;
+    let payloads = prepared_b4_terminal_evidence_payloads_trusted_host(&prepared)?;
+    let packet = publish_b4_terminal_evidence_packet_from_directory_descriptor(
+        parent,
+        final_component,
+        payloads,
+    )
+    .context("cannot publish and reopen descriptor-rooted trusted-host terminal packet")?;
+    complete_prepared_lineaged_publication_trusted_host(packet, campaign, prepared)
+}
+
 fn complete_prepared_lineaged_publication(
     packet: B4VerifiedTerminalEvidencePacketV1,
     prepared: B4PreparedLineagedTerminalEvidencePacketV1,
@@ -545,6 +675,31 @@ fn complete_prepared_lineaged_publication_v2(
         positive, lineage, ..
     } = prepared;
     Ok(B4PublishedLineagedTerminalEvidenceAuthorityV2 {
+        packet,
+        replay,
+        positive,
+        lineage,
+    })
+}
+
+fn complete_prepared_lineaged_publication_trusted_host(
+    packet: B4VerifiedTerminalEvidencePacketV1,
+    campaign: &B4TrustedHostCampaignPrecommitAuthorityV1,
+    prepared: B4PreparedLineagedTerminalEvidencePacketTrustedHostV1,
+) -> Result<B4PublishedLineagedTerminalEvidenceAuthorityTrustedHostV1> {
+    require_generation_binding(&packet, &prepared.authenticated, &prepared.direct)
+        .context("published trusted-host packet differs from generating composition")?;
+    let replay = replay_b4_terminal_evidence_sources(&packet)
+        .context("published trusted-host packet failed semantic source replay")?;
+    prepared.lineage
+        .verify_authority_bindings_trusted_host(campaign, &prepared.positive)
+        .context("published trusted-host packet lost its live authority join")?;
+    require_official_lineage_binding_v2(&packet, &prepared.lineage)
+        .context("published trusted-host packet differs from official source lineage")?;
+    let B4PreparedLineagedTerminalEvidencePacketTrustedHostV1 {
+        positive, lineage, ..
+    } = prepared;
+    Ok(B4PublishedLineagedTerminalEvidenceAuthorityTrustedHostV1 {
         packet,
         replay,
         positive,
@@ -714,6 +869,48 @@ fn prepared_b4_terminal_evidence_payloads_v2(
     )
 }
 
+fn prepared_b4_terminal_evidence_payloads_trusted_host(
+    prepared: &B4PreparedLineagedTerminalEvidencePacketTrustedHostV1,
+) -> Result<B4TerminalEvidencePacketPayloadsV1<'_>> {
+    let mut fixture_views = Vec::new();
+    fixture_views
+        .try_reserve_exact(B4_TERMINAL_FIXTURE_COUNT)
+        .context("cannot allocate the fixed trusted-host terminal fixture payload array")?;
+    for layout in B4_TERMINAL_FIXTURE_LAYOUT {
+        let raw_path = terminal_fixture_raw_seal_path(layout.fixture_id)?;
+        let oracle_path = terminal_fixture_receipt_oracle_path(layout.fixture_id)?;
+        fixture_views.push(B4TerminalEvidenceFixturePairPayloadV1::new(
+            prepared.generated.raw_seals().get(&raw_path)
+                .context("trusted-host generated fixture lacks a fixed raw-seal path")?,
+            prepared.generated.receipt_oracles().get(&oracle_path)
+                .context("trusted-host generated fixture lacks a fixed receipt-oracle path")?,
+        )?);
+    }
+    let fixtures: [_; B4_TERMINAL_FIXTURE_COUNT] = fixture_views
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("trusted-host terminal fixture payload count drift"))?;
+    B4TerminalEvidencePacketPayloadsV1::new(
+        B4TerminalEvidenceProfilePayloadsV1::new(
+            prepared.profile.manifest(),
+            prepared.profile.algorithm(),
+            prepared.profile.constants(),
+        )?,
+        B4TerminalEvidenceProducerSourcesV1::new(
+            prepared.authenticated.guest_elf(),
+            prepared.authenticated.statement(),
+            prepared.authenticated.lift15_receipt_oracle(),
+            prepared.authenticated.terminal_join_recursive_oracle(),
+            prepared.authenticated.terminal_resolve_recursive_oracle(),
+        )?,
+        fixtures,
+        prepared.generated.catalogue_jcs(),
+        B4TerminalEvidenceDirectPairPayloadV1::new(
+            prepared.direct.raw_seal(),
+            prepared.direct.receipt_oracle(),
+        )?,
+    )
+}
+
 fn require_case8_direct_non_substitution(
     generated: &B4GeneratedTerminalFixtureSetV1,
     direct: &B4Case8FinalJoinDirectEvidenceV1,
@@ -823,7 +1020,10 @@ mod tests {
         preflight_b4_terminal_evidence_publication, project_b4_terminal_evidence_publication_layout,
     };
     use eip_0045_reproduction::{
-        b4_campaign_contract::{B4CampaignPrecommitAuthorityV1, B4PositiveGenerationAuthorityV2},
+        b4_campaign_contract::{
+            B4CampaignPrecommitAuthorityV1, B4PositiveGenerationAuthorityV2,
+            B4TrustedHostCampaignPrecommitAuthorityV1,
+        },
         b4_terminal_evidence_packet::B4VerifiedTerminalEvidencePacketV1,
         b4_terminal_source_lineage::{
             B4TerminalSourceLineageAuthorityV1, B4TerminalSourceLineageAuthorityV2,
@@ -835,15 +1035,81 @@ mod tests {
     use super::publish_prepared_lineaged_b4_terminal_evidence_packet_from_directory_descriptor;
     use super::{
         B4PreparedLineagedTerminalEvidencePacketV1, B4PreparedLineagedTerminalEvidencePacketV2,
+        B4PreparedLineagedTerminalEvidencePacketTrustedHostV1,
         B4PublishedLineagedTerminalEvidenceAuthorityV1,
-        B4PublishedLineagedTerminalEvidenceAuthorityV2, B4ReplayedTerminalEvidenceSourcesV1,
+        B4PublishedLineagedTerminalEvidenceAuthorityV2,
+        B4PublishedLineagedTerminalEvidenceAuthorityTrustedHostV1,
+        B4ReplayedTerminalEvidenceSourcesV1,
         generate_and_publish_lineaged_b4_terminal_evidence_packet,
         generate_and_publish_lineaged_b4_terminal_evidence_packet_v2,
         prepare_lineaged_b4_terminal_evidence_packet,
         prepare_lineaged_b4_terminal_evidence_packet_v2,
+        prepare_lineaged_b4_terminal_evidence_packet_trusted_host,
         publish_prepared_lineaged_b4_terminal_evidence_packet, replay_b4_terminal_evidence_sources,
         require_terminal_packet_identity_binding, run_after_publication_preflight,
     };
+
+    #[test]
+    fn trusted_host_terminal_producer_join_has_distinct_live_authority_boundaries() {
+        let _: fn(
+            &LocalProver,
+            &B4TrustedHostCampaignPrecommitAuthorityV1,
+            B4PositiveGenerationAuthorityV2,
+            B4TerminalSourceLineageAuthorityV2,
+        ) -> Result<B4PreparedLineagedTerminalEvidencePacketTrustedHostV1> =
+            prepare_lineaged_b4_terminal_evidence_packet_trusted_host;
+        #[cfg(unix)]
+        let _: fn(
+            BorrowedFd<'_>,
+            &str,
+            &B4TrustedHostCampaignPrecommitAuthorityV1,
+            B4PreparedLineagedTerminalEvidencePacketTrustedHostV1,
+        ) -> Result<B4PublishedLineagedTerminalEvidenceAuthorityTrustedHostV1> =
+            super::publish_prepared_lineaged_b4_terminal_evidence_packet_from_directory_descriptor_trusted_host;
+        let _: fn(
+            B4PublishedLineagedTerminalEvidenceAuthorityTrustedHostV1,
+            &B4TrustedHostCampaignPrecommitAuthorityV1,
+            B4VerifiedTerminalEvidencePacketV1,
+        ) -> Result<B4PublishedLineagedTerminalEvidenceAuthorityTrustedHostV1> =
+            B4PublishedLineagedTerminalEvidenceAuthorityTrustedHostV1::
+                rebind_postcommit_semantically_reopened_packet_trusted_host;
+
+        let source = include_str!("terminal_evidence_export.rs");
+        let production = source.split("#[cfg(test)]").next().unwrap();
+        let prepare = production
+            .split("pub(crate) fn prepare_lineaged_b4_terminal_evidence_packet_trusted_host(")
+            .nth(1).unwrap()
+            .split("/// Publish one prepared packet").next().unwrap();
+        assert!(prepare.contains("authenticate_lineaged_b4_terminal_sources_trusted_host(campaign, &positive, &lineage)"));
+        let publish = production
+            .split("pub(crate) fn publish_prepared_lineaged_b4_terminal_evidence_packet_from_directory_descriptor_trusted_host(")
+            .nth(1).unwrap()
+            .split("fn complete_prepared_lineaged_publication(").next().unwrap();
+        let complete = production
+            .split("fn complete_prepared_lineaged_publication_trusted_host(")
+            .nth(1).unwrap()
+            .split("/// Generate, publish").next().unwrap();
+        let rebind = production
+            .split("pub(crate) fn rebind_postcommit_semantically_reopened_packet_trusted_host(")
+            .nth(1).unwrap()
+            .split("/// Opaque, single-use in-memory preparation").next().unwrap();
+        for phase in [publish, complete, rebind] {
+            assert!(phase.contains(".verify_authority_bindings_trusted_host(campaign, &"));
+            assert!(!phase.contains("verify_authority_bindings(campaign,"));
+        }
+        assert!(publish.contains("preflight_b4_terminal_evidence_publication_from_directory_descriptor"));
+        assert!(complete.contains("require_generation_binding(&packet, &prepared.authenticated, &prepared.direct)"));
+        assert!(complete.contains("replay_b4_terminal_evidence_sources(&packet)"));
+        assert!(complete.contains("require_official_lineage_binding_v2(&packet, &prepared.lineage)"));
+        assert!(rebind.contains("require_terminal_packet_identity_binding("));
+        assert!(rebind.contains("replay_b4_terminal_evidence_sources(&packet)"));
+        for forbidden in ["into_v1", "from_v2", "B4CampaignPrecommitAuthorityV1"] {
+            assert!(!prepare.contains(forbidden));
+            assert!(!publish.contains(forbidden));
+            assert!(!complete.contains(forbidden));
+            assert!(!rebind.contains(forbidden));
+        }
+    }
 
     #[test]
     fn packet_identity_binding_rejects_id_drift_at_equal_length() {

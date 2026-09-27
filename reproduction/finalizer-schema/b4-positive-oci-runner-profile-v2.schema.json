@@ -326,7 +326,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["startupDependencyPolicy", "binary", "release", "featureVersion", "vendor", "version", "options"],
       "properties": {
-        "startupDependencyPolicy": {"const": "eip0045-b4-elf64-amd64-startup-dependency-closure-v1"},
+        "startupDependencyPolicy": {"enum": ["eip0045-b4-elf64-amd64-startup-dependency-closure-v1", "eip0045-b4-elf64-amd64-startup-dependency-closure-v2"]},
         "binary": {"$ref": "#/$defs/ImageJavaBinaryIdentity"},
         "release": {"$ref": "#/$defs/JavaReleaseIdentity"},
         "featureVersion": {"const": 21},
@@ -353,7 +353,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["startupDependencyPolicy", "launcher", "compiler", "release", "featureVersion", "vendor", "version"],
       "properties": {
-        "startupDependencyPolicy": {"const": "eip0045-b4-elf64-amd64-startup-dependency-closure-v1"},
+        "startupDependencyPolicy": {"enum": ["eip0045-b4-elf64-amd64-startup-dependency-closure-v1", "eip0045-b4-elf64-amd64-startup-dependency-closure-v2"]},
         "launcher": {"$ref": "#/$defs/ImageJavaBinaryIdentity"},
         "compiler": {"$ref": "#/$defs/ImageJavacBinaryIdentity"},
         "release": {"$ref": "#/$defs/JavaReleaseIdentity"},
