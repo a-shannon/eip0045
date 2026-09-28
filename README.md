@@ -77,6 +77,21 @@ These commands do not exercise the embedded checkpoint routes. Their focused
 tests and genuine proof runs require the locked guest environment and the
 specific authenticated input receipts.
 
+The `trusted-host` CI job separately enables the F0 metadata policy, recursive
+ancestry and receipt-oracle features in the reproduction library. It executes
+the trusted-host authority tests and the pure metadata-policy tests. The
+generator job enables `b4-terminal-evidence-export`, which also compiles the
+campaign executor, input preparation, finalizer and terminal handlers, and runs
+the executor's ordinary tests sequentially. Each selected group must report at
+least one passing test and no failures or ignored tests; zero matches fail CI.
+
+The WSL syscall crate and its test target are compile-checked on Linux. Its
+privileged tests still require the selected WSL kernel and a fresh private
+tmpfs; hosted CI does not execute them. The embedded negative-ancestry handler
+also remains outside this hosted job because it requires the locked guest
+build. These checks establish source integration and fixture behavior, not
+physical TH/F0 admission, proof generation or B4 delivery.
+
 ## Remaining work
 
 The complete B4 corpus, Rust/JVM differential results and final archive remain
