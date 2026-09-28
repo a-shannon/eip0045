@@ -81,9 +81,18 @@ The `trusted-host` CI job separately enables the F0 metadata policy, recursive
 ancestry and receipt-oracle features in the reproduction library. It executes
 the trusted-host authority tests and the pure metadata-policy tests. The
 generator job enables `b4-terminal-evidence-export`, which also compiles the
-campaign executor, input preparation, finalizer and terminal handlers, and runs
-the executor's ordinary tests sequentially. Each selected group must report at
-least one passing test and no failures or ignored tests; zero matches fail CI.
+campaign executor, input preparation, finalizer and terminal handlers. Its
+focused tests cover trusted-host authority joins, terminal publication,
+reserved staging, the V2 ELF parser and physical dependency closure, V2
+permits/topology and the closed command grammar. Each group runs sequentially
+and must report at least one passing test and no failures or ignored tests;
+zero matches fail CI.
+
+This job uses an optimized test profile without debug information, with debug
+assertions and overflow checks enabled. Custody fixtures still authenticate
+the actual test executable at every required boundary. Removing debug
+information reduces the bytes hashed at each custody check. This is a focused
+changed-surface suite, not the entire campaign executor suite.
 
 The WSL syscall crate and its test target are compile-checked on Linux. Its
 privileged tests still require the selected WSL kernel and a fresh private

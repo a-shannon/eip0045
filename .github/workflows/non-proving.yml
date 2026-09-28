@@ -63,6 +63,11 @@ jobs:
     env:
       CARGO_BUILD_JOBS: "2"
       CARGO_INCREMENTAL: "0"
+      # Custody fixtures repeatedly authenticate the actual test executable.
+      CARGO_PROFILE_TEST_OPT_LEVEL: "1"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG_ASSERTIONS: "true"
+      CARGO_PROFILE_TEST_OVERFLOW_CHECKS: "true"
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -87,7 +92,9 @@ jobs:
           reproduction_features=b4-trusted-host-metadata-f0,recursive-ancestry,receipt-oracle
           run_group th-authorities cargo +1.89.0 test --manifest-path reproduction/Cargo.toml --no-default-features --features "$reproduction_features" --lib --locked trusted_host -- --test-threads=1
           run_group th-metadata-policy cargo +1.89.0 test --manifest-path reproduction/Cargo.toml --no-default-features --features "$reproduction_features" --lib --locked b4_retained_rootfs_metadata_th::tests -- --test-threads=1
-          run_group th-executor cargo +1.89.0 test --manifest-path generator/Cargo.toml --no-default-features --features b4-terminal-evidence-export --lib --locked b4_campaign_executor:: -- --test-threads=1
+          for filter in trusted_host projected_reserved_staging_absence both_terminal_handlers_keep physical_v2 v2_diagnostic owned_v2_dso_projection preparatory_v2 preparatory_startup_dependency_successor closed_argv; do
+            run_group "generator-$filter" cargo +1.89.0 test --manifest-path generator/Cargo.toml --no-default-features --features b4-terminal-evidence-export --lib --locked "$filter" -- --test-threads=1
+          done
       - name: Compile WSL diagnostic ABI and its test target
         run: cargo +1.89.0 check --manifest-path appliance/th-wsl-linux-abi/Cargo.toml --tests --locked
 
