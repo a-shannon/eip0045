@@ -5,6 +5,14 @@ Rust source, profile artifacts and candidate-proof tooling for
 The ErgoScript opcode and JVM verifier are developed separately in
 [SigmaState PR #1116](https://github.com/ergoplatform/sigmastate-interpreter/pull/1116).
 
+## October 2026 development checkpoint
+
+A focused test now applies a signed 262,145-byte transaction in a synthetic
+local full block and checks the resulting UTXO state. This is a qualified
+local test result; the received-block path and the complete B4–B8 delivery
+are still open. The [October progress note](docs/progress/2026-10-21.md)
+sets out the evidence boundary and remaining work.
+
 ## September 2026 milestone
 
 The JVM archive tooling now includes a strict ZIP reader and deterministic
