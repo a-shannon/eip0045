@@ -10,8 +10,10 @@ The ErgoScript opcode and JVM verifier are developed separately in
 A focused test now applies a signed 262,145-byte transaction in a synthetic
 local full block and checks the resulting UTXO state. This is a qualified
 local test result; the received-block path and the complete B4–B8 delivery
-are still open. The [28 October progress note](docs/progress/2026-10-28.md)
-sets out the latest evidence boundary and remaining work. The
+are still open. The [29 October diagnostic note](docs/progress/2026-10-29.md)
+records the bounded row-110 timeout and its limits. The
+[28 October progress note](docs/progress/2026-10-28.md) covers the local
+transaction boundary and remaining gates. The
 [21 October checkpoint](docs/progress/2026-10-21.md) remains available.
 
 ## September 2026 milestone
