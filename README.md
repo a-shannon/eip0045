@@ -5,6 +5,15 @@ Rust source, profile artifacts and candidate-proof tooling for
 The ErgoScript opcode and JVM verifier are developed separately in
 [SigmaState PR #1116](https://github.com/ergoplatform/sigmastate-interpreter/pull/1116).
 
+## November 2026 development checkpoint
+
+The local terminal-metadata pilot now has byte-identical Rust/JVM rejection
+results and a separate check against the negative-plan recipe. A native
+publisher has also created and qualified two additional test inputs, changing
+the metadata parameter and control ID. Their Rust/JVM consumer runs and
+expected-result QA remain open. The [4 November checkpoint](docs/progress/2026-11-04.md)
+records this local milestone, source-availability limits and the remaining B4–B8 work.
+
 ## October 2026 development checkpoint
 
 A focused test now applies a signed 262,145-byte transaction in a synthetic
