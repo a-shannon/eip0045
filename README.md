@@ -7,11 +7,12 @@ The ErgoScript opcode and JVM verifier are developed separately in
 
 ## November 2026 development checkpoint
 
-Three targeted local terminal-metadata cases now produce byte-identical
-Rust/JVM rejection records: changed kind, parameter and control ID. A separate
-supplied-byte check matched each result to its expected test recipe. The
-[4 November checkpoint](docs/progress/2026-11-04.md) records these results,
-the unpublished native additions and the remaining full-corpus and B4–B8 work.
+Nine targeted local fixture tests have now passed for retained source roles,
+cache integrity and checks after a consumer finishes. Their captured results
+received independent review. The [5 November checkpoint](docs/progress/2026-11-05.md)
+also covers the three byte-identical Rust/JVM terminal-metadata rejections
+reported on [4 November](docs/progress/2026-11-04.md). The new native sources
+remain unpublished; the complete B4 corpus and B5–B8 work are still open.
 
 ## October 2026 development checkpoint
 
