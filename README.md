@@ -7,12 +7,15 @@ The ErgoScript opcode and JVM verifier are developed separately in
 
 ## November 2026 development checkpoint
 
-Nine targeted local fixture tests have now passed for retained source roles,
-cache integrity and checks after a consumer finishes. Their captured results
-received independent review. The [5 November checkpoint](docs/progress/2026-11-05.md)
-also covers the three byte-identical Rust/JVM terminal-metadata rejections
-reported on [4 November](docs/progress/2026-11-04.md). The new native sources
-remain unpublished; the complete B4 corpus and B5–B8 work are still open.
+Local Rust compiler checks now cover six usage examples for the retained-input
+API. The permitted capture conversion and view access compile. Reusing a
+consumed capture, escaping a view borrow and requiring unsupported cloning or
+serialization traits on the source owner are rejected as expected. The
+[6 November checkpoint](docs/progress/2026-11-06.md) distinguishes the four new
+diagnostics from two previously qualified controls. It also brings together
+the nine retained-input fixture tests and three matching Rust/JVM rejection
+records reported this week. The new native sources remain unpublished; the
+complete B4 corpus and B5–B8 work are still open.
 
 ## October 2026 development checkpoint
 
