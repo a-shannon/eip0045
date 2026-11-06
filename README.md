@@ -7,6 +7,9 @@ The ErgoScript opcode and JVM verifier are developed separately in
 
 ## November 2026 development checkpoint
 
+Start with the [local developer preview](docs/developer-preview.md) to run the
+public non-proving checks with Rust 1.89.0.
+
 Local Rust compiler checks now cover six usage examples for the retained-input
 API. The permitted capture conversion and view access compile. Reusing a
 consumed capture, escaping a view borrow and requiring unsupported cloning or
