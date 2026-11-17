@@ -5,7 +5,15 @@ Rust source, profile artifacts and candidate-proof tooling for
 The ErgoScript opcode and JVM verifier are developed separately in
 [SigmaState PR #1116](https://github.com/ergoplatform/sigmastate-interpreter/pull/1116).
 
-## November 2026 development checkpoint
+## RISC Zero 3.1.0 developer demo
+
+[Replay one real lift-15 receipt in Rust and on the JVM](demos/risc0-3.1.0/README.md).
+Both verifiers accept the published Ergo statement. Changing one bit of its
+expected payload makes both reject the same proof. The demo includes the
+receipt, verifier sources and the recipe for generating a fresh proof.
+The 3.0.5 material below documents the earlier development checkpoint.
+
+## November 6 development checkpoint
 
 Start with the [local developer preview](docs/developer-preview.md) to run the
 public non-proving checks with Rust 1.89.0.

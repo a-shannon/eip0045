@@ -1,0 +1,12 @@
+{
+  "risc0Version": "3.1.0",
+  "risc0Commit": "22c5fb90522cb4d9427d4af6c05e747d20be2b7f",
+  "terminal": "lift-po2-15",
+  "terminalControlId": "0ade565f320cba2d0b23003a6323424d3f3d3609bcdcca4c14ab492b15cae153",
+  "profileId": "5649af920f3119ca06e8566d836d3c89de81af52ef3d140a0ad7012ca364d35c",
+  "programId": "b574db28719df2261c18b5c5f0a52ad5ad96a290679df3223c1c3acacd0fca9c",
+  "packedProgramSha256": "08407d22d73d76b522a5d25055f2766d16ea060cbfad631177fb78131254eae8",
+  "statementSha256": "e8eb87bdd03c109a13f549e64ab5cd6597b890c024a3c39830726dc814676715",
+  "receiptSha256": "cacf94f766b12a62222050fee0b667c1d00cd7d53b082a9f63f864b24d932e96",
+  "sealSha256": "5617ac97be387733a4edb767190fee0f1cbb64e05b63360f52f5f44fa9d04430"
+}

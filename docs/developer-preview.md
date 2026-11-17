@@ -1,5 +1,8 @@
 # EIP-0045 local developer preview
 
+For the corrected RISC Zero 3.1.0 circuits, [replay the lift-15 proof in Rust and on the JVM](../demos/risc0-3.1.0/README.md).
+The library checks and local catalogue results below describe the November 6 preview.
+
 This preview runs the EIP-0045 checks already in the public repository. It
 covers the guest input ABI, reproduction and profile contracts, and the
 non-proving generator library. The quickstart follows the library job in

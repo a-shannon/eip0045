@@ -9,6 +9,35 @@ permissions:
   contents: read
 
 jobs:
+  lift15-310-replay:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CARGO_BUILD_JOBS: "2"
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Replay one receipt in Rust and on the JVM
+        working-directory: demos/risc0-3.1.0
+        run: |
+          export PATH="$JAVA_HOME_17_X64/bin:$PATH"
+          export CARGO_TARGET_DIR="$RUNNER_TEMP/lift15-310-target"
+          python3 verify.py
+      - name: Rebuild the guest image bound by the receipt
+        working-directory: demos/risc0-3.1.0
+        run: |
+          export GUEST_TOOLCHAIN="$RUNNER_TEMP/risc0-toolchain" CARGO_TARGET_DIR="$RUNNER_TEMP/lift15-310-target"
+          mkdir "$GUEST_TOOLCHAIN"
+          archive="$RUNNER_TEMP/risc0-rust.tgz"
+          curl -fLsS --retry 2 https://github.com/risc0/rust/releases/download/r0.1.97.0/rust-toolchain-x86_64-unknown-linux-gnu.tar.gz -o "$archive"
+          echo "100b597d605b706bec94e1d32bfaaf5851df8d75173f986d4b56a3e90916be53  $archive" | sha256sum -c -
+          tar -xzf "$archive" -C "$GUEST_TOOLCHAIN"
+          bash prover/build-program.sh "$RUNNER_TEMP/program.bin"
+          digest=$(python3 -c 'import json; print(json.load(open("vector/vector.json"))["packedProgramSha256"])')
+          echo "$digest  $RUNNER_TEMP/program.bin" | sha256sum -c -
+
   jvm-archive:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
