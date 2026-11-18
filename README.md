@@ -7,6 +7,11 @@ The ErgoScript opcode and JVM verifier are developed separately in
 
 ## RISC Zero 3.1.0 developer demo
 
+[Replay all three recursive cases in Rust and on the JVM](demos/risc0-3.1.0/recursive/README.md).
+Two cases end in a join. The saved parent receipts let you check which one
+discharged an assumption before joining. The third case resolves an
+assumption under an explicit control root.
+
 [Replay one real lift-15 receipt in Rust and on the JVM](demos/risc0-3.1.0/README.md).
 Both verifiers accept the published Ergo statement. Changing one bit of its
 expected payload makes both reject the same proof. The demo includes the

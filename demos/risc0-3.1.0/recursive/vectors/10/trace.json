@@ -1,0 +1,77 @@
+{
+  "assumptionControlRoot": "0000000000000000000000000000000000000000000000000000000000000000",
+  "assumptionReceiptSha256": "cacf94f766b12a62222050fee0b667c1d00cd7d53b082a9f63f864b24d932e96",
+  "case": 10,
+  "compositeSha256": "d6f57f7ad5338138b593a59e6fd3eccccb57b991ced255f41a9fc33ee25e9507",
+  "finalClaim": "08efe8ab37aef866556039bab3aaf403e1c6a0ef47c66c8fa20fc01702bc1251",
+  "imageId": "b574db28719df2261c18b5c5f0a52ad5ad96a290679df3223c1c3acacd0fca9c",
+  "receiptSha256": "4996277767d49e6a7221d9c99727200bffe6b5fc168fa55eed82f91f019f509f",
+  "sealSha256": "9345f511c6b2aabdbf87b715cd9d0a3900b346825cfeed99dad2544e0ef4c5f5",
+  "sourcePo2": [
+    16,
+    15
+  ],
+  "statementSha256": "e8eb87bdd03c109a13f549e64ab5cd6597b890c024a3c39830726dc814676715",
+  "steps": [
+    {
+      "claimDigest": "9b4e19304721f736c73b9e8f4b8b0c30b7bea57fe81c217c55edbd1864f5f604",
+      "file": "segment-0.bin",
+      "index": 0,
+      "op": "segment",
+      "po2": 16,
+      "sha256": "1a96e4e3b7e0deb9a47b6f5a7bdd8b6016308a6f453a161c4c6c72b72761fcb7"
+    },
+    {
+      "claimDigest": "9b4e19304721f736c73b9e8f4b8b0c30b7bea57fe81c217c55edbd1864f5f604",
+      "controlId": "e1eba31fb23ce750e7f48433bec5d236ec0bf610a4ef876323be7a02b7b6f34a",
+      "file": "lift-0.bin",
+      "op": "lift",
+      "parents": [
+        "segment-0.bin"
+      ],
+      "sha256": "929112f732d1a12e01a685b70951caec91ad7c90d980c660791e34685b2dd7f3"
+    },
+    {
+      "claimDigest": "9a3e842cf1b490175d2d22dae5ebab83c7acfa0ce059f4ab1caa09ee454683da",
+      "file": "segment-1.bin",
+      "index": 1,
+      "op": "segment",
+      "po2": 15,
+      "sha256": "536e40096e94ec4201b30d9fa86ee0480d19ad507f014fd1e17a9e65133ba1c4"
+    },
+    {
+      "claimDigest": "9a3e842cf1b490175d2d22dae5ebab83c7acfa0ce059f4ab1caa09ee454683da",
+      "controlId": "0ade565f320cba2d0b23003a6323424d3f3d3609bcdcca4c14ab492b15cae153",
+      "file": "lift-1.bin",
+      "op": "lift",
+      "parents": [
+        "segment-1.bin"
+      ],
+      "sha256": "fb274d31d3cb73c7e399b20717d66825e030be8f6474cb849a0dc7ef71c583d3"
+    },
+    {
+      "claimDigest": "c93fccfc47be7e5fdaa1ea621a075eb091c214bd6459cd626f5d82cec6641826",
+      "controlId": "f8d1a9137a554402c2d05f3508c41642dde583520e481319042a4655695f8a51",
+      "file": "resolve.bin",
+      "op": "resolve",
+      "parents": [
+        "lift-1.bin",
+        "published-lift15-A"
+      ],
+      "sha256": "5b321229def463e1c3d845eb6e3a5340eff1db90a9f104b9d7af6be0a05a2fd7"
+    },
+    {
+      "claimDigest": "08efe8ab37aef866556039bab3aaf403e1c6a0ef47c66c8fa20fc01702bc1251",
+      "controlId": "be90046f2f27635c10f4b440c21cec1ab9be7c0ceedbcb771be8e62a47b6ef4a",
+      "file": "join.bin",
+      "op": "join",
+      "parents": [
+        "lift-0.bin",
+        "resolve.bin"
+      ],
+      "sha256": "4a4a10c4573bda0345b5909adad0b53f60ef697b30ebb3e57c9a62ae2c4d633e"
+    }
+  ],
+  "terminal": "be90046f2f27635c10f4b440c21cec1ab9be7c0ceedbcb771be8e62a47b6ef4a",
+  "workload": 0
+}

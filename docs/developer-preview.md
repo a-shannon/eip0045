@@ -1,6 +1,7 @@
 # EIP-0045 local developer preview
 
 For the corrected RISC Zero 3.1.0 circuits, [replay the lift-15 proof in Rust and on the JVM](../demos/risc0-3.1.0/README.md).
+The [recursive replay](../demos/risc0-3.1.0/recursive/README.md) adds both join paths and explicit-root assumption resolution.
 The library checks and local catalogue results below describe the November 6 preview.
 
 This preview runs the EIP-0045 checks already in the public repository. It

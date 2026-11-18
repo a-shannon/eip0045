@@ -1,0 +1,66 @@
+{
+  "assumptionControlRoot": null,
+  "assumptionReceiptSha256": null,
+  "case": 8,
+  "compositeSha256": "1e6516448779142cd640ade80b78571502017531321144041a142e646b32b252",
+  "finalClaim": "08efe8ab37aef866556039bab3aaf403e1c6a0ef47c66c8fa20fc01702bc1251",
+  "imageId": "b574db28719df2261c18b5c5f0a52ad5ad96a290679df3223c1c3acacd0fca9c",
+  "receiptSha256": "06e436a51a59c493c7f4bee97f0f48b5fe4497679653d305fd2d3b2167a64c28",
+  "sealSha256": "5406e5a959dea65298ccceb6a35493ff56eb3031e9001891f893e37c6bb9f6fe",
+  "sourcePo2": [
+    16,
+    16
+  ],
+  "statementSha256": "e8eb87bdd03c109a13f549e64ab5cd6597b890c024a3c39830726dc814676715",
+  "steps": [
+    {
+      "claimDigest": "c98de12151e37f23b27afe4d81fc736bc5de28332b976b7bec353b346f2eacee",
+      "file": "segment-0.bin",
+      "index": 0,
+      "op": "segment",
+      "po2": 16,
+      "sha256": "3f69ee06341d77e5d6ae8d6ab36c3c70aeedcd3e3521b0e630f52aadce576525"
+    },
+    {
+      "claimDigest": "c98de12151e37f23b27afe4d81fc736bc5de28332b976b7bec353b346f2eacee",
+      "controlId": "e1eba31fb23ce750e7f48433bec5d236ec0bf610a4ef876323be7a02b7b6f34a",
+      "file": "lift-0.bin",
+      "op": "lift",
+      "parents": [
+        "segment-0.bin"
+      ],
+      "sha256": "80e755cd30365e20adba6d550441f35f5281b6e7cb1634454b71b4aa7b176506"
+    },
+    {
+      "claimDigest": "8dcb0f6b42d9574a0975ccd103eb0238d3a6a2bd42e1aa3cb263681610020435",
+      "file": "segment-1.bin",
+      "index": 1,
+      "op": "segment",
+      "po2": 16,
+      "sha256": "bbf690b0f82acdb3353d7e4f01687663ced9dd48889d9cdae4c3b1b4aa06bac7"
+    },
+    {
+      "claimDigest": "8dcb0f6b42d9574a0975ccd103eb0238d3a6a2bd42e1aa3cb263681610020435",
+      "controlId": "e1eba31fb23ce750e7f48433bec5d236ec0bf610a4ef876323be7a02b7b6f34a",
+      "file": "lift-1.bin",
+      "op": "lift",
+      "parents": [
+        "segment-1.bin"
+      ],
+      "sha256": "1ec48896d2d271bfb7db3095d952a89e7989e98b8af61a49f79f568f9bf44d62"
+    },
+    {
+      "claimDigest": "08efe8ab37aef866556039bab3aaf403e1c6a0ef47c66c8fa20fc01702bc1251",
+      "controlId": "be90046f2f27635c10f4b440c21cec1ab9be7c0ceedbcb771be8e62a47b6ef4a",
+      "file": "join.bin",
+      "op": "join",
+      "parents": [
+        "lift-0.bin",
+        "lift-1.bin"
+      ],
+      "sha256": "15451621e71253f3ce2fa6bb551438eee4a1936b932711a808d2b17420dc387d"
+    }
+  ],
+  "terminal": "be90046f2f27635c10f4b440c21cec1ab9be7c0ceedbcb771be8e62a47b6ef4a",
+  "workload": 1024
+}

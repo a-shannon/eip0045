@@ -1,5 +1,8 @@
 # One Ergo receipt, two verifiers
 
+For joins and assumption resolution, [replay the three recursive receipts](recursive/README.md).
+They use the same guest, profile and public statement as the single lift below.
+
 This demo checks a RISC Zero 3.1.0 succinct proof of the EIP-0045 reference guest. The guest reads the public statement and commits it to its journal. The proof terminates in a single normal RV32IM lift with segment exponent 15.
 
 | Expected application payload (UTF-8) | Stock Rust verifier | Scala/JVM verifier |

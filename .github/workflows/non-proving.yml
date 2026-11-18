@@ -25,6 +25,12 @@ jobs:
           export PATH="$JAVA_HOME_17_X64/bin:$PATH"
           export CARGO_TARGET_DIR="$RUNNER_TEMP/lift15-310-target"
           python3 verify.py
+      - name: Replay all three recursive receipt graphs in Rust and their final seals on the JVM
+        working-directory: demos/risc0-3.1.0
+        run: |
+          export PATH="$JAVA_HOME_17_X64/bin:$PATH"
+          export CARGO_TARGET_DIR="$RUNNER_TEMP/lift15-310-target"
+          python3 recursive/verify.py
       - name: Rebuild the guest image bound by the receipt
         working-directory: demos/risc0-3.1.0
         run: |

@@ -1,0 +1,47 @@
+{
+  "assumptionControlRoot": "e6feef13db7aed4a731c7b0852de1f5c89b137726073f625d05333184d3a551d",
+  "assumptionReceiptSha256": "cacf94f766b12a62222050fee0b667c1d00cd7d53b082a9f63f864b24d932e96",
+  "case": 9,
+  "compositeSha256": "6ef0085306e5aafb4baa0015782f3531944af6bf03155c4d5878853230c14bc6",
+  "finalClaim": "08efe8ab37aef866556039bab3aaf403e1c6a0ef47c66c8fa20fc01702bc1251",
+  "imageId": "b574db28719df2261c18b5c5f0a52ad5ad96a290679df3223c1c3acacd0fca9c",
+  "receiptSha256": "21f9e12061530f5830a6ce2210a6876202c816aec8e82fea0c03c44c5a2000db",
+  "sealSha256": "d387b501e43ce5ae0550adca2fd5279dea06e8a03b3dd12030845c790d253709",
+  "sourcePo2": [
+    16
+  ],
+  "statementSha256": "e8eb87bdd03c109a13f549e64ab5cd6597b890c024a3c39830726dc814676715",
+  "steps": [
+    {
+      "claimDigest": "7d807584c710b57e3c29d192e562a4bbde52d4e773f13bc75af959655a7623e1",
+      "file": "segment-0.bin",
+      "index": 0,
+      "op": "segment",
+      "po2": 16,
+      "sha256": "c47b73b5e421d0f60b61d02895192c83fb1689d98c1b36af45959cb94820fd94"
+    },
+    {
+      "claimDigest": "7d807584c710b57e3c29d192e562a4bbde52d4e773f13bc75af959655a7623e1",
+      "controlId": "e1eba31fb23ce750e7f48433bec5d236ec0bf610a4ef876323be7a02b7b6f34a",
+      "file": "lift-0.bin",
+      "op": "lift",
+      "parents": [
+        "segment-0.bin"
+      ],
+      "sha256": "85c893e9b85550df16932935a3370136fa41fcc1ee2fcbe054d3a1310926339c"
+    },
+    {
+      "claimDigest": "08efe8ab37aef866556039bab3aaf403e1c6a0ef47c66c8fa20fc01702bc1251",
+      "controlId": "f8d1a9137a554402c2d05f3508c41642dde583520e481319042a4655695f8a51",
+      "file": "resolve.bin",
+      "op": "resolve",
+      "parents": [
+        "lift-0.bin",
+        "published-lift15-A"
+      ],
+      "sha256": "1a6143973155d790f3a0eeaca616de9c323608b924a76a14d3abb72b99b8bcdb"
+    }
+  ],
+  "terminal": "f8d1a9137a554402c2d05f3508c41642dde583520e481319042a4655695f8a51",
+  "workload": 0
+}
